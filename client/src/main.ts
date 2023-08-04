@@ -1,12 +1,20 @@
 import * as THREE from 'three'
 import { io } from 'socket.io-client';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+import {Player} from "./models/player";
+import {Box} from "./models/box";
+import {Sphere} from "./models/sphere";
+import { Sky } from 'three/addons/objects/Sky.js';
+import {initSky} from "./initMethods";
+import {initTerrain} from "./terrain";
 
 let socket
 
 let playerNames = {}
 
-let camera, scene, renderer, controls;
+let camera, scene, renderer,
+    controls:PointerLockControls;
+let sky, sun;
 
 const objects = [];
 
@@ -26,6 +34,7 @@ let raycaster;
 
 let timeUntilSprintOptionDisables;
 
+let goDown = false;
 let moveForward = false;
 let moveBackward = false;
 let moveLeft = false;
@@ -41,6 +50,10 @@ const vertex = new THREE.Vector3();
 const color = new THREE.Color();
 
 init();
+initSky(scene);
+const terrain = initTerrain(scene, controls, 256, 256);
+window.scene = scene;
+window.camera = camera;
 animate();
 
 function init() {
@@ -72,8 +85,7 @@ function init() {
 
             socket.on('position', function(msg) {
                 if(players[msg[3]] == null) {createPlayer(msg[3])}
-
-                players[msg[3]].position.set(msg[0], msg[1], msg[2])
+                players[msg[3]].setPosition(msg[0], msg[1], msg[2]);
             });
 
             socket.on('data', function(msg) {
@@ -245,6 +257,9 @@ function init() {
                     if ( canJump === true ) velocity.y += 350;
                     canJump = false;
                     break;
+                case 88: // space
+                    goDown = true;
+                    break;
 
             }
         }
@@ -273,6 +288,10 @@ function init() {
             case 39: // right
             case 68: // d
                 moveRight = false;
+                break;
+
+            case 88: // right
+                goDown = false;
                 break;
 
         }
@@ -307,6 +326,7 @@ function init() {
     window.addEventListener( 'resize', onWindowResize, false );
 }
 
+
 function showScores() {
     let output = ""
     let player
@@ -336,30 +356,22 @@ function showScores() {
 function createBullet(msg) {
     console.log("create bullet")
     console.log(msg)
-    const geometry = new THREE.SphereGeometry( 0.5, 15, 15 );
-    const material = new THREE.MeshBasicMaterial( {color: "red"} );
-    const sphere = new THREE.Mesh( geometry, material );
-    sphere.position.set(msg[0], msg[1], msg[2])
-    sphere.name = "bullet" + msg[4]
-    scene.add(sphere);
+    const sphere = new Sphere(scene, 0.5, 15, 15, 'red');
+    sphere.setPosition(msg[0], msg[1], msg[2]);
+    sphere.name = "bullet" + msg[4];
+    sphere.addToScene();
 }
 
 function createPlayer(playerNo) {
-    const geometry = new THREE.SphereGeometry( 3, 32, 32 );
-    const material = new THREE.MeshBasicMaterial( {color: "red"} );
-    const sphere = new THREE.Mesh( geometry, material );
-    sphere.position.set(0, 10, 0)
-    scene.add(sphere);
-    players[playerNo] = sphere
+    players[playerNo] = new Player(scene);
+    players[playerNo].addToScene()
 }
 
 function createObject(size, pos, colour) {
-    const geometry = new THREE.BoxGeometry(size[0], size[1], size[2] );
-    const material = new THREE.MeshBasicMaterial( {color: colour} );
-    const object = new THREE.Mesh( geometry, material );
-    object.position.set(pos[0], pos[1], pos[2])
-    scene.add(object);
-    objects.push(object)
+    const object = new Box(scene, size, colour);
+    object.setPosition(pos[0], pos[1], pos[2]);
+    object.addToScene();
+    objects.push(object.getMesh());
 }
 
 function onWindowResize() {
@@ -383,7 +395,8 @@ function animate() {
     if ( controls.isLocked === true && socket != null) {
         let controlsObject = controls.getObject()
         let pos = controlsObject.position
-        let rotation = controlsObject.rotation
+        let rotation = controlsObject.rotation;
+        let touchedTerrain = false;
 
         socket.emit("position", [pos.x, pos.y, pos.z])
 
@@ -404,6 +417,16 @@ function animate() {
 
         const intersections = raycaster.intersectObjects( objects );
 
+        raycaster.ray.origin.y = pos.y;
+        raycaster.ray.direction.set(0, -1, 0);
+        const intersectionTerrain = raycaster.intersectObjects( scene.children );
+        if (intersectionTerrain && intersectionTerrain.length) {
+            console.error(intersectionTerrain);
+            touchedTerrain = intersectionTerrain.find(intersection=>intersection && intersection.object.name === 'MainTerrain');
+
+        }
+
+
         const onObject = intersections.length > 1;
 
         const delta = ( time - prevTime ) / 1000;
@@ -416,7 +439,6 @@ function animate() {
         direction.z = Number( moveForward ) - Number( moveBackward );
         direction.x = Number( moveRight ) - Number( moveLeft );
         direction.normalize(); // this ensures consistent movements in all directions
-
 
         if ( moveForward || moveBackward ) velocity.z -= direction.z * 400.0 * delta;
         if ( moveLeft || moveRight ) velocity.x -= direction.x * 400.0 * delta;
@@ -438,37 +460,29 @@ function animate() {
 
         document.getElementById("HUD-energy").innerHTML = Math.round(energy)
 
-        if(pos.x > 150) {
-            pos.x = 150
-        }
-        else if(pos.x < -150) {
-            pos.x = -150
-        }
-
-        if(pos.z > 150) {
-            pos.z = 150
-        }
-        else if(pos.z < -150) {
-            pos.z = -150
-        }
-
-        if ( onObject === true ) {
+        if ( onObject === true || touchedTerrain) {
             velocity.y = Math.max( 0, velocity.y );
+            canJump = true;
+            if (touchedTerrain && touchedTerrain.distance) {
+                controls.getObject().position.y += 10 - touchedTerrain.distance;
+            }
+        } else {
+            controls.getObject().position.y += ( velocity.y * delta ); // new behavior
+
+        }
+        if ( pos.y < 10  && touchedTerrain) {
+            velocity.y = 0;
+            //controls.getObject().position.y = touchedTerrain;
             canJump = true;
         }
 
         controls.moveRight( - velocity.x * delta );
         controls.moveForward( - velocity.z * delta );
 
-        controls.getObject().position.y += ( velocity.y * delta ); // new behavior
 
-        if ( controls.getObject().position.y < 10 ) {
-            velocity.y = 0;
-            controls.getObject().position.y = 10;
-
-            canJump = true;
+        if (goDown) {
+            controls.getObject().position.y += ( velocity.y * delta ); // new behavior
         }
-
     }
 
     prevTime = time;
