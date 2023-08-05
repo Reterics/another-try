@@ -4,9 +4,11 @@ import { PointerLockControls } from 'three/addons/controls/PointerLockControls.j
 import {Player} from "./models/player";
 import {Box} from "./models/box";
 import {Sphere} from "./models/sphere";
-import { Sky } from 'three/addons/objects/Sky.js';
 import {initSky} from "./initMethods";
-import {initTerrain} from "./terrain";
+import {HeightmapTerrain} from "./terrain/heightmap";
+import {GltfScene} from "./terrain/gltfScene";
+import {RoundedBoxGeometry} from "three/examples/jsm/geometries/RoundedBoxGeometry";
+import {Hero} from "./models/hero";
 
 let socket
 
@@ -20,48 +22,50 @@ const objects = [];
 
 let players = {}
 
-let land
-
 let playerNo
 
 let scores = {}
-
-let energy = 10
 
 let typingAMessage = false
 
 let raycaster;
 
-let timeUntilSprintOptionDisables;
-
-let goDown = false;
-let moveForward = false;
-let moveBackward = false;
-let moveLeft = false;
-let moveRight = false;
-let sprinting = false;
-let canJump = false;
 let shoot = false;
 
 let prevTime = performance.now();
-const velocity = new THREE.Vector3();
 const direction = new THREE.Vector3();
-const vertex = new THREE.Vector3();
-const color = new THREE.Color();
+let heroPlayer;
 
 init();
 initSky(scene);
-const terrain = initTerrain(scene, controls, 256, 256);
+//const terrain = initTerrain(scene, controls, 256, 256);
+//const mapTerrain = new HeightmapTerrain(scene);
+//mapTerrain.render();
+const map = new GltfScene('dungeon_low_poly_game_level_challenge/scene.gltf', scene, controls,(map:GltfScene)=>{
+    map.addToScene();
+    map.initPlayerEvents();
+});
+
 window.scene = scene;
 window.camera = camera;
+window.controls = controls;
+window.player = heroPlayer;
 animate();
 
 function init() {
     camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 1000 );
-    camera.position.y = 0;
+    camera.position.y = 1;
+    camera.position.x = 15;
+    camera.position.z = 1;
+
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color("white");
+
+    const hero = new Hero(scene);
+    heroPlayer = hero.getMesh();
+    heroPlayer.position.copy(camera.position);
+    hero.addToScene();
 
     controls = new PointerLockControls( camera, document.body );
 
@@ -171,7 +175,6 @@ function init() {
     scene.add( controls.getObject() );
 
     const onKeyDown = function ( event ) {
-        console.log(event.keyCode)
 
         if(typingAMessage) {
             if(event.keyCode == 191) {
@@ -222,80 +225,9 @@ function init() {
 
                     break;
 
-                case 38: // up
-                case 87: // w
-                    if(!moveForward) {
-                        let now = new Date()
-
-                        if(timeUntilSprintOptionDisables != null && timeUntilSprintOptionDisables > now) {
-                            sprinting = true
-                        }
-
-                        now.setSeconds(now.getSeconds() + 1)
-                        timeUntilSprintOptionDisables = now
-                    }
-
-                    moveForward = true;
-                    break;
-
-                case 37: // left
-                case 65: // a
-                    moveLeft = true;
-                    break;
-
-                case 40: // down
-                case 83: // s
-                    moveBackward = true;
-                    break;
-
-                case 39: // right
-                case 68: // d
-                    moveRight = true;
-                    break;
-
-                case 32: // space
-                    if ( canJump === true ) velocity.y += 350;
-                    canJump = false;
-                    break;
-                case 88: // space
-                    goDown = true;
-                    break;
 
             }
         }
-    };
-
-    const onKeyUp = function ( event ) {
-
-        switch ( event.keyCode ) {
-
-            case 38: // up
-            case 87: // w
-                moveForward = false;
-                sprinting = false;
-                break;
-
-            case 37: // left
-            case 65: // a
-                moveLeft = false;
-                break;
-
-            case 40: // down
-            case 83: // s
-                moveBackward = false;
-                break;
-
-            case 39: // right
-            case 68: // d
-                moveRight = false;
-                break;
-
-            case 88: // right
-                goDown = false;
-                break;
-
-        }
-
     };
 
     const onClick = function() {
@@ -305,16 +237,9 @@ function init() {
     }
 
     document.addEventListener( 'keydown', onKeyDown, false );
-    document.addEventListener( 'keyup', onKeyUp, false );
     document.addEventListener("click", onClick, false);
 
     raycaster = new THREE.Raycaster( new THREE.Vector3(), new THREE.Vector3( 0, - 1, 0 ), 0, 10 );
-
-
-    //THE MAP
-    createObject([300, 0, 300], [0, 0, 0], "grey")
-
-    //
 
     renderer = new THREE.WebGLRenderer( { antialias: true } );
     renderer.setPixelRatio( window.devicePixelRatio );
@@ -417,72 +342,11 @@ function animate() {
 
         const intersections = raycaster.intersectObjects( objects );
 
-        raycaster.ray.origin.y = pos.y;
-        raycaster.ray.direction.set(0, -1, 0);
-        const intersectionTerrain = raycaster.intersectObjects( scene.children );
-        if (intersectionTerrain && intersectionTerrain.length) {
-            console.error(intersectionTerrain);
-            touchedTerrain = intersectionTerrain.find(intersection=>intersection && intersection.object.name === 'MainTerrain');
-
-        }
-
-
         const onObject = intersections.length > 1;
 
         const delta = ( time - prevTime ) / 1000;
-
-        velocity.x -= velocity.x * 10.0 * delta;
-        velocity.z -= velocity.z * 10.0 * delta;
-
-        velocity.y -= 9.8 * 100.0 * delta; // 100.0 = mass
-
-        direction.z = Number( moveForward ) - Number( moveBackward );
-        direction.x = Number( moveRight ) - Number( moveLeft );
-        direction.normalize(); // this ensures consistent movements in all directions
-
-        if ( moveForward || moveBackward ) velocity.z -= direction.z * 400.0 * delta;
-        if ( moveLeft || moveRight ) velocity.x -= direction.x * 400.0 * delta;
-
-        if(sprinting) {
-            if(energy > 0) {
-                velocity.z -= 12
-                energy -= 0.05
-            }
-            else {
-                sprinting = false
-            }
-        }
-        else {
-            if(energy < 20) {
-                energy += 0.02
-            }
-        }
-
-        document.getElementById("HUD-energy").innerHTML = Math.round(energy)
-
-        if ( onObject === true || touchedTerrain) {
-            velocity.y = Math.max( 0, velocity.y );
-            canJump = true;
-            if (touchedTerrain && touchedTerrain.distance) {
-                controls.getObject().position.y += 10 - touchedTerrain.distance;
-            }
-        } else {
-            controls.getObject().position.y += ( velocity.y * delta ); // new behavior
-
-        }
-        if ( pos.y < 10  && touchedTerrain) {
-            velocity.y = 0;
-            //controls.getObject().position.y = touchedTerrain;
-            canJump = true;
-        }
-
-        controls.moveRight( - velocity.x * delta );
-        controls.moveForward( - velocity.z * delta );
-
-
-        if (goDown) {
-            controls.getObject().position.y += ( velocity.y * delta ); // new behavior
-        }
+        //heroPlayer.position.copy(camera.position);
+        map.updatePlayer(delta, camera, heroPlayer);
     }
 
     prevTime = time;

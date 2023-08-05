@@ -94,6 +94,39 @@
       </div>
     </div>
   </div>
+  <!-- Disabled the shaders due to incompatibility with Rays-->
+  <!--
+  <script id="fragmentShader" type="x-shader/x-vertex">
+    varying float vAmount;
+
+    void main()
+    {
+                              //minHT  max HT
+      vec3 water = (smoothstep(0.01, 0.45, vAmount) - smoothstep(0.34, 0.50, vAmount)) * vec3(0.0, 0.0, 1.0);
+      vec3 sand = (smoothstep(0.03, 0.47, vAmount) - smoothstep(0.40, 0.55, vAmount)) * vec3(0.76, 0.7, 0.5);
+      vec3 grass = (smoothstep(0.40, 0.56, vAmount) - smoothstep(0.43, 0.70, vAmount)) * vec3(0.0, 0.6, 0.01);
+      vec3 rock = (smoothstep(0.43, 0.75, vAmount) - smoothstep(0.50, 0.85, vAmount)) * vec3(0.28, 0.25, 0.23);
+      vec3 snow = (smoothstep(0.70, 0.8, vAmount)) * vec3(1.0, 1.0, 1.0);
+
+      gl_FragColor = vec4(water + sand + grass + rock + snow, 1.0);
+    }
+  </script>
+  <script id="vertexShader" type="x-shader/x-vertex">
+    uniform sampler2D bumpTexture;
+    uniform float bumpScale;
+
+    varying float vAmount;
+
+    void main()
+    {
+      vec4 bumpData = texture2D(bumpTexture, uv);
+      vAmount = bumpData.r;
+
+      vec3 newPosition = position + normal * bumpScale * vAmount;
+
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
+    }
+  </script>-->
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
