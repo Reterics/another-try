@@ -1,0 +1,32 @@
+<div id="HUD" class="HUD" style="top: 6px; left: 6px;">
+    <div class="user-image">
+        <img src="/assets/images/png/head.png" />
+    </div>
+    <div class="user-meta">
+        <div class="user-stats">
+
+            <progress id="HUD-health" value="100" max="100"> 100% </progress>
+            <progress id="HUD-energy" value="0" max="20"> 0% </progress>
+        </div>
+        <div id="HUD-information">(Scores will appear here)</div>
+    </div>
+
+</div>
+
+
+<div id="typedMessage" class="HUD" style="bottom: 6px; left: 25%; right: 25%; display: none;">
+    <span id="typedMessageOutput"><b>Start typing, your message will appear here.</b></span>
+</div>
+
+<div class="HUD" style="bottom: 6px; left: 6px;">
+    <div id="messageList" style="display: none;">
+        <p><b>Message history</b></p>
+        <p><i>Only the 3 most recent messages are shown.</i></p>
+        <p id="msg3"></p>
+        <p id="msg2"></p>
+        <p id="msg1"></p>
+    </div>
+    <i class="fas fa-envelope"></i> <span id="featuredMessage"></span>
+</div>
+
+<div id="crosshair" class="HUD" style="bottom: 50%; top: 50%; left: 50%; right: 50%; background-color:rgba(0, 0, 0, 0); font-size: 25px; display: none;">+</div>

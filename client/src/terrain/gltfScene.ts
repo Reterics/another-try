@@ -14,7 +14,7 @@ let tempSegment = new THREE.Line3();
 // let upVector = new THREE.Vector3( 0, 1, 0 );
 const direction = new THREE.Vector3();
 const velocity = new THREE.Vector3();
-let timeUntilSprintOptionDisables;
+let timeUntilSprintOptionDisables: Date | undefined | null;
 
 /*function getAzimuthalAngle(controls) {
     return Math.atan2(controls.camera.rotation.x, controls.camera.rotation.z);
@@ -218,7 +218,7 @@ export class GltfScene {
         }
     }
 
-    updatePlayer(delta, camera: THREE.PerspectiveCamera, player: Mesh) {
+    updatePlayer(delta:number, camera: THREE.PerspectiveCamera, player: Mesh) {
         if (this.collider && camera && player) {
             this.collider.visible = this.params.displayCollider;
             this.visualizer.visible = this.params.displayBVH;
@@ -260,7 +260,9 @@ export class GltfScene {
             }
 
             if (this.energyNode) {
+
                 this.energyNode.innerHTML = Math.round(this.energy).toString();
+                this.energyNode.value = this.energy;
             }
 
             if ( this.playerIsOnGround ) {
@@ -320,9 +322,9 @@ export class GltfScene {
 
             this.collider.geometry.boundsTree.shapecast( {
 
-                intersectsBounds: box => box.intersectsBox( tempBox ),
+                intersectsBounds: (box:any) => box.intersectsBox( tempBox ),
 
-                intersectsTriangle: tri => {
+                intersectsTriangle: (tri:any) => {
 
                     // check if the triangle is intersecting the capsule and adjust the
                     // capsule position if it is.

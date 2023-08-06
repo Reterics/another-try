@@ -5,7 +5,7 @@ import {Water} from "three/examples/jsm/objects/Water2";
 
 export class HeightmapTerrain {
     protected scene: Scene;
-    constructor(scene ) {
+    constructor(scene: Scene) {
         this.scene = scene;
     }
 
@@ -44,10 +44,10 @@ export class HeightmapTerrain {
         const groundGeometry = new THREE.PlaneGeometry( 4000, 4000, 250, 250 );
 
         const colorScale = 300.0;
-        const uniforms = {
+        /*const uniforms = {
             bumpTexture: {value: disMap},
             bumpScale: {value: colorScale}
-        }
+        }*/
 
         /**
          * The shader solution is really nice, but we cant use rays on it.

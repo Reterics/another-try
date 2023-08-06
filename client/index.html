@@ -5,95 +5,10 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Another Try</title>
-
-    <style >
-      html, body {
-        margin: 0;
-        overflow: hidden;
-      }
-
-      #blocker {
-        position: absolute;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0,0,0,0.5);
-      }
-
-      #blockerContents {
-        width: 100%;
-        height: 100%;
-
-        display: -webkit-box;
-        display: -moz-box;
-        display: box;
-
-        -webkit-box-orient: horizontal;
-        -moz-box-orient: horizontal;
-        box-orient: horizontal;
-
-        -webkit-box-pack: center;
-        -moz-box-pack: center;
-        box-pack: center;
-
-        -webkit-box-align: center;
-        -moz-box-align: center;
-        box-align: center;
-
-        color: #ffffff;
-        text-align: center;
-        font-family: Arial;
-        font-size: 14px;
-        line-height: 24px;
-
-        cursor: pointer;
-      }
-
-      .HUD {
-        z-index: 99 !important;
-        position: absolute;
-        padding: 3px;
-        background-color: white;
-      }
-    </style>
+    <link rel="stylesheet" type="text/css" href="/style.css" />
   </head>
   <body>
-  <div id="HUD" class="HUD" style="top: 6px; left: 6px;">
-    <i class="fas fa-bolt"></i> <span id="HUD-energy">10</span>
-    <i class="fas fa-user-friends"></i> <span id="HUD-information">(Scores will appear here)</span>
-  </div>
 
-
-  <div id="typedMessage" class="HUD" style="bottom: 6px; left: 25%; right: 25%; display: none;">
-    <span id="typedMessageOutput"><b>Start typing, your message will appear here.</b></span>
-  </div>
-
-  <div class="HUD" style="bottom: 6px; left: 6px;">
-    <div id="messageList" style="display: none;">
-      <p><b>Message history</b></p>
-      <p><i>Only the 3 most recent messages are shown.</i></p>
-      <p id="msg3"></p>
-      <p id="msg2"></p>
-      <p id="msg1"></p>
-    </div>
-    <i class="fas fa-envelope"></i> <span id="featuredMessage"></span>
-  </div>
-
-  <div id="crosshair" class="HUD" style="bottom: 50%; top: 50%; left: 50%; right: 50%; background-color:rgba(0, 0, 0, 0); font-size: 25px; display: none;">+</div>
-
-  <div id="blocker">
-    <div id="blockerContents">
-      <div id="instructions">
-        <h1>Click to join</h1>
-        <p><b>Name:</b></p>
-        <input type="text" id="name" value="Player" onclick=""></input>
-      </div>
-      <div id="paused" style="display: none;">
-        <h1>Paused</h1>
-        <p><b>Click to resume.</b></p>
-        <p>Only your game has been paused; other players can still attack you.</p>
-      </div>
-    </div>
-  </div>
   <!-- Disabled the shaders due to incompatibility with Rays-->
   <!--
   <script id="fragmentShader" type="x-shader/x-vertex">

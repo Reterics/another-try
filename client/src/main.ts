@@ -9,6 +9,7 @@ import {HeightmapTerrain} from "./terrain/heightmap";
 import {GltfScene} from "./terrain/gltfScene";
 import {RoundedBoxGeometry} from "three/examples/jsm/geometries/RoundedBoxGeometry";
 import {Hero} from "./models/hero";
+import {HUDController} from "./hud";
 
 let socket
 
@@ -36,7 +37,11 @@ let prevTime = performance.now();
 const direction = new THREE.Vector3();
 let heroPlayer;
 
+const hudController = new HUDController();
 init();
+
+hudController.renderMenu();
+hudController.setControls(controls);
 initSky(scene);
 //const terrain = initTerrain(scene, controls, 256, 256);
 //const mapTerrain = new HeightmapTerrain(scene);
@@ -58,7 +63,6 @@ function init() {
     camera.position.x = 15;
     camera.position.z = 1;
 
-
     scene = new THREE.Scene();
     scene.background = new THREE.Color("white");
 
@@ -69,19 +73,19 @@ function init() {
 
     controls = new PointerLockControls( camera, document.body );
 
-    const blocker = document.getElementById( 'blocker' );
+    /*const blocker = document.getElementById( 'blocker' );
     const crosshair = document.getElementById( 'crosshair' )
     const instructions = document.getElementById( 'instructions' );
     const paused = document.getElementById( 'paused' )
 
     blockerContents.addEventListener( 'click', function() {
         controls.lock()
-    }, false );
+    }, false );*/
 
     controls.addEventListener( 'lock', function () {
-        instructions.style.display = 'none';
+        /*instructions.style.display = 'none';
         blocker.style.display = 'none';
-        crosshair.style.display = 'block'
+        crosshair.style.display = 'block'*/
 
         if(socket == null) {
 
@@ -163,14 +167,14 @@ function init() {
         }
     } );
 
-    controls.addEventListener( 'unlock', function () {
+    /*controls.addEventListener( 'unlock', function () {
 
         blocker.style.display = 'block';
         paused.style.display = 'block'
 
         crosshair.style.display = 'none'
 
-    } );
+    } );*/
 
     scene.add( controls.getObject() );
 
