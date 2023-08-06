@@ -21,7 +21,7 @@ Dive deep into a world where the objective is simple: Keep it alive at all costs
  - (Optional) A stable internet connection for multiplayer action.
 
 ### Build and Contribute
-Node JS, and NPM is required for this repository. The recommended NPM version is 8 (*currently installed: 8.3.1*), whereas the recommended Node version is 16 and up. (*currently installed 16.14.0*)
+Node JS, and NPM is required for this repository. The recommended NPM version is 9 (*currently installed: 9.8.0*), whereas the recommended Node version is 18 and up. (*currently installed 20.5.0*)
 
 If you don't have node already, install node from here: <https://nodejs.org/en/download/> or use nvm (explained later) to control which version is currently installed.
 
