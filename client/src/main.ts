@@ -1,5 +1,6 @@
 import * as THREE from 'three'
-import {io, Socket} from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
+import {io} from 'socket.io-client';
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import {Player} from "./models/player";
 import {Sphere} from "./models/sphere";
@@ -8,8 +9,10 @@ import {GltfScene} from "./terrain/gltfScene";
 import {Hero} from "./models/hero";
 import {HUDController} from "./hud";
 import {Mesh, Object3D, PerspectiveCamera, Raycaster, Scene, Vector3, WebGLRenderer} from "three";
-import { acceleratedRaycast } from 'three-mesh-bvh';
+import {acceleratedRaycast, computeBoundsTree, disposeBoundsTree} from "three-mesh-bvh";
 
+THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
+THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 let socket: Socket;

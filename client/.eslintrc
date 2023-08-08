@@ -1,0 +1,65 @@
+{
+  "root": true,
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "sourceType": "module",
+    "ecmaVersion": 2020,
+    "ecmaFeatures": {
+      "jsx": true
+    }
+  },
+  // Limit TypeScript linting to TS/TSX
+  // https://github.com/typescript-eslint/typescript-eslint/issues/1928
+  "overrides": [
+    {
+      "files": ["src/**/*.{ts,tsx}"],
+      "extends": [
+        "plugin:@typescript-eslint/eslint-recommended",
+        "plugin:@typescript-eslint/recommended",
+        "plugin:@typescript-eslint/recommended-requiring-type-checking"
+        // "plugin:eslint-plugin-tsdoc/recommended"
+      ],
+      "rules": {
+        "@typescript-eslint/ban-ts-comment": "off",
+        "@typescript-eslint/explicit-function-return-type": "off",
+        "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+        // All the @typescript-eslint/* rules here...
+        "@typescript-eslint/no-unnecessary-type-arguments": "error",
+        "@typescript-eslint/prefer-nullish-coalescing": "error",
+        "@typescript-eslint/prefer-optional-chain": "error"
+      },
+      "parser": "@typescript-eslint/parser",
+      "parserOptions": {
+        "tsconfigRootDir": "./",
+        "project": "./tsconfig.json"
+      }
+    }
+  ],
+  "env": {
+    "browser": true,
+    "node": true,
+    "jest": false
+  },
+  "plugins": [
+    //   "react"
+    //"prettier", // add this if we want to use prettier error reporting
+    // "jest",
+    // "@typescript-eslint"
+    "eslint-plugin-tsdoc",
+    "jsdoc"
+  ],
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/eslint-recommended",
+    "plugin:import/errors",
+    "plugin:import/warnings",
+    "plugin:import/typescript"
+  ],
+  "settings": {
+    "react": {
+      "pragma": "h",
+      "createClass": ""
+    }
+  },
+  "rules": {}
+}
