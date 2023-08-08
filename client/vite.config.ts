@@ -1,6 +1,5 @@
 import { NodeGlobalsPolyfillPlugin } from "@esbuild-plugins/node-globals-polyfill";
-import { defineConfig } from "vite";
-import { splitVendorChunkPlugin } from 'vite'
+import { defineConfig, splitVendorChunkPlugin } from "vite";
 
 export default defineConfig({
     plugins: [splitVendorChunkPlugin()],
