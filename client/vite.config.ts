@@ -1,8 +1,9 @@
 import { NodeGlobalsPolyfillPlugin } from "@esbuild-plugins/node-globals-polyfill";
 import { defineConfig } from "vite";
+import { splitVendorChunkPlugin } from 'vite'
 
 export default defineConfig({
-    plugins: [],
+    plugins: [splitVendorChunkPlugin()],
     optimizeDeps: {
         esbuildOptions: {
             define: {
@@ -23,4 +24,14 @@ export default defineConfig({
             util: "util",
         },
     },
+    build: {
+        rollupOptions: {
+            /*external: ['three'],
+            output: {
+                globals: {
+                    three: 'THREE'
+                }
+            }*/
+        }
+    }
 });

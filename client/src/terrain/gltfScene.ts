@@ -43,6 +43,7 @@ export class GltfScene {
     energy = 10;
     fwdPressed = false; bkdPressed = false; lftPressed = false; rgtPressed = false;
     private readonly energyNode: HTMLProgressElement | null;
+    private selectedModel: string;
 
     constructor(model: string, scene: Scene, controls:PointerLockControls, callback: Function) {
         if (model.startsWith('/')) {
@@ -52,8 +53,17 @@ export class GltfScene {
         this.controls = controls;
         this.environment = new THREE.Group();
         this.collider = new THREE.Mesh();
-        this.initMethod = new Promise(resolve=>{
-            new GLTFLoader().load( 'assets/scenes/' + model, res => {
+        this.selectedModel = model;
+        this.initMethod = this._loadGLTF(callback);
+
+        this.energyNode = document.getElementById("HUD-energy") as HTMLProgressElement;
+        return this;
+    }
+    _loadGLTF(callback: Function|undefined): Promise<GltfScene> {
+        return new Promise(resolve=> {
+            const targetModel = this.selectedModel.startsWith('https://') || this.selectedModel.startsWith('http://') ?
+                this.selectedModel : 'assets/scenes/' + this.selectedModel;
+            new GLTFLoader().load( targetModel, res => {
                 const gltfScene:THREE.Group = res.scene;
                 gltfScene.scale.setScalar( .01 );
 
@@ -149,8 +159,6 @@ export class GltfScene {
                 resolve(this);
             } );
         });
-        this.energyNode = document.getElementById("HUD-energy") as HTMLProgressElement;
-        return this;
     }
 
     respawn(camera: THREE.PerspectiveCamera, player: Mesh) {
@@ -391,5 +399,18 @@ export class GltfScene {
         }
     }
 
+    updateScene (selectedMap: string): Promise<GltfScene> {
+        if (this.selectedModel !== selectedMap && this.visualizer) {
+            this.visualizer.clear();
+            this.collider.clear();
+            this.environment.clear();
+            this.scene.remove(this.visualizer);
+            this.scene.remove(this.collider);
+            this.scene.remove(this.environment);
 
+            this.selectedModel = selectedMap;
+            return this._loadGLTF(undefined);
+        }
+        return new Promise<GltfScene>(resolve => resolve(this));
+    }
 }

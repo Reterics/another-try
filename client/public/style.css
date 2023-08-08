@@ -128,3 +128,10 @@ a.logo-title {
     min-height: 18px;
     min-width: 160px;
 }
+#maps {
+    display: flex;
+    flex-direction: column;
+}
+#maps > a {
+    margin-bottom: 2px;
+}

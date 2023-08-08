@@ -61,6 +61,7 @@ let prevTime = performance.now();
 const direction = new THREE.Vector3();
 let heroPlayer: Mesh;
 let map: GltfScene;
+let animationRunning = false;
 
 const hudController = new HUDController();
 init();
@@ -281,15 +282,35 @@ function init() {
     hudController.renderMenu();
     if (controls) {
         hudController.setControls(controls);
+        hudController.onLoadMap((selectedMap, options)=>{
+            if (map) {
+                return map.updateScene(selectedMap).then((map: GltfScene) => {
+                    map.addToScene();
+                    if (options.y) {
+                        camera.position.y = Number(options.y);
+                    }
+
+                    if (options.x) {
+                        camera.position.x = Number(options.x);
+                    }
+
+                    if (options.z) {
+                        camera.position.y = Number(options.z);
+                    }
+                });
+            }
+            map = new GltfScene(selectedMap, scene, controls,(map:GltfScene)=>{ //'dungeon_low_poly_game_level_challenge/scene.gltf'
+                map.addToScene();
+                map.initPlayerEvents();
+            });
+            if (!animationRunning) {
+                animate();
+            }
+        })
     }
 
     initSky(scene);
-    map = new GltfScene('dungeon_low_poly_game_level_challenge/scene.gltf', scene, controls,(map:GltfScene)=>{
-        map.addToScene();
-        map.initPlayerEvents();
-    });
 
-    animate();
 }
 
 
@@ -335,7 +356,6 @@ function createPlayer(playerNo: string|number) {
     players[playerNo].addToScene()
 }
 
-
 function onWindowResize() {
 
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -351,7 +371,9 @@ function round(num: number) {
 
 function animate() {
     requestAnimationFrame( animate );
-
+    if (!animationRunning) {
+        animationRunning = true;
+    }
     const time = performance.now();
 
     if ( controls.isLocked && socket != null) {

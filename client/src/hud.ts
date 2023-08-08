@@ -3,11 +3,18 @@ import pauseMenuTemplate from './pages/pause.html?raw'
 import inGameTemplate from './pages/ingame.html?raw'
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 
+interface MapOptions {
+    y?: number|string;
+    x?: number|string;
+    z?: number|string;
+}
+
 export class HUDController {
     private inGame: HTMLDivElement;
     private mainMenu: HTMLDivElement;
     private pauseMenu: HTMLDivElement;
     private controls: PointerLockControls | undefined;
+    private onload: Function|undefined;
 
     constructor() {
         // We use createElement because it is DOM level 1 feature, faster than innerHTML
@@ -40,12 +47,13 @@ export class HUDController {
         this.mainMenu.onclick = (event: MouseEvent) => {
             const target: HTMLElement = event.target as HTMLElement;
             if (target && target.parentElement && target.parentElement.id === 'maps' && target.id) {
-                console.log('Selected level: ', target.id);
-                this.renderGame(target.id);
+                const level = target.getAttribute('data-location') || target.id;
+                console.log('Selected map: ', level);
+                this.renderGame(level, target);
             }
         };
         this.pauseMenu.onclick = () => {
-            this.renderGame(null);
+            this.renderGame(null, null);
         };
         this.controls.addEventListener( 'unlock', () => {
             this.renderPauseMenu();
@@ -64,7 +72,22 @@ export class HUDController {
         this.mainMenu.style.display = 'none';
     }
 
-    renderGame(level: string|null) {
+    getOptionsFromNode(node: HTMLElement|null|undefined) {
+        const options = {};
+
+        if (node) {
+            ['x', 'y', 'z'].forEach(key=>{
+                const value = node.getAttribute('data-' + key);
+                if (value) {
+                    // @ts-ignore
+                    options[key] = value;
+                }
+            });
+        }
+        return options;
+    }
+
+    renderGame (level: string|null, node: HTMLElement|null|undefined) {
         console.log('Render level: ', level);
         this.inGame.style.display = 'block';
         this.pauseMenu.style.display = 'none';
@@ -72,6 +95,12 @@ export class HUDController {
         if (this.controls && typeof this.controls.lock === 'function') {
             this.controls.lock();
         }
+        if (this.onload && level) {
+            this.onload(level, this.getOptionsFromNode(node));
+        }
     }
 
+    onLoadMap(param: (selectedMap: string, options: MapOptions) => void) {
+        this.onload = param;
+    }
 }
