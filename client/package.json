@@ -10,16 +10,16 @@
   },
   "dependencies": {
     "buffer": "^6.0.3",
-    "three-mesh-bvh": "0.6.3",
     "events": "^3.3.0",
     "process": "^0.11.10",
-    "three": "0.155.0",
-    "util": "^0.12.5",
-    "@esbuild-plugins/node-globals-polyfill": "^0.2.3",
+    "socket.io-client": "latest",
     "stream-browserify": "latest",
-    "socket.io-client": "latest"
+    "three": "0.155.0",
+    "three-mesh-bvh": "0.6.3",
+    "util": "^0.12.5"
   },
   "devDependencies": {
+    "@types/node": "^20.4.8",
     "@types/three": "0.155.0",
     "typescript": "^5.0.2",
     "vite": "^4.4.5"

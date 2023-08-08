@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MeshBVH, MeshBVHVisualizer, StaticGeometryGenerator } from 'three-mesh-bvh';
-import {GLTFLoader} from "three/examples/jsm/loaders/GLTFLoader";
-import {Group, Mesh, Scene} from "three";
-import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+import {BufferGeometry, Group, Mesh, MeshStandardMaterial, Scene} from "three";
+import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import {CapsuleInfo} from "../main";
 
 let tempVector = new THREE.Vector3();
 let tempVector2 = new THREE.Vector3();
@@ -20,7 +21,7 @@ let timeUntilSprintOptionDisables: Date | undefined | null;
     return Math.atan2(controls.camera.rotation.x, controls.camera.rotation.z);
 }*/
 export class GltfScene {
-    protected visualizer: MeshBVHVisualizer;
+    protected visualizer: MeshBVHVisualizer | undefined;
     protected collider: Mesh;
     protected environment: Group;
     params = {
@@ -41,17 +42,19 @@ export class GltfScene {
     sprinting = false; // Temporary not available
     energy = 10;
     fwdPressed = false; bkdPressed = false; lftPressed = false; rgtPressed = false;
-    private readonly energyNode: HTMLElement | null;
+    private readonly energyNode: HTMLProgressElement | null;
 
-    constructor(model: string, scene: Scene, controls:PointerLockControls, callback) {
+    constructor(model: string, scene: Scene, controls:PointerLockControls, callback: Function) {
         if (model.startsWith('/')) {
             model = model.substring(1);
         }
         this.scene = scene;
         this.controls = controls;
+        this.environment = new THREE.Group();
+        this.collider = new THREE.Mesh();
         this.initMethod = new Promise(resolve=>{
             new GLTFLoader().load( 'assets/scenes/' + model, res => {
-                const gltfScene = res.scene;
+                const gltfScene:THREE.Group = res.scene;
                 gltfScene.scale.setScalar( .01 );
 
                 const box = new THREE.Box3();
@@ -61,8 +64,10 @@ export class GltfScene {
 
                 // visual geometry setup
                 const toMerge = {};
-                gltfScene.traverse( c => {
+                // @ts-ignore
+                gltfScene.traverse( (c: Mesh) => {
 
+                    // Excludes during loading
                     if (
                         /Boss/.test( c.name ) ||
                         /Enemie/.test( c.name ) ||
@@ -72,34 +77,30 @@ export class GltfScene {
                         /Gate/.test( c.name ) ||
 
                         // spears
-                        /Cube/.test( c.name ) ||
-
-                        // pink brick
-                        c.material && c.material.color.r === 1.0
+                        /Cube/.test( c.name )
                     ) {
-
                         return;
-
                     }
 
-                    if ( c.isMesh ) {
-
-                        const hex = c.material.color.getHex();
+                    if (c.isMesh ) {
+                        const material:MeshStandardMaterial = c.material as MeshStandardMaterial;
+                        const hex = material.color.getHex();
+                        // @ts-ignore
                         toMerge[ hex ] = toMerge[ hex ] || [];
+                        // @ts-ignore
                         toMerge[ hex ].push( c );
-
                     }
 
                 } );
 
                 this.environment = new THREE.Group();
                 for ( const hex in toMerge ) {
-
+                    // @ts-ignore
                     const arr = toMerge[ hex ];
-                    const visualGeometries = [];
-                    arr.forEach( mesh => {
-
-                        if ( mesh.material.emissive.r !== 0 ) {
+                    const visualGeometries: BufferGeometry[] = [];
+                    arr.forEach( (mesh: Mesh) => {
+                        const material = mesh.material as MeshStandardMaterial;
+                        if ( material.emissive.r !== 0 ) {
 
                             this.environment.attach( mesh );
 
@@ -115,7 +116,7 @@ export class GltfScene {
 
                     if ( visualGeometries.length ) {
 
-                        const newGeom = BufferGeometryUtils.mergeBufferGeometries( visualGeometries );
+                        const newGeom = BufferGeometryUtils.mergeBufferGeometries( visualGeometries ) as BufferGeometry;
                         const newMesh = new THREE.Mesh( newGeom, new THREE.MeshStandardMaterial( { color: parseInt( hex ), shadowSide: 2 } ) );
                         newMesh.castShadow = true;
                         newMesh.receiveShadow = true;
@@ -134,9 +135,10 @@ export class GltfScene {
                 mergedGeometry.boundsTree = new MeshBVH( mergedGeometry );
 
                 this.collider = new THREE.Mesh( mergedGeometry );
-                this.collider.material.wireframe = true;
-                this.collider.material.opacity = 0.5;
-                this.collider.material.transparent = true;
+                const colliderMaterial: MeshStandardMaterial = this.collider.material as MeshStandardMaterial;
+                colliderMaterial.wireframe = true;
+                colliderMaterial.opacity = 0.5;
+                colliderMaterial.transparent = true;
 
                 this.visualizer = new MeshBVHVisualizer( this.collider, this.params.visualizeDepth );
 
@@ -147,7 +149,7 @@ export class GltfScene {
                 resolve(this);
             } );
         });
-        this.energyNode = document.getElementById("HUD-energy");
+        this.energyNode = document.getElementById("HUD-energy") as HTMLProgressElement;
         return this;
     }
 
@@ -206,20 +208,24 @@ export class GltfScene {
 
     addToScene() {
         if (this.loaded) {
-            this.scene.add( this.visualizer );
-            this.scene.add( this.collider );
-            this.scene.add( this.environment );
-        } else {
-            this.initMethod.then(()=>{
+            if (this.visualizer) {
                 this.scene.add( this.visualizer );
                 this.scene.add( this.collider );
                 this.scene.add( this.environment );
-            })
+            }
+        } else {
+            this.initMethod.then(()=>{
+                if (this.visualizer) {
+                    this.scene.add( this.visualizer );
+                    this.scene.add( this.collider );
+                    this.scene.add( this.environment );
+                }
+            });
         }
     }
 
     updatePlayer(delta:number, camera: THREE.PerspectiveCamera, player: Mesh) {
-        if (this.collider && camera && player) {
+        if (this.collider && camera && player && this.visualizer) {
             this.collider.visible = this.params.displayCollider;
             this.visualizer.visible = this.params.displayBVH;
 
@@ -260,7 +266,6 @@ export class GltfScene {
             }
 
             if (this.energyNode) {
-
                 this.energyNode.innerHTML = Math.round(this.energy).toString();
                 this.energyNode.value = this.energy;
             }
@@ -304,7 +309,8 @@ export class GltfScene {
             player.updateMatrixWorld();
 
             // adjust player position based on collisions
-            const capsuleInfo = player.capsuleInfo;
+            // @ts-ignore
+            const capsuleInfo: CapsuleInfo = player["capsuleInfo"] as CapsuleInfo;
             tempBox.makeEmpty();
             tempMat.copy( this.collider.matrixWorld ).invert();
             tempSegment.copy( capsuleInfo.segment );
@@ -320,31 +326,33 @@ export class GltfScene {
             tempBox.min.addScalar( - capsuleInfo.radius );
             tempBox.max.addScalar( capsuleInfo.radius );
 
-            this.collider.geometry.boundsTree.shapecast( {
+            if (this.collider.geometry.boundsTree) {
+                this.collider.geometry.boundsTree.shapecast( {
 
-                intersectsBounds: (box:any) => box.intersectsBox( tempBox ),
+                    intersectsBounds: (box:any) => box.intersectsBox( tempBox ),
 
-                intersectsTriangle: (tri:any) => {
+                    intersectsTriangle: (tri:any) => {
 
-                    // check if the triangle is intersecting the capsule and adjust the
-                    // capsule position if it is.
-                    const triPoint = tempVector;
-                    const capsulePoint = tempVector2;
+                        // check if the triangle is intersecting the capsule and adjust the
+                        // capsule position if it is.
+                        const triPoint = tempVector;
+                        const capsulePoint = tempVector2;
 
-                    const distance = tri.closestPointToSegment( tempSegment, triPoint, capsulePoint );
-                    if ( distance < capsuleInfo.radius ) {
+                        const distance = tri.closestPointToSegment( tempSegment, triPoint, capsulePoint );
+                        if ( distance < capsuleInfo.radius ) {
 
-                        const depth = capsuleInfo.radius - distance;
-                        const direction = capsulePoint.sub( triPoint ).normalize();
+                            const depth = capsuleInfo.radius - distance;
+                            const direction = capsulePoint.sub( triPoint ).normalize();
 
-                        tempSegment.start.addScaledVector( direction, depth );
-                        tempSegment.end.addScaledVector( direction, depth );
+                            tempSegment.start.addScaledVector( direction, depth );
+                            tempSegment.end.addScaledVector( direction, depth );
+
+                        }
 
                     }
 
-                }
-
-            } );
+                } );
+            }
 
             // get the adjusted position of the capsule collider in world space after checking
             // triangle collisions and moving it. capsuleInfo.segment.start is assumed to be

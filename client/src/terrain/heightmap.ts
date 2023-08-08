@@ -43,10 +43,10 @@ export class HeightmapTerrain {
 // ground
         const groundGeometry = new THREE.PlaneGeometry( 4000, 4000, 250, 250 );
 
-        const colorScale = 300.0;
-        /*const uniforms = {
-            bumpTexture: {value: disMap},
-            bumpScale: {value: colorScale}
+        /*const colorScale = 300.0;
+        const uniforms = {
+           bumpTexture: {value: disMap},
+           bumpScale: {value: colorScale}
         }*/
 
         /**

@@ -1,7 +1,7 @@
 import menuTemplate from './pages/menu.html?raw'
 import pauseMenuTemplate from './pages/pause.html?raw'
 import inGameTemplate from './pages/ingame.html?raw'
-import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 
 export class HUDController {
     private inGame: HTMLDivElement;
@@ -38,12 +38,13 @@ export class HUDController {
         this.controls = controls;
 
         this.mainMenu.onclick = (event: MouseEvent) => {
-            if (event.target && event.target.parentElement.id === 'maps' && event.target.id) {
-                console.log('Selected level: ', event.target.id);
-                this.renderGame(event.target.id);
+            const target: HTMLElement = event.target as HTMLElement;
+            if (target && target.parentElement && target.parentElement.id === 'maps' && target.id) {
+                console.log('Selected level: ', target.id);
+                this.renderGame(target.id);
             }
         };
-        this.pauseMenu.onclick = (event: MouseEvent) => {
+        this.pauseMenu.onclick = () => {
             this.renderGame(null);
         };
         this.controls.addEventListener( 'unlock', () => {
@@ -64,6 +65,7 @@ export class HUDController {
     }
 
     renderGame(level: string|null) {
+        console.log('Render level: ', level);
         this.inGame.style.display = 'block';
         this.pauseMenu.style.display = 'none';
         this.mainMenu.style.display = 'none';

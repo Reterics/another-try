@@ -1,28 +1,27 @@
 import * as THREE from "three";
-import {Scene} from "three";
-import {ImprovedNoise} from "three/examples/jsm/math/ImprovedNoise";
-import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+import { Scene } from "three";
+import { ImprovedNoise } from "three/examples/jsm/math/ImprovedNoise";
 
 const
     worldWidthDefault = 256,
-    worldDepthDefault = 256,
+    worldDepthDefault = 256;/*,
     worldHalfWidth = worldWidthDefault / 2,
     worldHalfDepth = worldDepthDefault / 2,
-    scaleFactor = 10;
+    scaleFactor = 10;*/
 
 
 
 let texture, mesh;
 
-export function initTerrain (scene: Scene, controls: PointerLockControls,
+export function initTerrain (scene: Scene,
     worldWidth = worldWidthDefault,
     worldDepth = worldDepthDefault) {
 
     const data = generateHeight( worldWidth, worldDepth );
-    let controlsObject = controls.getObject()
-    let pos = controlsObject.position
-    let rotation = controlsObject.rotation
-    //pos.y = data[ worldHalfWidth + worldHalfDepth * worldWidth ] + 500;
+    //let controlsObject = controls.getObject()
+    // let pos = controlsObject.position
+    // let rotation = controlsObject.rotation
+    // pos.y = data[ worldHalfWidth + worldHalfDepth * worldWidth ] + 500;
     const geometry = new THREE.PlaneGeometry( 7500, 7500, worldWidth - 1, worldDepth - 1 );
     geometry.rotateX( - Math.PI / 2 );
 
@@ -42,13 +41,13 @@ export function initTerrain (scene: Scene, controls: PointerLockControls,
     mesh = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( { map: texture, side: THREE.DoubleSide } ) );
     mesh.name = "MainTerrain";
     // mesh.geometry.verticesNeedUpdate = true;
-    //scene.add( mesh );
+    scene.add( mesh );
 
     return mesh;
 }
 
 
-function generateHeight( width, height ) {
+function generateHeight( width: number, height: number ):Uint8Array {
 
     const size = width * height, data = new Uint8Array( size ),
         perlin = new ImprovedNoise(), z = Math.random() * 100;
@@ -92,7 +91,7 @@ function generateHeight( width, height ) {
 
 }
 
-function generateTexture( data, width, height ) {
+function generateTexture( data: Uint8Array, width: number, height: number ): HTMLCanvasElement {
 
     // bake lighting into texture
 
@@ -108,53 +107,57 @@ function generateTexture( data, width, height ) {
     canvas.height = height;
 
     context = canvas.getContext( '2d' );
-    context.fillStyle = '#000';
-    context.fillRect( 0, 0, width, height );
+    if (context) {
+        context.fillStyle = '#000';
+        context.fillRect( 0, 0, width, height );
 
-    image = context.getImageData( 0, 0, canvas.width, canvas.height );
-    imageData = image.data;
+        image = context.getImageData( 0, 0, canvas.width, canvas.height );
+        imageData = image.data;
 
-    for ( let i = 0, j = 0, l = imageData.length; i < l; i += 4, j ++ ) {
+        for ( let i = 0, j = 0, l = imageData.length; i < l; i += 4, j ++ ) {
 
-        vector3.x = data[ j - 2 ] - data[ j + 2 ];
-        vector3.y = 2;
-        vector3.z = data[ j - width * 2 ] - data[ j + width * 2 ];
-        vector3.normalize();
+            vector3.x = data[ j - 2 ] - data[ j + 2 ];
+            vector3.y = 2;
+            vector3.z = data[ j - width * 2 ] - data[ j + width * 2 ];
+            vector3.normalize();
 
-        shade = vector3.dot( sun );
+            shade = vector3.dot( sun );
 
-        imageData[ i ] = ( 96 + shade * 128 ) * ( 0.5 + data[ j ] * 0.007 );
-        imageData[ i + 1 ] = ( 32 + shade * 96 ) * ( 0.5 + data[ j ] * 0.007 );
-        imageData[ i + 2 ] = ( shade * 96 ) * ( 0.5 + data[ j ] * 0.007 );
+            imageData[ i ] = ( 96 + shade * 128 ) * ( 0.5 + data[ j ] * 0.007 );
+            imageData[ i + 1 ] = ( 32 + shade * 96 ) * ( 0.5 + data[ j ] * 0.007 );
+            imageData[ i + 2 ] = ( shade * 96 ) * ( 0.5 + data[ j ] * 0.007 );
 
+        }
+
+        context.putImageData( image, 0, 0 );
     }
-
-    context.putImageData( image, 0, 0 );
-
     // Scaled 4x
-
     const canvasScaled = document.createElement( 'canvas' );
     canvasScaled.width = width * 4;
     canvasScaled.height = height * 4;
 
+
+
     context = canvasScaled.getContext( '2d' );
-    context.scale( 4, 4 );
-    context.drawImage( canvas, 0, 0 );
+    if (context) {
+        context.scale( 4, 4 );
+        context.drawImage( canvas, 0, 0 );
 
-    image = context.getImageData( 0, 0, canvasScaled.width, canvasScaled.height );
-    imageData = image.data;
+        image = context.getImageData( 0, 0, canvasScaled.width, canvasScaled.height );
+        imageData = image.data;
 
-    for ( let i = 0, l = imageData.length; i < l; i += 4 ) {
+        for ( let i = 0, l = imageData.length; i < l; i += 4 ) {
 
-        const v = ~ ~ ( Math.random() * 5 );
+            const v = ~ ~ ( Math.random() * 5 );
 
-        imageData[ i ] += v;
-        imageData[ i + 1 ] += v;
-        imageData[ i + 2 ] += v;
+            imageData[ i ] += v;
+            imageData[ i + 1 ] += v;
+            imageData[ i + 2 ] += v;
 
+        }
+
+        context.putImageData( image, 0, 0 );
     }
-
-    context.putImageData( image, 0, 0 );
 
     return canvasScaled;
 

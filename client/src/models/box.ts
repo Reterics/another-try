@@ -23,7 +23,7 @@ export class Box {
         this.scene.add(this.mesh);
     }
 
-    setPosition(x, y, z) {
+    setPosition(x: number, y: number, z: number) {
         this.mesh.position.set(x, y, z)
     }
 
