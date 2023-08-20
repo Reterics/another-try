@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MeshBVH, MeshBVHVisualizer, StaticGeometryGenerator } from 'three-mesh-bvh';
-import {BufferGeometry, Group, Mesh, MeshStandardMaterial, Scene} from "three";
+import {BufferGeometry, Group, Light, Mesh, MeshStandardMaterial, Scene} from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import {CapsuleInfo} from "../main";
@@ -17,6 +17,16 @@ const direction = new THREE.Vector3();
 const velocity = new THREE.Vector3();
 let timeUntilSprintOptionDisables: Date | undefined | null;
 
+interface MapSegment {
+    visualizer: MeshBVHVisualizer;
+    collider: Mesh;
+    environment: Group;
+}
+
+interface MapSegments {
+    [key: string]: MapSegment
+}
+
 /*function getAzimuthalAngle(controls) {
     return Math.atan2(controls.camera.rotation.x, controls.camera.rotation.z);
 }*/
@@ -24,6 +34,7 @@ export class GltfScene {
     protected visualizer: MeshBVHVisualizer | undefined;
     protected collider: Mesh;
     protected environment: Group;
+    protected mapSegments: MapSegments;
     params = {
         displayCollider: false,
         displayBVH: false,
@@ -59,26 +70,36 @@ export class GltfScene {
         this.energyNode = document.getElementById("HUD-energy") as HTMLProgressElement;
         return this;
     }
+    // eslint-disable-next-line @typescript-eslint/ban-types
     _loadGLTF(callback: Function|undefined): Promise<GltfScene> {
+        let targetModel = this.selectedModel.startsWith('https://') || this.selectedModel.startsWith('http://') ?
+            this.selectedModel : 'assets/scenes/' + this.selectedModel;
+        if (!targetModel.endsWith('.gtlf') && !targetModel.endsWith('.glb')) {
+            // Apply Coordinate
+            const coordinate = this.controls.camera.position.x + ',' + this.controls.camera.position.y + ',' + this.controls.camera.position.z;
+            console.error(coordinate);
+
+            targetModel += '.gltf';
+        }
         return new Promise(resolve=> {
-            const targetModel = this.selectedModel.startsWith('https://') || this.selectedModel.startsWith('http://') ?
-                this.selectedModel : 'assets/scenes/' + this.selectedModel;
+
             new GLTFLoader().load( targetModel, res => {
                 const gltfScene:THREE.Group = res.scene;
-                gltfScene.scale.setScalar( .01 );
+                //gltfScene.scale.setScalar( .01 );
 
                 const box = new THREE.Box3();
                 box.setFromObject( gltfScene );
                 box.getCenter( gltfScene.position ).negate();
                 gltfScene.updateMatrixWorld( true );
-
                 // visual geometry setup
                 const toMerge = {};
+                const toMergeTexture = {};
+                this.environment = new THREE.Group();
                 // @ts-ignore
-                gltfScene.traverse( (c: Mesh) => {
+                gltfScene.traverse( (c: Mesh|Light) => {
 
                     // Excludes during loading
-                    if (
+                   /* if (
                         /Boss/.test( c.name ) ||
                         /Enemie/.test( c.name ) ||
                         /Shield/.test( c.name ) ||
@@ -90,20 +111,28 @@ export class GltfScene {
                         /Cube/.test( c.name )
                     ) {
                         return;
-                    }
+                    }*/
 
                     if (c.isMesh ) {
                         const material:MeshStandardMaterial = c.material as MeshStandardMaterial;
-                        const hex = material.color.getHex();
+                        let hex = material.color.getHex();
+                        if (material.map) {
+                            hex = Number(hex.toString() + '999');
+                            toMergeTexture[hex] = material;
+                        }
                         // @ts-ignore
                         toMerge[ hex ] = toMerge[ hex ] || [];
                         // @ts-ignore
                         toMerge[ hex ].push( c );
+                    } else if (c.isLight) {
+                        try {
+                            this.scene.add( c.clone(true) );
+                        } catch (e) {
+                            console.error(e);
+                        }
                     }
-
                 } );
 
-                this.environment = new THREE.Group();
                 for ( const hex in toMerge ) {
                     // @ts-ignore
                     const arr = toMerge[ hex ];
@@ -111,31 +140,45 @@ export class GltfScene {
                     arr.forEach( (mesh: Mesh) => {
                         const material = mesh.material as MeshStandardMaterial;
                         if ( material.emissive.r !== 0 ) {
-
                             this.environment.attach( mesh );
-
-                        } else {
+                        } else if(mesh.material && mesh.material.type === "MeshStandardMaterial"){
+                            //this.environment.add(mesh);
 
                             const geom = mesh.geometry.clone();
                             geom.applyMatrix4( mesh.matrixWorld );
                             visualGeometries.push( geom );
-
+                        } else {
+                            const geom = mesh.geometry.clone();
+                            geom.applyMatrix4( mesh.matrixWorld );
+                            visualGeometries.push( geom );
                         }
-
                     } );
 
                     if ( visualGeometries.length ) {
+                        const newGeom = BufferGeometryUtils.mergeGeometries(visualGeometries);
+                            // BufferGeometryUtils.mergeBufferGeometries( visualGeometries ) ;
+                        if (newGeom) {
+                            let material;
+                            if (toMergeTexture[hex]) {
+                                material = toMergeTexture[hex] as MeshStandardMaterial;
+                            } else {
+                                material = new THREE.MeshStandardMaterial( {
+                                    color: parseInt( hex )
+                                    , shadowSide: 2 } );
+                            }
+                            const newMesh = new THREE.Mesh( newGeom, material );
+                            newMesh.castShadow = true;
+                            newMesh.receiveShadow = true;
+                            newMesh.material.shadowSide = 2;
+                            newMesh.material.side = THREE.DoubleSide;
 
-                        const newGeom = BufferGeometryUtils.mergeBufferGeometries( visualGeometries ) as BufferGeometry;
-                        const newMesh = new THREE.Mesh( newGeom, new THREE.MeshStandardMaterial( { color: parseInt( hex ), shadowSide: 2 } ) );
-                        newMesh.castShadow = true;
-                        newMesh.receiveShadow = true;
-                        newMesh.material.shadowSide = 2;
-
-                        this.environment.add( newMesh );
-
+                            this.environment.add( newMesh );
+                        } else {
+                            console.error('Merging visual geometries failed');
+                        }
+                    } else {
+                        console.error('No visual geometries found')
                     }
-
                 }
 
                 const staticGenerator = new StaticGeometryGenerator( this.environment );
@@ -194,6 +237,7 @@ export class GltfScene {
                 case 'KeyD': self.rgtPressed = true; break;
                 case 'KeyA': self.lftPressed = true; break;
                 case 'Space':
+                    self.controls.camera.position.y = 10;
                     if ( self.playerIsOnGround && self.canJump) {
                         velocity.y = 10.0;
                         self.playerIsOnGround = false;

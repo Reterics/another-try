@@ -71,14 +71,15 @@ init();
 
 
 function init() {
-    camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 1000 );
-    camera.position.y = 1;
+    camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 2000 );
+    camera.position.y = 10;
     camera.position.x = 15;
     camera.position.z = 1;
-
+    window.camera = camera;
     scene = new THREE.Scene();
     scene.background = new THREE.Color("white");
-
+    window.scene = scene;
+    window.THREE = THREE;
     const hero = new Hero(scene);
     heroPlayer = hero.getMesh();
     heroPlayer.position.copy(camera.position);
