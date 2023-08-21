@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { MeshBVH, MeshBVHVisualizer, StaticGeometryGenerator } from 'three-mesh-bvh';
-import {BufferGeometry, Group, Light, Mesh, MeshStandardMaterial, Scene} from "three";
+import {ExtendedTriangle, MeshBVH, MeshBVHVisualizer, StaticGeometryGenerator} from 'three-mesh-bvh';
+import {Box3, BufferGeometry, Group, Light, Mesh, MeshStandardMaterial, Object3D, Scene} from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import {CapsuleInfo} from "../main";
@@ -25,6 +25,9 @@ interface MapSegment {
 
 interface MapSegments {
     [key: string]: MapSegment
+}
+interface toMergeType {
+    [key: number]: (Mesh|Light|undefined)[]
 }
 
 /*function getAzimuthalAngle(controls) {
@@ -75,10 +78,6 @@ export class GltfScene {
         let targetModel = this.selectedModel.startsWith('https://') || this.selectedModel.startsWith('http://') ?
             this.selectedModel : 'assets/scenes/' + this.selectedModel;
         if (!targetModel.endsWith('.gtlf') && !targetModel.endsWith('.glb')) {
-            // Apply Coordinate
-            const coordinate = this.controls.camera.position.x + ',' + this.controls.camera.position.y + ',' + this.controls.camera.position.z;
-            console.error(coordinate);
-
             targetModel += '.gltf';
         }
         return new Promise(resolve=> {
@@ -87,49 +86,32 @@ export class GltfScene {
                 const gltfScene:THREE.Group = res.scene;
                 //gltfScene.scale.setScalar( .01 );
 
-                const box = new THREE.Box3();
-                box.setFromObject( gltfScene );
-                box.getCenter( gltfScene.position ).negate();
+                // const box = new THREE.Box3();
+                // box.setFromObject( gltfScene );
+                // box.getCenter( gltfScene.position ).negate();
                 gltfScene.updateMatrixWorld( true );
                 // visual geometry setup
-                const toMerge = {};
+                const toMerge:toMergeType = {};
                 const toMergeTexture = {};
                 this.environment = new THREE.Group();
                 // @ts-ignore
                 gltfScene.traverse( (c: Mesh|Light) => {
-
-                    // Excludes during loading
-                   /* if (
-                        /Boss/.test( c.name ) ||
-                        /Enemie/.test( c.name ) ||
-                        /Shield/.test( c.name ) ||
-                        /Sword/.test( c.name ) ||
-                        /Character/.test( c.name ) ||
-                        /Gate/.test( c.name ) ||
-
-                        // spears
-                        /Cube/.test( c.name )
-                    ) {
-                        return;
-                    }*/
-
                     if (c.isMesh ) {
                         const material:MeshStandardMaterial = c.material as MeshStandardMaterial;
-                        let hex = material.color.getHex();
+                        let hex = material.color.getHex() || 0;
                         if (material.map) {
                             hex = Number(hex.toString() + '999');
                             toMergeTexture[hex] = material;
                         }
-                        // @ts-ignore
-                        toMerge[ hex ] = toMerge[ hex ] || [];
-                        // @ts-ignore
+                        if (!Array.isArray(toMerge[ hex ])) {
+                            toMerge[ hex ] =  [];
+                        }
                         toMerge[ hex ].push( c );
                     } else if (c.isLight) {
-                        try {
-                            this.scene.add( c.clone(true) );
-                        } catch (e) {
-                            console.error(e);
-                        }
+                        // We always need to clone the light, otherwise it fails
+                        this.scene.add( c.clone(true) as Object3D);
+                    } else if(c.isCamera) {
+                        this.controls.camera.position.copy(c.position);
                     }
                 } );
 
@@ -141,12 +123,6 @@ export class GltfScene {
                         const material = mesh.material as MeshStandardMaterial;
                         if ( material.emissive.r !== 0 ) {
                             this.environment.attach( mesh );
-                        } else if(mesh.material && mesh.material.type === "MeshStandardMaterial"){
-                            //this.environment.add(mesh);
-
-                            const geom = mesh.geometry.clone();
-                            geom.applyMatrix4( mesh.matrixWorld );
-                            visualGeometries.push( geom );
                         } else {
                             const geom = mesh.geometry.clone();
                             geom.applyMatrix4( mesh.matrixWorld );
@@ -214,48 +190,47 @@ export class GltfScene {
         camera.position.copy(player.position);
     }
     initPlayerEvents() {
-        const self = this;
-        window.addEventListener( 'keydown', function ( e ) {
+        window.addEventListener( 'keydown', e => {
 
             switch ( e.code ) {
 
                 case 'KeyW':
-                    if(!self.fwdPressed) {
-                        let now = new Date()
+                    if(!this.fwdPressed) {
+                        const now = new Date()
 
                         if(timeUntilSprintOptionDisables != null && timeUntilSprintOptionDisables > now) {
-                            self.sprinting = true; // Temporary not available
+                            this.sprinting = true; // Temporary not available
                         }
 
                         now.setSeconds(now.getSeconds() + 1)
                         timeUntilSprintOptionDisables = now
                     }
-                    self.fwdPressed = true;
+                    this.fwdPressed = true;
 
                     break;
-                case 'KeyS': self.bkdPressed = true; break;
-                case 'KeyD': self.rgtPressed = true; break;
-                case 'KeyA': self.lftPressed = true; break;
+                case 'KeyS': this.bkdPressed = true; break;
+                case 'KeyD': this.rgtPressed = true; break;
+                case 'KeyA': this.lftPressed = true; break;
                 case 'Space':
-                    self.controls.camera.position.y = 10;
-                    if ( self.playerIsOnGround && self.canJump) {
+                    this.controls.camera.position.y = 10;
+                    if ( this.playerIsOnGround && this.canJump) {
                         velocity.y = 10.0;
-                        self.playerIsOnGround = false;
+                        this.playerIsOnGround = false;
                     }
                     break;
 
             }
 
-        } );
+        });
 
-        window.addEventListener( 'keyup', function ( e ) {
+        window.addEventListener( 'keyup', e => {
             switch ( e.code ) {
-                case 'KeyW': self.fwdPressed = false; break;
-                case 'KeyS': self.bkdPressed = false; break;
-                case 'KeyD': self.rgtPressed = false; break;
-                case 'KeyA': self.lftPressed = false; break;
+                case 'KeyW': this.fwdPressed = false; break;
+                case 'KeyS': this.bkdPressed = false; break;
+                case 'KeyD': this.rgtPressed = false; break;
+                case 'KeyA': this.lftPressed = false; break;
             }
-        } );
+        });
     }
 
     addToScene() {
@@ -266,7 +241,7 @@ export class GltfScene {
                 this.scene.add( this.environment );
             }
         } else {
-            this.initMethod.then(()=>{
+            return this.initMethod.then(()=>{
                 if (this.visualizer) {
                     this.scene.add( this.visualizer );
                     this.scene.add( this.collider );
@@ -381,16 +356,23 @@ export class GltfScene {
             if (this.collider.geometry.boundsTree) {
                 this.collider.geometry.boundsTree.shapecast( {
 
-                    intersectsBounds: (box:any) => box.intersectsBox( tempBox ),
+                    intersectsBounds: (box: Box3,
+                                       isLeaf: boolean,
+                                       score: number | undefined,
+                                       depth: number,
+                                       nodeIndex: number) => box.intersectsBox( tempBox ),
 
-                    intersectsTriangle: (tri:any) => {
+                    intersectsTriangle: (triangle:ExtendedTriangle,
+                                         triangleIndex: number,
+                                         contained: boolean,
+                                         depth: number) => {
 
                         // check if the triangle is intersecting the capsule and adjust the
                         // capsule position if it is.
                         const triPoint = tempVector;
                         const capsulePoint = tempVector2;
 
-                        const distance = tri.closestPointToSegment( tempSegment, triPoint, capsulePoint );
+                        const distance = triangle.closestPointToSegment( tempSegment, triPoint, capsulePoint );
                         if ( distance < capsuleInfo.radius ) {
 
                             const depth = capsuleInfo.radius - distance;
