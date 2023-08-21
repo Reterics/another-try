@@ -123,6 +123,16 @@ export class GltfScene {
                         const material = mesh.material as MeshStandardMaterial;
                         if ( material.emissive.r !== 0 ) {
                             this.environment.attach( mesh );
+                        } else if(material.map) {
+                            const geom = mesh.geometry.clone();
+                            geom.applyMatrix4( mesh.matrixWorld );
+                            const newMesh = new THREE.Mesh( geom, material );
+                            newMesh.castShadow = true;
+                            newMesh.receiveShadow = true;
+                            newMesh.material.shadowSide = 2;
+                            newMesh.material.side = THREE.DoubleSide;
+                            this.environment.add( newMesh );
+
                         } else {
                             const geom = mesh.geometry.clone();
                             geom.applyMatrix4( mesh.matrixWorld );
@@ -131,6 +141,7 @@ export class GltfScene {
                     } );
 
                     if ( visualGeometries.length ) {
+                        console.error(visualGeometries);
                         const newGeom = BufferGeometryUtils.mergeGeometries(visualGeometries);
                             // BufferGeometryUtils.mergeBufferGeometries( visualGeometries ) ;
                         if (newGeom) {
