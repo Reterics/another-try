@@ -141,7 +141,6 @@ export class GltfScene {
                     } );
 
                     if ( visualGeometries.length ) {
-                        console.error(visualGeometries);
                         const newGeom = BufferGeometryUtils.mergeGeometries(visualGeometries);
                             // BufferGeometryUtils.mergeBufferGeometries( visualGeometries ) ;
                         if (newGeom) {
@@ -223,7 +222,7 @@ export class GltfScene {
                 case 'KeyD': this.rgtPressed = true; break;
                 case 'KeyA': this.lftPressed = true; break;
                 case 'Space':
-                    this.controls.camera.position.y = 10;
+                    // this.controls.camera.position.y = 10;
                     if ( this.playerIsOnGround && this.canJump) {
                         velocity.y = 10.0;
                         this.playerIsOnGround = false;
