@@ -6,14 +6,13 @@ Another Try is a cutting-edge multiplayer FPS game, developed with the powerful 
 
 Dive deep into a world where the objective is simple: Keep it alive at all costs.
 
-![Another Try In Game](./client/public/ingame.jpg)
 ## Key Features
  - **Mysterious Entity**: As players, you are tasked with a unique mission; to guard an entity. But what is it? And why is it so crucial? Unravel the story as you play.
  - **Intense Multiplayer Action**: Team up with others or compete against them, but you never know that someone is your friend or your enemy. **Friendly fire is on.**
  - **Simple Graphics**: Using low polygon count and minimalist environment, you can be sure, that even your phone can power up the game.
  - **Offline/Online Game Modes**: You can run the game without internet access to practice or explore
 
-![Another Try In Game](./client/public/ingame2.jpg)
+![Another Try In Game](./client/public/ingame3.jpg)
 
 ## Requirements
 
