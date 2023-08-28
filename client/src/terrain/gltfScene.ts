@@ -5,6 +5,7 @@ import {Box3, BufferGeometry, Group, Light, Mesh, MeshStandardMaterial, Object3D
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import {CapsuleInfo} from "../main";
+import {Water} from "three/examples/jsm/objects/Water2";
 
 let tempVector = new THREE.Vector3();
 let tempVector2 = new THREE.Vector3();
@@ -45,7 +46,7 @@ export class GltfScene {
         gravity: - 30,
         playerSpeed: 10,
         physicsSteps: 5,
-        spawnCoordinates: [15, 1, 1] // X Y Z
+        spawnCoordinates: [15, 10, 1] // X Y Z
     };
     protected scene: Scene;
     private readonly initMethod;
@@ -448,5 +449,22 @@ export class GltfScene {
             return this._loadGLTF(undefined);
         }
         return new Promise<GltfScene>(resolve => resolve(this));
+    }
+
+    addWater (y = -10, flowMapURL = 'textures/water/flowmap_water.png') {
+        const textureLoader = new THREE.TextureLoader();
+        const waterGeometry = new THREE.PlaneGeometry( 4000, 4000 );
+        const flowMap = textureLoader.load(flowMapURL);
+
+        const water = new Water( waterGeometry, {
+            scale: 2,
+            textureWidth: 1024,
+            textureHeight: 1024,
+            flowMap: flowMap
+        } );
+
+        water.position.y = y;
+        water.rotation.x = Math.PI * - 0.5;
+        this.scene.add( water );
     }
 }

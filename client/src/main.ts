@@ -288,8 +288,9 @@ function init() {
         hudController.setControls(controls);
         hudController.onLoadMap((selectedMap, options)=>{
             if (map) {
-                return map.updateScene(selectedMap).then((map: GltfScene) => {
-                    map.addToScene();
+                return map.updateScene(selectedMap).then(async (map: GltfScene) => {
+                    await map.addToScene();
+                    map.respawn(controls.camera as THREE.PerspectiveCamera, heroPlayer);
                     if (options.y) {
                         camera.position.y = Number(options.y);
                     }
@@ -303,9 +304,10 @@ function init() {
                     }
                 });
             }
-            map = new GltfScene(selectedMap, scene, controls,(map:GltfScene)=>{ //'dungeon_low_poly_game_level_challenge/scene.gltf'
-                map.addToScene();
+            map = new GltfScene(selectedMap, scene, controls,async (map:GltfScene)=>{ //'dungeon_low_poly_game_level_challenge/scene.gltf'
+                await map.addToScene();
                 map.initPlayerEvents();
+                // map.addWater(-10);
             });
             if (!animationRunning) {
                 animate();
