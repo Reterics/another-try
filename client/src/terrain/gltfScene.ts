@@ -38,7 +38,6 @@ export class GltfScene {
     protected visualizer: MeshBVHVisualizer | undefined;
     protected collider: Mesh;
     protected environment: Group;
-    protected mapSegments: MapSegments;
     params = {
         displayCollider: false,
         displayBVH: false,

@@ -75,11 +75,8 @@ function init() {
     camera.position.y = 10;
     camera.position.x = 15;
     camera.position.z = 1;
-    window.camera = camera;
     scene = new THREE.Scene();
     scene.background = new THREE.Color("white");
-    window.scene = scene;
-    window.THREE = THREE;
     const hero = new Hero(scene);
     heroPlayer = hero.getMesh();
     heroPlayer.position.copy(camera.position);
