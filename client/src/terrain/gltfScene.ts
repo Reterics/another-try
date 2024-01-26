@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import {ExtendedTriangle, MeshBVH, MeshBVHVisualizer, StaticGeometryGenerator} from 'three-mesh-bvh';
-import {Box3, BufferGeometry, Group, Light, Mesh, MeshStandardMaterial, Object3D, Scene} from "three";
+import {ExtendedTriangle, MeshBVH, MeshBVHHelper, StaticGeometryGenerator} from 'three-mesh-bvh';
+import {Box3, BufferGeometry, Camera, Group, Light, Mesh, MeshStandardMaterial, Object3D, Scene} from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import {CapsuleInfo} from "../main";
@@ -19,23 +19,27 @@ const velocity = new THREE.Vector3();
 let timeUntilSprintOptionDisables: Date | undefined | null;
 
 interface MapSegment {
-    visualizer: MeshBVHVisualizer;
+    visualizer: MeshBVHHelper;
     collider: Mesh;
     environment: Group;
 }
 
+// @ts-ignore
 interface MapSegments {
     [key: string]: MapSegment
 }
 interface toMergeType {
     [key: number]: (Mesh|Light|undefined)[]
 }
+interface toMergeTextureType {
+    [key: number]: (MeshStandardMaterial|undefined)
+}
 
 /*function getAzimuthalAngle(controls) {
     return Math.atan2(controls.camera.rotation.x, controls.camera.rotation.z);
 }*/
 export class GltfScene {
-    protected visualizer: MeshBVHVisualizer | undefined;
+    protected visualizer: MeshBVHHelper | undefined;
     protected collider: Mesh;
     protected environment: Group;
     params = {
@@ -92,11 +96,11 @@ export class GltfScene {
                 gltfScene.updateMatrixWorld( true );
                 // visual geometry setup
                 const toMerge:toMergeType = {};
-                const toMergeTexture = {};
+                const toMergeTexture:toMergeTextureType = {};
                 this.environment = new THREE.Group();
                 // @ts-ignore
-                gltfScene.traverse( (c: Mesh|Light) => {
-                    if (c.isMesh ) {
+                gltfScene.traverse( (c: Mesh|Light|Camera) => {
+                    if (c instanceof Mesh && c.isMesh) {
                         const material:MeshStandardMaterial = c.material as MeshStandardMaterial;
                         let hex = material.color.getHex() || 0;
                         if (material.map) {
@@ -107,10 +111,10 @@ export class GltfScene {
                             toMerge[ hex ] =  [];
                         }
                         toMerge[ hex ].push( c );
-                    } else if (c.isLight) {
+                    } else if (c instanceof Light && c.isLight) {
                         // We always need to clone the light, otherwise it fails
                         this.scene.add( c.clone(true) as Object3D);
-                    } else if(c.isCamera) {
+                    } else if(c instanceof Camera && c.isCamera) {
                         this.controls.camera.position.copy(c.position);
                     }
                 } );
@@ -119,25 +123,29 @@ export class GltfScene {
                     // @ts-ignore
                     const arr = toMerge[ hex ];
                     const visualGeometries: BufferGeometry[] = [];
-                    arr.forEach( (mesh: Mesh) => {
-                        const material = mesh.material as MeshStandardMaterial;
-                        if ( material.emissive.r !== 0 ) {
-                            this.environment.attach( mesh );
-                        } else if(material.map) {
-                            const geom = mesh.geometry.clone();
-                            geom.applyMatrix4( mesh.matrixWorld );
-                            const newMesh = new THREE.Mesh( geom, material );
-                            newMesh.castShadow = true;
-                            newMesh.receiveShadow = true;
-                            newMesh.material.shadowSide = 2;
-                            newMesh.material.side = THREE.DoubleSide;
-                            this.environment.add( newMesh );
+                    arr.forEach( (element) => {
+                        if (element) {
+                            const mesh = element as Mesh;
+                            const material = mesh.material as MeshStandardMaterial;
+                            if ( material.emissive.r !== 0 ) {
+                                this.environment.attach( mesh );
+                            } else if(material.map) {
+                                const geom = mesh.geometry.clone();
+                                geom.applyMatrix4( mesh.matrixWorld );
+                                const newMesh = new THREE.Mesh( geom, material );
+                                newMesh.castShadow = true;
+                                newMesh.receiveShadow = true;
+                                newMesh.material.shadowSide = 2;
+                                newMesh.material.side = THREE.DoubleSide;
+                                this.environment.add( newMesh );
 
-                        } else {
-                            const geom = mesh.geometry.clone();
-                            geom.applyMatrix4( mesh.matrixWorld );
-                            visualGeometries.push( geom );
+                            } else {
+                                const geom = mesh.geometry.clone();
+                                geom.applyMatrix4( mesh.matrixWorld );
+                                visualGeometries.push( geom );
+                            }
                         }
+
                     } );
 
                     if ( visualGeometries.length ) {
@@ -179,7 +187,7 @@ export class GltfScene {
                 colliderMaterial.opacity = 0.5;
                 colliderMaterial.transparent = true;
 
-                this.visualizer = new MeshBVHVisualizer( this.collider, this.params.visualizeDepth );
+                this.visualizer = new MeshBVHHelper( this.collider, this.params.visualizeDepth );
 
                 this.loaded = true;
                 if (typeof callback === 'function') {
@@ -366,16 +374,9 @@ export class GltfScene {
             if (this.collider.geometry.boundsTree) {
                 this.collider.geometry.boundsTree.shapecast( {
 
-                    intersectsBounds: (box: Box3,
-                                       isLeaf: boolean,
-                                       score: number | undefined,
-                                       depth: number,
-                                       nodeIndex: number) => box.intersectsBox( tempBox ),
+                    intersectsBounds: (box: Box3) => box.intersectsBox( tempBox ),
 
-                    intersectsTriangle: (triangle:ExtendedTriangle,
-                                         triangleIndex: number,
-                                         contained: boolean,
-                                         depth: number) => {
+                    intersectsTriangle: (triangle:ExtendedTriangle) => {
 
                         // check if the triangle is intersecting the capsule and adjust the
                         // capsule position if it is.
