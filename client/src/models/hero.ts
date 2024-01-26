@@ -1,7 +1,7 @@
 import {RoundedBoxGeometry} from "three/examples/jsm/geometries/RoundedBoxGeometry";
 import * as THREE from "three";
 import {Mesh, MeshStandardMaterial, Scene} from "three";
-import {CapsuleInfo} from "../main";
+import { CapsuleInfo } from "../types/main";
 
 
 export class Hero {

@@ -4,8 +4,8 @@ import {ExtendedTriangle, MeshBVH, MeshBVHHelper, StaticGeometryGenerator} from 
 import {Box3, BufferGeometry, Camera, Group, Light, Mesh, MeshStandardMaterial, Object3D, Scene} from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
-import {CapsuleInfo} from "../main";
 import {Water} from "three/examples/jsm/objects/Water2";
+import {CapsuleInfo} from "../types/main.ts";
 
 let tempVector = new THREE.Vector3();
 let tempVector2 = new THREE.Vector3();

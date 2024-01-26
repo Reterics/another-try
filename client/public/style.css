@@ -147,3 +147,10 @@ a.logo-title {
 #maps > a {
     margin-bottom: 2px;
 }
+#HUD-stats {
+    display: flex;
+    z-index: 99 !important;
+    position: absolute;
+    padding: 3px;
+    background-color: #e7e7e7e6;
+}

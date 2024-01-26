@@ -7,9 +7,11 @@ import {Sphere} from "./models/sphere";
 import {initSky} from "./initMethods";
 import {GltfScene} from "./terrain/gltfScene";
 import {Hero} from "./models/hero";
-import {HUDController} from "./hud";
-import {Mesh, Object3D, PerspectiveCamera, Raycaster, Scene, Vector3, WebGLRenderer} from "three";
+import {HUDController} from "./controllers/HUDController.ts";
+import {Mesh, Object3D, Vector3} from "three";
 import {acceleratedRaycast, computeBoundsTree, disposeBoundsTree} from "three-mesh-bvh";
+import {CreatorController} from "./controllers/CreatorController.ts";
+import {PlayerList, PlayerNames, PlayerScores, ServerMessage} from "./types/main.ts";
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
@@ -18,34 +20,8 @@ THREE.Mesh.prototype.raycast = acceleratedRaycast;
 let socket: Socket;
 
 
-let camera:PerspectiveCamera,
-    scene: Scene,
-    renderer: WebGLRenderer,
-    controls: PointerLockControls;
-// const objects: Mesh[] = [];
-
 // TODO: Move interfaces outside
-interface PlayerList {
-    [key: number|string]: Player
-}
-interface PlayerNames {
-    [key: number|string]: string|null|undefined
-}
-interface PlayerScores {
-    [key: number|string]: number
-}
-interface ServerMessage {
-    type: string;
-    player: string|number;
-    attacker?: string|number;
-    name?: string;
-    past?: boolean;
-    msg?: string;
-}
-export interface CapsuleInfo {
-    radius: number,
-    segment: THREE.Line3
-}
+
 let playerNames:PlayerNames = {}
 
 let players: PlayerList = {}
@@ -56,8 +32,6 @@ let scores: PlayerScores = {}
 
 let typingAMessage = false
 
-let raycaster: Raycaster;
-
 let shoot = false;
 
 let prevTime = performance.now();
@@ -67,22 +41,29 @@ let map: GltfScene;
 let animationRunning = false;
 
 const hudController = new HUDController();
-init();
+const {
+    camera,
+    renderer,
+    scene,
+    controls,
+    raycaster} = init();
+// @ts-ignore
+const creatorController = new CreatorController(camera, scene, hudController);
 
 
 function init() {
-    camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 2000 );
+    const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 2000 );
     camera.position.y = 10;
     camera.position.x = 15;
     camera.position.z = 1;
-    scene = new THREE.Scene();
+    const scene = new THREE.Scene();
     scene.background = new THREE.Color("white");
     const hero = new Hero(scene);
     heroPlayer = hero.getMesh();
     heroPlayer.position.copy(camera.position);
     hero.addToScene();
 
-    controls = new PointerLockControls( camera, document.body );
+    const controls = new PointerLockControls( camera, document.body );
 
     /*const blocker = document.getElementById( 'blocker' );
     const crosshair = document.getElementById( 'crosshair' )
@@ -269,9 +250,9 @@ function init() {
     document.addEventListener( 'keydown', onKeyDown, false );
     document.addEventListener("click", onClick, false);
 
-    raycaster = new THREE.Raycaster( new THREE.Vector3(), new THREE.Vector3( 0, - 1, 0 ), 0, 10 );
+    const raycaster = new THREE.Raycaster( new THREE.Vector3(), new THREE.Vector3( 0, - 1, 0 ), 0, 10 );
 
-    renderer = new THREE.WebGLRenderer( { antialias: true } );
+    const renderer = new THREE.WebGLRenderer( { antialias: true } );
     renderer.setPixelRatio( window.devicePixelRatio );
     renderer.setSize( window.innerWidth, window.innerHeight );
     document.body.appendChild( renderer.domElement );
@@ -314,6 +295,9 @@ function init() {
 
     initSky(scene);
 
+    return {
+        camera, renderer, controls, scene, hero, raycaster
+    }
 }
 
 
@@ -408,6 +392,8 @@ function animate() {
         const delta = ( time - prevTime ) / 1000;
         //heroPlayer.position.copy(camera.position);
         map.updatePlayer(delta, camera, heroPlayer);
+        creatorController.update(delta)
+
     }
 
     prevTime = time;

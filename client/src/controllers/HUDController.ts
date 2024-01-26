@@ -1,7 +1,8 @@
-import menuTemplate from './pages/menu.html?raw'
-import pauseMenuTemplate from './pages/pause.html?raw'
-import inGameTemplate from './pages/ingame.html?raw'
+import menuTemplate from '../pages/menu.html?raw'
+import pauseMenuTemplate from '../pages/pause.html?raw'
+import inGameTemplate from '../pages/ingame.html?raw'
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
+import {CreatorController} from "./CreatorController.ts";
 
 interface MapOptions {
     y?: number|string;
@@ -10,11 +11,16 @@ interface MapOptions {
 }
 
 export class HUDController {
-    private inGame: HTMLDivElement;
-    private mainMenu: HTMLDivElement;
-    private pauseMenu: HTMLDivElement;
+    private readonly inGame: HTMLDivElement;
+    private readonly mainMenu: HTMLDivElement;
+    private readonly pauseMenu: HTMLDivElement;
     private controls: PointerLockControls | undefined;
     private onload: Function|undefined;
+    element: HTMLElement|null;
+    private updatePeriod: number;
+    private _elapsed: number;
+    _preDelta: number;
+    private stats: HTMLElement|null;
 
     constructor() {
         // We use createElement because it is DOM level 1 feature, faster than innerHTML
@@ -36,8 +42,29 @@ export class HUDController {
         document.body.appendChild(this.inGame);
         document.body.appendChild(this.mainMenu);
         document.body.appendChild(this.pauseMenu);
+
+
+        this.updatePeriod = 1;
+        this._elapsed = 0;
+        this._preDelta = 0;
+
+        this.element = document.querySelector('#HUD-information');
+        this.stats = document.querySelector('#HUD-stats');
+        if(!this.element) {
+            this._loadHUD();
+        }
     }
 
+    _loadHUD() {
+        const el = document.querySelector('#HUD-information');
+        if (!el) {
+            return setTimeout(()=>{
+                this._loadHUD.bind(this);
+            }, 200);
+        }
+        this.element = el as HTMLElement;
+        this.stats = document.querySelector('#HUD-stats') as HTMLElement;
+    }
     setControls(controls: PointerLockControls) {
         if (!controls) {
             return;
@@ -102,5 +129,51 @@ export class HUDController {
 
     onLoadMap(param: (selectedMap: string, options: MapOptions) => void) {
         this.onload = param;
+    }
+
+    updateText (string: string|number, target: HTMLElement|null) {
+        if(target) {
+            target.innerHTML = String(string);
+        }
+    }
+
+    updateLines (string: (string|number)[], target: HTMLElement|null) {
+        this.updateText(string.join('<br>'), target);
+    }
+
+    update(delta: number|null, controller: CreatorController) {
+        const d = delta || this._preDelta;
+        this._elapsed += d;
+        if (delta !== null) {
+            this._preDelta = delta;
+        }
+
+        if (this._elapsed >= this.updatePeriod || delta === null) {
+            this._elapsed = 0;
+
+            const tableData = [
+                Math.round(1 / d) + " FPS"
+            ];
+
+            // @ts-ignore
+            if (window.performance && window.performance.memory) {
+                // @ts-ignore
+                const memory = window.performance.memory;
+                tableData.push(Math.round(memory.usedJSHeapSize / 1048576) + " / "
+                    + Math.round(memory.jsHeapSizeLimit / 1048576) + " (MB Memory)");
+            }
+
+            tableData.push("Far: " + controller.far);
+            tableData.push("Mode: " + controller.active + " (KeyR)");
+            tableData.push("Precision: " + controller.precision);
+            if (controller.reference) {
+                tableData.push("Selected object: " + (controller.reference.type !== "model" ?
+                    controller.reference.type :
+                    controller.reference.name || controller.reference.id || ""));
+            }
+
+
+            this.updateLines(tableData, this.stats);
+        }
     }
 }
