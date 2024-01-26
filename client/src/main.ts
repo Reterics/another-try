@@ -12,16 +12,14 @@ import {Mesh, Object3D, Vector3} from "three";
 import {acceleratedRaycast, computeBoundsTree, disposeBoundsTree} from "three-mesh-bvh";
 import {CreatorController} from "./controllers/CreatorController.ts";
 import {PlayerList, PlayerNames, PlayerScores, ServerMessage} from "./types/main.ts";
+import {createShadowObject} from "./utils/model.ts";
+import {AssetObject} from "./types/assets.ts";
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 let socket: Socket;
-
-
-// TODO: Move interfaces outside
-
 let playerNames:PlayerNames = {}
 
 let players: PlayerList = {}
@@ -47,8 +45,15 @@ const {
     scene,
     controls,
     raycaster} = init();
-// @ts-ignore
 const creatorController = new CreatorController(camera, scene, hudController);
+createShadowObject({
+    "type": "rect",
+    "w": 3,
+    "h": 3
+} as AssetObject).then(shadowObject=>{
+    scene.add(shadowObject);
+    creatorController.updateShadowObject();
+})
 
 
 function init() {

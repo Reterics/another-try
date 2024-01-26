@@ -157,7 +157,7 @@ export class CreatorController {
         const delta = Math.max(-1, Math.min(1, (event.wheelDelta || -event.detail)));
 
         if (this.active === 'far') {
-            this.far += delta * 10;
+            this.far += delta * 5;
             const shadowObject = this.getShadowObject();
             this.dropObject(shadowObject);
         } else if (this.active === 'size') {
