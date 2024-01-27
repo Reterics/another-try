@@ -42,9 +42,10 @@ const {
     camera,
     renderer,
     scene,
+    hero,
     controls,
     raycaster} = init();
-const creatorController = new CreatorController(camera, scene, hudController);
+const creatorController = new CreatorController(camera, scene, hudController, hero);
 createShadowObject({
     "type": "rect",
     "w": 3,

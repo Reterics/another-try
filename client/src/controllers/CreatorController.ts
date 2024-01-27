@@ -7,6 +7,7 @@ import { Active3DMode } from "../types/three";
 import { roundToPrecision } from "../utils/math";
 import {AssetObject} from "../types/assets";
 import {HUDController} from "./HUDController.ts";
+import {Hero} from "../models/hero.ts";
 
 let prevTime = performance.now();
 
@@ -21,8 +22,9 @@ export class CreatorController {
     private hud: HUDController;
     assets?: AssetObject[]
     reference?: AssetObject
+    private readonly hero;
 
-    constructor(camera: PerspectiveCamera, scene: Scene, hudController: HUDController) {
+    constructor(camera: PerspectiveCamera, scene: Scene, hudController: HUDController, hero: Hero) {
         this.controls =  new PointerLockControls(camera, document.body);
 
         const obj = this.controls.getObject();
@@ -40,6 +42,7 @@ export class CreatorController {
         this.far = 100;
         this.active = 'pointer';
         this.precision = 10;
+        this.hero = hero;
 
         this.controls.lock();
         document.addEventListener('keyup', this.onKeyUp.bind(this));
@@ -100,6 +103,10 @@ export class CreatorController {
         if (this.shadowObject) {
             this.shadowObject.visible = this.active !== 'pointer';
         }
+    }
+
+    getPosition() {
+        return this.hero.getPosition()
     }
 
     dropObject (object: Object3D|undefined) {

@@ -25,6 +25,7 @@ export class HUDController {
     private scores: HTMLElement|null;
     private messageInput: HTMLElement|null;
     private messageList: HTMLElement|null;
+    private footer: HTMLElement|null;
 
     constructor() {
         // We use createElement because it is DOM level 1 feature, faster than innerHTML
@@ -57,6 +58,7 @@ export class HUDController {
         this.scores = document.querySelector('#HUD-information') as HTMLElement;
         this.messageInput = document.querySelector('#messageInput') as HTMLElement;
         this.messageList = document.querySelector('#messageList') as HTMLElement;
+        this.footer = document.querySelector('#HUD-footer') as HTMLElement;
         if(!this.element) {
             this._loadHUD();
         }
@@ -82,6 +84,7 @@ export class HUDController {
         this.scores = document.querySelector('#HUD-information') as HTMLElement;
         this.messageInput = document.querySelector('#messageInput') as HTMLElement;
         this.messageList = document.querySelector('#messageList') as HTMLElement;
+        this.footer = document.querySelector('#HUD-footer') as HTMLElement;
     }
     setControls(controls: PointerLockControls) {
         if (!controls) {
@@ -190,6 +193,10 @@ export class HUDController {
                     controller.reference.name || controller.reference.id || ""));
             }
 
+            const position = controller.getPosition();
+            this.updateText('X: ' + position.x.toFixed(2) +
+                ' Y: ' + position.y.toFixed(2) +
+                ' Z: ' + position.z.toFixed(2), this.footer);
 
             this.updateLines(tableData, this.stats);
         }

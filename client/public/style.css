@@ -126,10 +126,16 @@ a.logo-title {
 }
 
 .user-image > img {
-    max-height: 48px;
+    height: 48px;
+    width: 48px;
 }
-#HUD > .user-image, .user-meta > * {
-    background-color: #e7e7e7e6;
+#HUD > .user-image {
+    background: white;
+    border-radius: 32px;
+    height: 48px;
+}
+#HUD > .user-meta > * {
+    background-color: rgba(78, 78, 78, 0.31);
 }
 .user-stats {
     height: 27px;
@@ -152,7 +158,7 @@ a.logo-title {
     z-index: 99 !important;
     position: absolute;
     padding: 3px;
-    background-color: #e7e7e7e6;
+    background-color: rgba(78, 78, 78, 0.31);
 }
 
 .HUD-messages {
@@ -174,4 +180,11 @@ a.logo-title {
     border: 1px solid rgb(23 23 23);
     height: 20px;
     padding-left: 5px;
+}
+
+#HUD-footer {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    text-align: end;
 }

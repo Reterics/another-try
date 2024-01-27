@@ -32,4 +32,8 @@ export class Hero {
     addToScene() {
         this.scene.add(this.mesh);
     }
+
+    getPosition() {
+        return this.mesh.position.clone();
+    }
 }
