@@ -3,6 +3,7 @@ import pauseMenuTemplate from '../pages/pause.html?raw'
 import inGameTemplate from '../pages/ingame.html?raw'
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import {CreatorController} from "./CreatorController.ts";
+import {PlayerNames, PlayerScores} from "../types/main.ts";
 
 interface MapOptions {
     y?: number|string;
@@ -17,10 +18,14 @@ export class HUDController {
     private controls: PointerLockControls | undefined;
     private onload: Function|undefined;
     element: HTMLElement|null;
-    private updatePeriod: number;
+    private _updatePeriod: number;
     private _elapsed: number;
     _preDelta: number;
     private stats: HTMLElement|null;
+    private scores: HTMLElement|null;
+    private messageInput: HTMLElement|null;
+    private messages: HTMLElement|null;
+    private messageList: HTMLElement|null;
 
     constructor() {
         // We use createElement because it is DOM level 1 feature, faster than innerHTML
@@ -44,15 +49,27 @@ export class HUDController {
         document.body.appendChild(this.pauseMenu);
 
 
-        this.updatePeriod = 1;
+        this._updatePeriod = 1;
         this._elapsed = 0;
         this._preDelta = 0;
 
         this.element = document.querySelector('#HUD-information');
-        this.stats = document.querySelector('#HUD-stats');
+        this.stats = document.querySelector('#HUD-stats') as HTMLElement;
+        this.scores = document.querySelector('#HUD-information') as HTMLElement;
+        this.messages = document.querySelector('#messages') as HTMLElement;
+        this.messageInput = document.querySelector('#messageInput') as HTMLElement;
+        this.messageList = document.querySelector('#messageList') as HTMLElement;
         if(!this.element) {
             this._loadHUD();
         }
+    }
+
+    get updatePeriod(): number {
+        return this._updatePeriod;
+    }
+
+    set updatePeriod(value: number) {
+        this._updatePeriod = value;
     }
 
     _loadHUD() {
@@ -64,6 +81,10 @@ export class HUDController {
         }
         this.element = el as HTMLElement;
         this.stats = document.querySelector('#HUD-stats') as HTMLElement;
+        this.scores = document.querySelector('#HUD-information') as HTMLElement;
+        this.messages = document.querySelector('#messages') as HTMLElement;
+        this.messageInput = document.querySelector('#messageInput') as HTMLElement;
+        this.messageList = document.querySelector('#messageList') as HTMLElement;
     }
     setControls(controls: PointerLockControls) {
         if (!controls) {
@@ -148,7 +169,7 @@ export class HUDController {
             this._preDelta = delta;
         }
 
-        if (this._elapsed >= this.updatePeriod || delta === null) {
+        if (this._elapsed >= this._updatePeriod || delta === null) {
             this._elapsed = 0;
 
             const tableData = [
@@ -174,6 +195,75 @@ export class HUDController {
 
 
             this.updateLines(tableData, this.stats);
+        }
+    }
+
+    updateScores(playerNames: PlayerNames, scores: PlayerScores) {
+        let output = ""
+        let player
+        let loops = 0
+        for (player in playerNames) {
+            output += "<b>" + playerNames[player] + ": </b>"
+
+            if(scores[player] == null) {
+                output += "0"
+            }
+            else {
+                output += scores[player] + ""
+            }
+
+            loops += 1
+
+
+            if(loops != Object.keys(playerNames).length) {
+                output += ", "
+            }
+        }
+        if (this.scores) {
+            this.scores.innerHTML = output;
+        }
+    }
+
+
+    onMessage(message: string) {
+        if (this.messageList) {
+            const div = document.createElement('div');
+            div.innerText = message;
+            this.messageList.appendChild(div);
+        }
+    }
+
+    toggleChat() {
+        if (this.messages) {
+            if (this.messages.style.display !== 'none') {
+                this.messages.style.display = "none";
+            } else {
+                this.messages.style.display = "flex";
+            }
+        }
+    }
+
+    isChatActive(): boolean {
+        return !!(this.messages && this.messages.style.display !== 'none');
+    }
+
+    getMessage(): string {
+        if (this.messageInput) {
+            return this.messageInput.innerHTML;
+        }
+
+        return "";
+    }
+
+    clearMessage() {
+        if (this.messageInput) {
+            this.messageInput.innerHTML = "";
+        }
+    }
+
+    type(key: string) {
+        if (this.messageInput) {
+            return this.messageInput.innerText += key;
         }
     }
 }

@@ -1,4 +1,4 @@
-<div id="HUD" class="HUD" style="top: 6px; left: 6px;">
+<div id="HUD" style="top: 6px; left: 6px;">
     <div class="user-image">
         <img src="/assets/images/png/head.png" />
     </div>
@@ -11,22 +11,14 @@
         <div id="HUD-information">(Scores will appear here)</div>
     </div>
 </div>
-<div id="HUD-stats" class="HUD" style="top: 6px; right: 6px;"></div>
+<div id="HUD-stats" style="top: 6px; right: 6px;"></div>
 
 
-<div id="typedMessage" class="HUD" style="bottom: 6px; left: 25%; right: 25%; display: none;">
-    <span id="typedMessageOutput"><b>Start typing, your message will appear here.</b></span>
-</div>
 
-<div class="HUD" style="bottom: 6px; left: 6px;">
-    <div id="messageList" style="display: none;">
-        <p><b>Message history</b></p>
-        <p><i>Only the 3 most recent messages are shown.</i></p>
-        <p id="msg3"></p>
-        <p id="msg2"></p>
-        <p id="msg1"></p>
+
+<div id="messages" class="HUD-messages" style="display: none">
+    <div id="messageList"></div>
+    <div id="typedMessage">
+        <div id="messageInput">Press T to start messaging</div>
     </div>
-    <i class="fas fa-envelope"></i> <span id="featuredMessage"></span>
 </div>
-
-<div id="crosshair" class="HUD" style="bottom: 50%; top: 50%; left: 50%; right: 50%; background-color:rgba(0, 0, 0, 0); font-size: 25px; display: none;">+</div>

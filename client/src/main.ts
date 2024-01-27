@@ -28,9 +28,8 @@ let playerNo: string|number;
 
 let scores: PlayerScores = {}
 
-let typingAMessage = false
-
-let shoot = false;
+let shoot = false,
+    isChatActive = false;
 
 let prevTime = performance.now();
 const direction = new THREE.Vector3();
@@ -70,23 +69,8 @@ function init() {
 
     const controls = new PointerLockControls( camera, document.body );
 
-    /*const blocker = document.getElementById( 'blocker' );
-    const crosshair = document.getElementById( 'crosshair' )
-    const instructions = document.getElementById( 'instructions' );
-    const paused = document.getElementById( 'paused' )
-
-    blockerContents.addEventListener( 'click', function() {
-        controls.lock()
-    }, false );*/
-    const featuredMessage = document.getElementById("featuredMessage");
-    const msg3 = document.getElementById("msg3");
-    const msg2 = document.getElementById("msg2");
-    const msg1 = document.getElementById("msg1");
     const name:HTMLInputElement = document.getElementById("name") as HTMLInputElement;
     controls.addEventListener( 'lock', function () {
-        /*instructions.style.display = 'none';
-        blocker.style.display = 'none';
-        crosshair.style.display = 'block'*/
 
         if(socket == null) {
 
@@ -99,7 +83,6 @@ function init() {
 
             socket.on('data', function(msg: ServerMessage) {
                 let message: string = "";
-                let showMsg = true
 
                 if(msg.type == "bul col") {
                     if(msg.player == playerNo) {
@@ -115,7 +98,7 @@ function init() {
                         scores[msg.attacker] += 1
                     }
 
-                    showScores()
+                    hudController.updateScores(playerNames, scores);
                 }
                 else if(msg.type == "config") {
                     playerNo = msg.player
@@ -127,7 +110,6 @@ function init() {
                     }
                 }
                 else if(msg.type == "name") {
-                    if(msg.past) { showMsg = false }
                     message = "\"" + msg.name + "\" has just joined."
                     playerNames[msg.player] = msg.name;
                 }
@@ -138,23 +120,8 @@ function init() {
                     message = "Player \"" + playerNames[msg.player] + "\" just disconnected."
                 }
 
-                if(showMsg && message) {
-                    if (featuredMessage) {
-                        featuredMessage.innerHTML = message;
-                    }
-
-                    setTimeout(function(){
-                        if (msg1 && msg2 && msg3) {
-                            msg3.innerHTML = msg2.innerHTML;
-                            msg2.innerHTML = msg1.innerHTML;
-                            msg1.innerHTML = message;
-                        }
-
-
-                        if(featuredMessage && featuredMessage.innerHTML == message) {
-                            featuredMessage.innerHTML = ""
-                        }
-                    }, 3000);
+                if(message) {
+                    hudController.onMessage(message);
                 }
             });
 
@@ -178,70 +145,22 @@ function init() {
         }
     } );
 
-    /*controls.addEventListener( 'unlock', function () {
-
-        blocker.style.display = 'block';
-        paused.style.display = 'block'
-
-        crosshair.style.display = 'none'
-
-    } );*/
-
     scene.add( controls.getObject() );
-    const typedMessage = document.getElementById("typedMessage") || document.createElement('div');
-    const typedMessageOutput = document.getElementById("typedMessageOutput") || document.createElement('div');
-    const messageList = document.getElementById("messageList") || document.createElement('div');
-
     const onKeyDown = function ( event: KeyboardEvent ) {
-
-        if(typingAMessage) {
-            if(event.keyCode == 191) {
-                typingAMessage = false
-                typedMessage.style.display = "none"
-            }
-            else if(event.keyCode == 13) {
-                typingAMessage = false
-                typedMessage.style.display = "none"
-
-                socket.emit("data", {type: "msg", msg: typedMessageOutput.innerHTML})
+        if(event.code == "KeyT") {
+            hudController.toggleChat();
+            isChatActive = !isChatActive;
+        } else if(hudController.isChatActive()) {
+            if(event.key == "Enter") {
+                const text = hudController.getMessage();
+                if (text) {
+                    socket.emit("data", {type: "msg", msg: text})
+                }
+                hudController.clearMessage();
+                isChatActive = !isChatActive;
             }
             else {
-                let letter = String.fromCharCode(event.keyCode)
-                let expression = new RegExp("^[A-Z0-9_ ]*$")
-
-                if(expression.test(letter)) {
-                    if(typedMessageOutput.innerHTML == "<b>Type a message... (press enter to send or / to cancel)</b>") {
-                        typedMessageOutput.innerHTML = letter
-                    }
-                    else {
-                        typedMessageOutput.innerHTML += letter
-                    }
-                }
-            }
-        }
-        else {
-            switch ( event.keyCode ) {
-
-                case 77: //m
-                    if(messageList.style.display == "none") {
-                        messageList.style.display = "block"
-                    }
-                    else {
-                        messageList.style.display = "none"
-                    }
-
-                    break;
-
-                case 191: //   /
-                    if(controls.isLocked) {
-                        typingAMessage = true
-                        typedMessage.style.display = "block"
-                        typedMessageOutput.innerHTML = "<b>Type a message... (press enter to send or / to cancel)</b>"
-                    }
-
-                    break;
-
-
+                hudController.type(event.key);
             }
         }
     };
@@ -262,7 +181,6 @@ function init() {
     renderer.setSize( window.innerWidth, window.innerHeight );
     document.body.appendChild( renderer.domElement );
 
-    //
 
     window.addEventListener( 'resize', onWindowResize, false );
 
@@ -306,34 +224,6 @@ function init() {
 }
 
 
-function showScores() {
-    let output = ""
-    let player
-    let loops = 0
-    for (player in playerNames) {
-        output += "<b>" + playerNames[player] + ": </b>"
-
-        if(scores[player] == null) {
-            output += "0"
-        }
-        else {
-            output += scores[player] + ""
-        }
-
-        loops += 1
-
-
-        if(loops != Object.keys(playerNames).length) {
-            output += ", "
-        }
-    }
-
-    const HUDInformation = document.getElementById("HUD-information");
-    if (HUDInformation) {
-        HUDInformation.innerHTML = output
-    }
-}
-
 function createBullet(msg: number[]) {
     console.log("create bullet")
     console.log(msg)
@@ -368,7 +258,7 @@ function animate() {
     }
     const time = performance.now();
 
-    if ( controls.isLocked && socket != null) {
+    if ( controls.isLocked && socket != null && !isChatActive) {
         let controlsObject = controls.getObject()
         let pos = controlsObject.position
         //let rotation = controlsObject.rotation;

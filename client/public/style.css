@@ -154,3 +154,18 @@ a.logo-title {
     padding: 3px;
     background-color: #e7e7e7e6;
 }
+
+.HUD-messages {
+    bottom: 6px;
+    left: 6px;
+    position: absolute;
+    width: 280px;
+    background: #4e4e4e4f;
+    height: 145px;
+    padding: 4px;
+
+    z-index: 10;
+    display: flex;
+    flex-flow: column;
+    justify-content: space-between;
+}
