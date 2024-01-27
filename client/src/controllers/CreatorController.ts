@@ -38,7 +38,7 @@ export class CreatorController {
         scene.add(obj);
         this.scene = scene;
         this.far = 100;
-        this.active = 'far';
+        this.active = 'pointer';
         this.precision = 10;
 
         this.controls.lock();
@@ -97,6 +97,9 @@ export class CreatorController {
     updateShadowObject() {
         this.shadowObject = this.scene.children
             .find(m => m.name === "shadowObject");
+        if (this.shadowObject) {
+            this.shadowObject.visible = this.active !== 'pointer';
+        }
     }
 
     dropObject (object: Object3D|undefined) {

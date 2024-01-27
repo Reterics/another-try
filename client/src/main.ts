@@ -1,14 +1,14 @@
 import * as THREE from 'three'
-import type { Socket } from 'socket.io-client';
+import {Mesh, Object3D, Vector3} from 'three'
+import type {Socket} from 'socket.io-client';
 import {io} from 'socket.io-client';
-import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
+import {PointerLockControls} from "three/examples/jsm/controls/PointerLockControls";
 import {Player} from "./models/player";
 import {Sphere} from "./models/sphere";
 import {initSky} from "./initMethods";
 import {GltfScene} from "./terrain/gltfScene";
 import {Hero} from "./models/hero";
 import {HUDController} from "./controllers/HUDController.ts";
-import {Mesh, Object3D, Vector3} from "three";
 import {acceleratedRaycast, computeBoundsTree, disposeBoundsTree} from "three-mesh-bvh";
 import {CreatorController} from "./controllers/CreatorController.ts";
 import {PlayerList, PlayerNames, PlayerScores, ServerMessage} from "./types/main.ts";
@@ -147,21 +147,23 @@ function init() {
 
     scene.add( controls.getObject() );
     const onKeyDown = function ( event: KeyboardEvent ) {
-        if(event.code == "KeyT") {
-            hudController.toggleChat();
-            isChatActive = !isChatActive;
-        } else if(hudController.isChatActive()) {
+         isChatActive = hudController.isChatActive();
+         if(isChatActive) {
             if(event.key == "Enter") {
                 const text = hudController.getMessage();
                 if (text) {
                     socket.emit("data", {type: "msg", msg: text})
                 }
                 hudController.clearMessage();
+                hudController.toggleChat();
                 isChatActive = !isChatActive;
             }
             else {
                 hudController.type(event.key);
             }
+        } else if(event.code == "KeyT") {
+            hudController.toggleChat();
+            isChatActive = !isChatActive;
         }
     };
 

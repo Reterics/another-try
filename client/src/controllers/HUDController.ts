@@ -24,7 +24,6 @@ export class HUDController {
     private stats: HTMLElement|null;
     private scores: HTMLElement|null;
     private messageInput: HTMLElement|null;
-    private messages: HTMLElement|null;
     private messageList: HTMLElement|null;
 
     constructor() {
@@ -56,7 +55,6 @@ export class HUDController {
         this.element = document.querySelector('#HUD-information');
         this.stats = document.querySelector('#HUD-stats') as HTMLElement;
         this.scores = document.querySelector('#HUD-information') as HTMLElement;
-        this.messages = document.querySelector('#messages') as HTMLElement;
         this.messageInput = document.querySelector('#messageInput') as HTMLElement;
         this.messageList = document.querySelector('#messageList') as HTMLElement;
         if(!this.element) {
@@ -82,7 +80,6 @@ export class HUDController {
         this.element = el as HTMLElement;
         this.stats = document.querySelector('#HUD-stats') as HTMLElement;
         this.scores = document.querySelector('#HUD-information') as HTMLElement;
-        this.messages = document.querySelector('#messages') as HTMLElement;
         this.messageInput = document.querySelector('#messageInput') as HTMLElement;
         this.messageList = document.querySelector('#messageList') as HTMLElement;
     }
@@ -228,23 +225,25 @@ export class HUDController {
     onMessage(message: string) {
         if (this.messageList) {
             const div = document.createElement('div');
-            div.innerText = message;
+            div.innerHTML = message;
             this.messageList.appendChild(div);
         }
     }
 
     toggleChat() {
-        if (this.messages) {
-            if (this.messages.style.display !== 'none') {
-                this.messages.style.display = "none";
+        if (this.messageInput && this.messageList && this.messageList.parentElement) {
+            if (this.messageInput.style.display !== 'none') {
+                this.messageInput.style.display = "none";
+                this.messageList.parentElement.style.backgroundColor = '#4e4e4e4f';
             } else {
-                this.messages.style.display = "flex";
+                this.messageInput.style.display = "flex";
+                this.messageList.parentElement.style.backgroundColor = '#808080';
             }
         }
     }
 
     isChatActive(): boolean {
-        return !!(this.messages && this.messages.style.display !== 'none');
+        return !!(this.messageInput && this.messageInput.style.display !== 'none');
     }
 
     getMessage(): string {

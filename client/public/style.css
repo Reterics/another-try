@@ -169,3 +169,9 @@ a.logo-title {
     flex-flow: column;
     justify-content: space-between;
 }
+
+#messageInput {
+    border: 1px solid rgb(23 23 23);
+    height: 20px;
+    padding-left: 5px;
+}

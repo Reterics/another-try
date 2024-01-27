@@ -10,15 +10,15 @@
   "author": "Attila Reterics",
   "license": "ISC",
   "dependencies": {
-    "dotenv": "^16.3.1",
+    "dotenv": "^16.4.1",
     "express": "^4.18.2",
     "socket.io": "latest",
-    "three": "0.155.0"
+    "three": "0.160.0"
   },
   "devDependencies": {
-    "@types/express": "^4.17.17",
-    "@types/node": "^20.4.6",
-    "@types/three": "^0.155.0",
-    "typescript": "5.1.6"
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.7",
+    "@types/three": "0.160.0",
+    "typescript": "5.3.3"
   }
 }
