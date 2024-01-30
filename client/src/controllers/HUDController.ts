@@ -4,6 +4,7 @@ import inGameTemplate from '../pages/ingame.html?raw'
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import {CreatorController} from "./CreatorController.ts";
 import {PlayerNames, PlayerScores} from "../types/main.ts";
+import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
 
 interface MapOptions {
     y?: number|string;
@@ -15,7 +16,7 @@ export class HUDController {
     private readonly inGame: HTMLDivElement;
     private readonly mainMenu: HTMLDivElement;
     private readonly pauseMenu: HTMLDivElement;
-    private controls: PointerLockControls | undefined;
+    private controls: PointerLockControls | undefined | OrbitControls;
     private onload: Function|undefined;
     element: HTMLElement|null;
     private _updatePeriod: number;
@@ -86,7 +87,7 @@ export class HUDController {
         this.messageList = document.querySelector('#messageList') as HTMLElement;
         this.footer = document.querySelector('#HUD-footer') as HTMLElement;
     }
-    setControls(controls: PointerLockControls) {
+    setControls(controls: PointerLockControls|OrbitControls) {
         if (!controls) {
             return;
         }
@@ -103,9 +104,11 @@ export class HUDController {
         this.pauseMenu.onclick = () => {
             this.renderGame(null, null);
         };
-        this.controls.addEventListener( 'unlock', () => {
-            this.renderPauseMenu();
-        } );
+        if (this.controls instanceof PointerLockControls) {
+            this.controls.addEventListener( 'unlock', () => {
+                this.renderPauseMenu();
+            } );
+        }
     }
 
     renderMenu() {
@@ -140,7 +143,7 @@ export class HUDController {
         this.inGame.style.display = 'block';
         this.pauseMenu.style.display = 'none';
         this.mainMenu.style.display = 'none';
-        if (this.controls && typeof this.controls.lock === 'function') {
+        if (this.controls && this.controls instanceof PointerLockControls) {
             this.controls.lock();
         }
         if (this.onload && level) {

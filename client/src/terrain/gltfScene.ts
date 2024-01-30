@@ -6,6 +6,7 @@ import { PointerLockControls } from "three/examples/jsm/controls/PointerLockCont
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import {Water} from "three/examples/jsm/objects/Water2";
 import {CapsuleInfo} from "../types/main.ts";
+import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
 
 let tempVector = new THREE.Vector3();
 let tempVector2 = new THREE.Vector3();
@@ -14,7 +15,7 @@ let tempMat = new THREE.Matrix4();
 let tempSegment = new THREE.Line3();
 // let playerVelocity = new THREE.Vector3();
 // let upVector = new THREE.Vector3( 0, 1, 0 );
-const direction = new THREE.Vector3();
+//const direction = new THREE.Vector3();
 const velocity = new THREE.Vector3();
 let timeUntilSprintOptionDisables: Date | undefined | null;
 
@@ -34,6 +35,7 @@ interface toMergeType {
 interface toMergeTextureType {
     [key: number]: (MeshStandardMaterial|undefined)
 }
+let upVector = new THREE.Vector3( 0, 1, 0 );
 
 /*function getAzimuthalAngle(controls) {
     return Math.atan2(controls.camera.rotation.x, controls.camera.rotation.z);
@@ -49,21 +51,22 @@ export class GltfScene {
         gravity: - 30,
         playerSpeed: 10,
         physicsSteps: 5,
-        spawnCoordinates: [15, 10, 1] // X Y Z
+        spawnCoordinates: [15, 100, 10] // X Y Z
     };
     protected scene: Scene;
     private readonly initMethod;
     private loaded = false;
-    private controls: PointerLockControls;
+    private controls: OrbitControls;
     playerIsOnGround = false;
     canJump = false;
     sprinting = false; // Temporary not available
     energy = 10;
     fwdPressed = false; bkdPressed = false; lftPressed = false; rgtPressed = false;
+    spacePressed = false;
     private readonly energyNode: HTMLProgressElement | null;
     private selectedModel: string;
 
-    constructor(model: string, scene: Scene, controls:PointerLockControls, callback: Function) {
+    constructor(model: string, scene: Scene, controls:OrbitControls, callback: Function) {
         if (model.startsWith('/')) {
             model = model.substring(1);
         }
@@ -115,7 +118,8 @@ export class GltfScene {
                         // We always need to clone the light, otherwise it fails
                         this.scene.add( c.clone(true) as Object3D);
                     } else if(c instanceof Camera && c.isCamera) {
-                        this.controls.camera.position.copy(c.position);
+                        this.controls.object.position.copy(c.position);
+
                     }
                 } );
 
@@ -198,14 +202,20 @@ export class GltfScene {
         });
     }
 
-    respawn(camera: THREE.PerspectiveCamera, player: Mesh) {
+    respawn(_camera: THREE.PerspectiveCamera, player: Mesh) {
         player.position.set(
             this.params.spawnCoordinates[0],
-            this.params.spawnCoordinates[1],
+            this.params.spawnCoordinates[1] + 50,
             this.params.spawnCoordinates[2]);
 
-        velocity.set( 0, 0, 0 );
-        camera.position.copy(player.position);
+       /* camera
+            .position
+            .sub( this.controls.target )
+            .normalize()
+            .multiplyScalar( 10 )
+            .add( this.controls.target );*/
+        //velocity.set( 0, 0, 0 );
+        // camera.position.copy(player.position);
     }
     initPlayerEvents() {
         window.addEventListener( 'keydown', e => {
@@ -231,6 +241,7 @@ export class GltfScene {
                 case 'KeyA': this.lftPressed = true; break;
                 case 'Space':
                     // this.controls.camera.position.y = 10;
+                    this.spacePressed = true;
                     if ( this.playerIsOnGround && this.canJump) {
                         velocity.y = 10.0;
                         this.playerIsOnGround = false;
@@ -247,6 +258,7 @@ export class GltfScene {
                 case 'KeyS': this.bkdPressed = false; break;
                 case 'KeyD': this.rgtPressed = false; break;
                 case 'KeyA': this.lftPressed = false; break;
+                case 'Space': this.spacePressed = false; break;
             }
         });
     }
@@ -274,26 +286,18 @@ export class GltfScene {
             this.collider.visible = this.params.displayCollider;
             this.visualizer.visible = this.params.displayBVH;
 
-
-            /*if ( playerIsOnGround ) {
-                playerVelocity.y = delta * this.params.gravity;
-            } else {
-                playerVelocity.y += delta * this.params.gravity;
-            }
-            player.position.addScaledVector( playerVelocity, delta );*/
-
             // move the player
-            velocity.x -= velocity.x * this.params.playerSpeed * delta;
-            velocity.z -= velocity.z * this.params.playerSpeed * delta;
+            //velocity.x -= velocity.x * this.params.playerSpeed * delta;
+            //velocity.z -= velocity.z * this.params.playerSpeed * delta;
 
             //velocity.y -= 9.8 * 100.0 * delta; // 100.0 = mass
 
-            direction.z = Number( this.fwdPressed ) - Number( this.bkdPressed  );
-            direction.x = Number( this.rgtPressed ) - Number( this.lftPressed );
-            direction.normalize(); // this ensures consistent movements in all directions
+            //direction.z = Number( this.fwdPressed ) - Number( this.bkdPressed  );
+            //direction.x = Number( this.rgtPressed ) - Number( this.lftPressed );
+            //direction.normalize(); // this ensures consistent movements in all directions
 
-            if ( this.fwdPressed  ||  this.bkdPressed ) velocity.z -= direction.z * 100.0 * delta;
-            if ( this.rgtPressed  || this.lftPressed ) velocity.x -= direction.x * 100.0 * delta;
+            //if ( this.fwdPressed  ||  this.bkdPressed ) velocity.z -= direction.z * 100.0 * delta;
+            //if ( this.rgtPressed  || this.lftPressed ) velocity.x -= direction.x * 100.0 * delta;
 
             if(this.sprinting) {
                 if(this.energy > 0) {
@@ -317,39 +321,44 @@ export class GltfScene {
 
             if ( this.playerIsOnGround ) {
                 velocity.y = delta * this.params.gravity;
-                velocity.y = Math.max( 0, velocity.y );
+                //velocity.y = Math.max( 0, velocity.y );
                 this.canJump = true;
             } else {
                 velocity.y += delta * this.params.gravity;
             }
 
-            this.controls.getObject().position.y += ( velocity.y * delta );
+            if (this.controls instanceof PointerLockControls) {
+                this.controls.getObject().position.y += ( velocity.y * delta );
 
-            this.controls.moveRight( - velocity.x * delta /** this.params.playerSpeed*/);
-            this.controls.moveForward( - velocity.z * delta /** this.params.playerSpeed*/);
-            player.rotation.copy(camera.rotation);
-            player.position.copy(camera.position);
-            /*const angle = getAzimuthalAngle(this.controls); //this.controls.getAzimuthalAngle(); // Get Azimuth for OrbitControl
-            if ( this.fwdPressed ) {
-                tempVector.set( 0, 0, - 1 ).applyAxisAngle( upVector, angle );
-                player.position.addScaledVector( tempVector, this.params.playerSpeed * delta );
+                this.controls.moveRight( - velocity.x * delta /** this.params.playerSpeed*/);
+                this.controls.moveForward( - velocity.z * delta /** this.params.playerSpeed*/);
+                player.rotation.copy(camera.rotation);
+                player.position.copy(camera.position);
+            } else {
+                player.position.addScaledVector( velocity, delta );
+
+                const angle = this.controls.getAzimuthalAngle(); // Get Azimuth for OrbitControl
+                if ( this.fwdPressed ) {
+                    tempVector.set( 0, 0, - 1 ).applyAxisAngle( upVector, angle );
+                    player.position.addScaledVector( tempVector, this.params.playerSpeed * delta );
+                }
+
+                if ( this.bkdPressed ) {
+                    tempVector.set( 0, 0, 1 ).applyAxisAngle( upVector, angle );
+                    player.position.addScaledVector( tempVector, this.params.playerSpeed * delta );
+                }
+
+                if ( this.lftPressed ) {
+                    tempVector.set( - 1, 0, 0 ).applyAxisAngle( upVector, angle );
+                    player.position.addScaledVector( tempVector, this.params.playerSpeed * delta );
+                }
+
+                if ( this.rgtPressed ) {
+                    tempVector.set( 1, 0, 0 ).applyAxisAngle( upVector, angle );
+                    player.position.addScaledVector( tempVector, this.params.playerSpeed * delta );
+                }
+
             }
-
-            if ( this.bkdPressed ) {
-                tempVector.set( 0, 0, 1 ).applyAxisAngle( upVector, angle );
-                player.position.addScaledVector( tempVector, this.params.playerSpeed * delta );
-            }
-
-            if ( this.lftPressed ) {
-                tempVector.set( - 1, 0, 0 ).applyAxisAngle( upVector, angle );
-                player.position.addScaledVector( tempVector, this.params.playerSpeed * delta );
-            }
-
-            if ( this.rgtPressed ) {
-                tempVector.set( 1, 0, 0 ).applyAxisAngle( upVector, angle );
-                player.position.addScaledVector( tempVector, this.params.playerSpeed * delta );
-
-            }*/
 
             player.updateMatrixWorld();
 
@@ -423,11 +432,19 @@ export class GltfScene {
                 deltaVector.normalize();
                 velocity.addScaledVector( deltaVector, - deltaVector.dot( velocity ) );
             } else {
-                //velocity.set( 0, 0, 0 );
+                velocity.set( 0, 0, 0 );
             }
 
             // adjust the camera
-            camera.position.copy(player.position);
+            if (this.controls instanceof PointerLockControls) {
+                //camera.position.copy(player.position);
+                console.log(this.fwdPressed, player.position, camera.position);
+
+            } else {
+                camera.position.sub( this.controls.target );
+                this.controls.target.copy( player.position );
+                camera.position.add( player.position );
+            }
 
             // if the player has fallen too far below the level reset their position to the start
             if ( player.position.y < - 25 ) {

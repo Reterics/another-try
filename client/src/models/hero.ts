@@ -15,6 +15,8 @@ export class Hero {
         this.geometry = new RoundedBoxGeometry( 20.0, 20.0, 1.0, 10, 10.5 );
         this.material = new THREE.MeshStandardMaterial({color: 0x00ff00, wireframe: true});
         this.mesh = new THREE.Mesh(this.geometry, this.material);
+        this.mesh.geometry.translate( 0, - 0.5, 0 );
+
         // @ts-ignore
         this.mesh.capsuleInfo = {
             radius: 0.5,

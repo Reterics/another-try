@@ -1,7 +1,8 @@
-import { Mesh, PerspectiveCamera, Scene } from "three";
+import { Mesh, Scene } from "three";
 import { Object3D } from "three/src/core/Object3D";
 import * as THREE from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { isCollisionDetected } from "../utils/model";
 import { Active3DMode } from "../types/three";
 import { roundToPrecision } from "../utils/math";
@@ -12,7 +13,7 @@ import {Hero} from "../models/hero.ts";
 let prevTime = performance.now();
 
 export class CreatorController {
-    controls: PointerLockControls;
+    controls: PointerLockControls|OrbitControls;
     private scene: Scene;
     target: null;
     private shadowObject: Object3D | undefined;
@@ -24,10 +25,10 @@ export class CreatorController {
     reference?: AssetObject
     private readonly hero;
 
-    constructor(camera: PerspectiveCamera, scene: Scene, hudController: HUDController, hero: Hero) {
-        this.controls =  new PointerLockControls(camera, document.body);
+    constructor(scene: Scene, hudController: HUDController, hero: Hero, controls: OrbitControls) {
+        this.controls =  controls;
 
-        const obj = this.controls.getObject();
+        const obj = this.controls.object;
         obj.name = "camera";
         this.target = null;
         //obj.up.set(0, 0, 1);
@@ -44,13 +45,12 @@ export class CreatorController {
         this.precision = 10;
         this.hero = hero;
 
-        this.controls.lock();
+        //this.controls.lock();
         document.addEventListener('keyup', this.onKeyUp.bind(this));
         document.addEventListener('dblclick', this.onDblClick.bind(this));
         document.addEventListener('mousemove', this.onMouseMove.bind(this));
         document.addEventListener('wheel', this.onScroll.bind(this));
-        this.controls.addEventListener('lock', this.updateShadowObject.bind(this));
-
+        //this.controls.addEventListener('lock', this.updateShadowObject.bind(this));
         this.hud = hudController;
     }
 
@@ -77,13 +77,17 @@ export class CreatorController {
 
     update(deltaTime?: number | undefined) {
         const delta = deltaTime || ((performance.now() - prevTime) / 1000);
-        if (this.controls && this.controls.isLocked) {
+        if (this.controls &&
+            ((this.controls instanceof OrbitControls && this.controls.enabled) ||
+            (this.controls instanceof PointerLockControls && this.controls.isLocked))
+        ) {
             this.hud.update(delta, this);
         }
     }
 
     getCursorPosition() {
-        const rect = this.controls.domElement.getBoundingClientRect();
+        const domElement = this.controls.domElement as HTMLElement;
+        const rect = domElement.getBoundingClientRect();
         const mouse = new THREE.Vector2();
 
         mouse.x = ((rect.width / 2) / rect.width) * 2 - 1;
@@ -111,7 +115,8 @@ export class CreatorController {
 
     dropObject (object: Object3D|undefined) {
         if (object) {
-            const camera = this.controls.camera;
+            const camera = this.controls instanceof PointerLockControls ?
+                this.controls.camera : this.controls.object;
             const movementSpeed = 3; // Adjust the speed as needed
             object.position.copy(camera.position)
 
@@ -194,12 +199,14 @@ export class CreatorController {
         document.removeEventListener('dblclick', this.onDblClick.bind(this));
         document.removeEventListener('mousemove', this.onMouseMove.bind(this));
         document.removeEventListener('wheel', this.onScroll.bind(this));
-        this.controls.removeEventListener('lock', this.updateShadowObject.bind(this));
+        if (this.controls instanceof PointerLockControls) {
+            this.controls.removeEventListener('lock', this.updateShadowObject.bind(this));
+        }
         this.controls.dispose();
     }
 
     lock() {
-        if (!this.controls.isLocked) {
+        if (this.controls instanceof PointerLockControls && !this.controls.isLocked) {
             this.controls.lock();
         }
     }
