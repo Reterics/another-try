@@ -22,3 +22,13 @@ export interface CapsuleInfo {
     radius: number,
     segment: THREE.Line3
 }
+
+export interface SceneParams {
+    displayCollider: boolean,
+    displayBVH: boolean,
+    visualizeDepth: number,
+    gravity: number,
+    playerSpeed: number,
+    physicsSteps: number,  //5
+    spawnCoordinates: number[] // X Y Z
+}

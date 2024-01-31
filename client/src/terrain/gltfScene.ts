@@ -2,10 +2,10 @@ import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {ExtendedTriangle, MeshBVH, MeshBVHHelper, StaticGeometryGenerator} from 'three-mesh-bvh';
 import {Box3, BufferGeometry, Camera, Group, Light, Mesh, MeshStandardMaterial, Object3D, Scene} from "three";
-import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import {Water} from "three/examples/jsm/objects/Water2";
-import {CapsuleInfo} from "../types/main.ts";
+import {CapsuleInfo, SceneParams} from "../types/main.ts";
+import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
 
 let tempVector = new THREE.Vector3();
 let tempVector2 = new THREE.Vector3();
@@ -13,8 +13,8 @@ let tempBox = new THREE.Box3();
 let tempMat = new THREE.Matrix4();
 let tempSegment = new THREE.Line3();
 // let playerVelocity = new THREE.Vector3();
-// let upVector = new THREE.Vector3( 0, 1, 0 );
-const direction = new THREE.Vector3();
+const upVector = new THREE.Vector3( 0, 1, 0 );
+//const direction = new THREE.Vector3();
 const velocity = new THREE.Vector3();
 let timeUntilSprintOptionDisables: Date | undefined | null;
 
@@ -42,19 +42,11 @@ export class GltfScene {
     protected visualizer: MeshBVHHelper | undefined;
     protected collider: Mesh;
     protected environment: Group;
-    params = {
-        displayCollider: false,
-        displayBVH: false,
-        visualizeDepth: 10,
-        gravity: - 30,
-        playerSpeed: 10,
-        physicsSteps: 5,
-        spawnCoordinates: [15, 10, 1] // X Y Z
-    };
+    params: SceneParams;
     protected scene: Scene;
     private readonly initMethod;
     private loaded = false;
-    private controls: PointerLockControls;
+    private controls: OrbitControls;
     playerIsOnGround = false;
     canJump = false;
     sprinting = false; // Temporary not available
@@ -63,7 +55,7 @@ export class GltfScene {
     private readonly energyNode: HTMLProgressElement | null;
     private selectedModel: string;
 
-    constructor(model: string, scene: Scene, controls:PointerLockControls, callback: Function) {
+    constructor(model: string, scene: Scene, controls:OrbitControls, callback: Function) {
         if (model.startsWith('/')) {
             model = model.substring(1);
         }
@@ -75,8 +67,29 @@ export class GltfScene {
         this.initMethod = this._loadGLTF(callback);
 
         this.energyNode = document.getElementById("HUD-energy") as HTMLProgressElement;
+
+        this.params = {
+            displayCollider: false,
+            displayBVH: false,
+            visualizeDepth: 10,
+            gravity: - 30,
+            playerSpeed: 10,
+            physicsSteps: 1,  //5
+            spawnCoordinates: [12, 15, 80] // X Y Z
+        };
         return this;
     }
+
+    static CreateMap(model: string, scene: Scene, controls:OrbitControls): Promise<GltfScene> {
+        return new Promise(resolve => {
+            new GltfScene(model, scene, controls, resolve);
+        })
+    }
+    setSpawnCoordinates (x: number, y: number, z: number) {
+        console.log('Set Spawn ', x, y, z);
+        this.params.spawnCoordinates = [x, y, z];
+    }
+
     // eslint-disable-next-line @typescript-eslint/ban-types
     _loadGLTF(callback: Function|undefined): Promise<GltfScene> {
         let targetModel = this.selectedModel.startsWith('https://') || this.selectedModel.startsWith('http://') ?
@@ -115,7 +128,8 @@ export class GltfScene {
                         // We always need to clone the light, otherwise it fails
                         this.scene.add( c.clone(true) as Object3D);
                     } else if(c instanceof Camera && c.isCamera) {
-                        this.controls.camera.position.copy(c.position);
+                        this.controls.object.position.copy(c.position);
+
                     }
                 } );
 
@@ -198,14 +212,20 @@ export class GltfScene {
         });
     }
 
-    respawn(camera: THREE.PerspectiveCamera, player: Mesh) {
+    respawn(_camera: THREE.PerspectiveCamera, player: Mesh) {
         player.position.set(
             this.params.spawnCoordinates[0],
             this.params.spawnCoordinates[1],
             this.params.spawnCoordinates[2]);
 
-        velocity.set( 0, 0, 0 );
-        camera.position.copy(player.position);
+       _camera
+            .position
+            .sub( this.controls.target )
+            .normalize()
+            .multiplyScalar( 10 )
+            .add( this.controls.target );
+
+       this.controls.update();
     }
     initPlayerEvents() {
         window.addEventListener( 'keydown', e => {
@@ -253,14 +273,14 @@ export class GltfScene {
 
     addToScene() {
         if (this.loaded) {
-            if (this.visualizer) {
+            if (this.visualizer && !this.scene.children.find(c=>c===this.visualizer)) {
                 this.scene.add( this.visualizer );
                 this.scene.add( this.collider );
                 this.scene.add( this.environment );
             }
         } else {
             return this.initMethod.then(()=>{
-                if (this.visualizer) {
+                if (this.visualizer && !this.scene.children.find(c=>c===this.visualizer)) {
                     this.scene.add( this.visualizer );
                     this.scene.add( this.collider );
                     this.scene.add( this.environment );
@@ -274,26 +294,18 @@ export class GltfScene {
             this.collider.visible = this.params.displayCollider;
             this.visualizer.visible = this.params.displayBVH;
 
-
-            /*if ( playerIsOnGround ) {
-                playerVelocity.y = delta * this.params.gravity;
-            } else {
-                playerVelocity.y += delta * this.params.gravity;
-            }
-            player.position.addScaledVector( playerVelocity, delta );*/
-
             // move the player
-            velocity.x -= velocity.x * this.params.playerSpeed * delta;
-            velocity.z -= velocity.z * this.params.playerSpeed * delta;
+            //velocity.x -= velocity.x * this.params.playerSpeed * delta;
+            //velocity.z -= velocity.z * this.params.playerSpeed * delta;
 
             //velocity.y -= 9.8 * 100.0 * delta; // 100.0 = mass
 
-            direction.z = Number( this.fwdPressed ) - Number( this.bkdPressed  );
-            direction.x = Number( this.rgtPressed ) - Number( this.lftPressed );
-            direction.normalize(); // this ensures consistent movements in all directions
+            //direction.z = Number( this.fwdPressed ) - Number( this.bkdPressed  );
+            //direction.x = Number( this.rgtPressed ) - Number( this.lftPressed );
+            //direction.normalize(); // this ensures consistent movements in all directions
 
-            if ( this.fwdPressed  ||  this.bkdPressed ) velocity.z -= direction.z * 100.0 * delta;
-            if ( this.rgtPressed  || this.lftPressed ) velocity.x -= direction.x * 100.0 * delta;
+            //if ( this.fwdPressed  ||  this.bkdPressed ) velocity.z -= direction.z * 100.0 * delta;
+            //if ( this.rgtPressed  || this.lftPressed ) velocity.x -= direction.x * 100.0 * delta;
 
             if(this.sprinting) {
                 if(this.energy > 0) {
@@ -317,19 +329,23 @@ export class GltfScene {
 
             if ( this.playerIsOnGround ) {
                 velocity.y = delta * this.params.gravity;
-                velocity.y = Math.max( 0, velocity.y );
+                //velocity.y = Math.max( 0, velocity.y );
                 this.canJump = true;
             } else {
                 velocity.y += delta * this.params.gravity;
             }
 
-            this.controls.getObject().position.y += ( velocity.y * delta );
+            /*if (this.controls instanceof PointerLockControls) {
+                this.controls.getObject().position.y += ( velocity.y * delta );
 
-            this.controls.moveRight( - velocity.x * delta /** this.params.playerSpeed*/);
-            this.controls.moveForward( - velocity.z * delta /** this.params.playerSpeed*/);
-            player.rotation.copy(camera.rotation);
-            player.position.copy(camera.position);
-            /*const angle = getAzimuthalAngle(this.controls); //this.controls.getAzimuthalAngle(); // Get Azimuth for OrbitControl
+                this.controls.moveRight( - velocity.x * delta );
+                this.controls.moveForward( - velocity.z * delta );
+                player.rotation.copy(camera.rotation);
+                player.position.copy(camera.position);
+            }*/
+            player.position.addScaledVector( velocity, delta );
+
+            const angle = this.controls.getAzimuthalAngle(); // Get Azimuth for OrbitControl
             if ( this.fwdPressed ) {
                 tempVector.set( 0, 0, - 1 ).applyAxisAngle( upVector, angle );
                 player.position.addScaledVector( tempVector, this.params.playerSpeed * delta );
@@ -348,8 +364,8 @@ export class GltfScene {
             if ( this.rgtPressed ) {
                 tempVector.set( 1, 0, 0 ).applyAxisAngle( upVector, angle );
                 player.position.addScaledVector( tempVector, this.params.playerSpeed * delta );
+            }
 
-            }*/
 
             player.updateMatrixWorld();
 
@@ -419,15 +435,16 @@ export class GltfScene {
             player.position.add( deltaVector );
 
             if ( ! this.playerIsOnGround ) {
-
                 deltaVector.normalize();
                 velocity.addScaledVector( deltaVector, - deltaVector.dot( velocity ) );
             } else {
-                //velocity.set( 0, 0, 0 );
+                velocity.set( 0, 0, 0 );
             }
 
             // adjust the camera
-            camera.position.copy(player.position);
+            camera.position.sub( this.controls.target );
+            this.controls.target.copy( player.position );
+            camera.position.add( player.position );
 
             // if the player has fallen too far below the level reset their position to the start
             if ( player.position.y < - 25 ) {
