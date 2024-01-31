@@ -118,7 +118,6 @@ function init() {
 
     hudController.renderMenu();
     if (controls) {
-        hudController.setControls(controls);
         hudController.onLoadMap((selectedMap, options)=>{
             if (map) {console.log(map);
                 return map.updateScene(selectedMap).then(async (map: GltfScene) => {
@@ -136,7 +135,6 @@ function init() {
                         camera.position.y = Number(options.z);
                     }
                 });
-            } else {
             }
             map = new GltfScene(selectedMap, scene, controls,async (map:GltfScene)=>{ //'dungeon_low_poly_game_level_challenge/scene.gltf'
                 await map.addToScene();

@@ -1,7 +1,6 @@
 import { Mesh, Scene } from "three";
 import { Object3D } from "three/src/core/Object3D";
 import * as THREE from "three";
-import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { isCollisionDetected } from "../utils/model";
 import { Active3DMode } from "../types/three";
@@ -13,7 +12,7 @@ import {Hero} from "../models/hero.ts";
 let prevTime = performance.now();
 
 export class CreatorController {
-    controls: PointerLockControls|OrbitControls;
+    controls: OrbitControls;
     private scene: Scene;
     target: null;
     private shadowObject: Object3D | undefined;
@@ -72,15 +71,14 @@ export class CreatorController {
                 shadow.visible = this.active !== 'pointer';
                 this.hud.update(null, this);
                 break;
+            case 'Escape':
+                this.hud.renderPauseMenu();
         }
     }
 
     update(deltaTime?: number | undefined) {
         const delta = deltaTime || ((performance.now() - prevTime) / 1000);
-        if (this.controls &&
-            ((this.controls instanceof OrbitControls && this.controls.enabled) ||
-            (this.controls instanceof PointerLockControls && this.controls.isLocked))
-        ) {
+        if (this.controls && this.controls.enabled) {
             this.hud.update(delta, this);
         }
     }
@@ -115,8 +113,7 @@ export class CreatorController {
 
     dropObject (object: Object3D|undefined) {
         if (object) {
-            const camera = this.controls instanceof PointerLockControls ?
-                this.controls.camera : this.controls.object;
+            const camera = this.controls.object;
             const movementSpeed = 3; // Adjust the speed as needed
             object.position.copy(camera.position)
 
@@ -155,8 +152,8 @@ export class CreatorController {
         this.dropObject(shadowObject);
     }
 
-    // @ts-ignore
     onDblClick (event: MouseEvent) {
+        event.preventDefault();
         const shadowObject = this.getShadowObject();
         if (shadowObject) {
             const bulletObject = shadowObject.clone();
@@ -199,15 +196,11 @@ export class CreatorController {
         document.removeEventListener('dblclick', this.onDblClick.bind(this));
         document.removeEventListener('mousemove', this.onMouseMove.bind(this));
         document.removeEventListener('wheel', this.onScroll.bind(this));
-        if (this.controls instanceof PointerLockControls) {
-            this.controls.removeEventListener('lock', this.updateShadowObject.bind(this));
-        }
         this.controls.dispose();
     }
 
-    lock() {
-        if (this.controls instanceof PointerLockControls && !this.controls.isLocked) {
-            this.controls.lock();
-        }
-    }
+    /**
+     * @deprecated
+     */
+    lock() {}
 }
