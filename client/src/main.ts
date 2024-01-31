@@ -71,10 +71,12 @@ function init() {
     document.body.appendChild( renderer.domElement );
 
     const controls = new OrbitControls( camera, renderer.domElement );
+    controls.mouseButtons = {
+        LEFT: null,
+        MIDDLE: THREE.MOUSE.DOLLY,
+        RIGHT: THREE.MOUSE.ROTATE,
+    }
 
-    controls.addEventListener( 'lock', function () {
-        loadSocket();
-    } );
     loadSocket();
 
     scene.add( controls.object );
@@ -115,26 +117,25 @@ function init() {
 
     hudController.renderMenu();
     initSky(scene);
-    if (controls) {
-        hudController.onLoadMap(async (selectedMap, options)=>{
-            if (!map) {
-                map = await GltfScene.CreateMap(selectedMap, scene, controls);
-                map.initPlayerEvents();
-            } else {
-                await map.updateScene(selectedMap);
-            }
-            await map.addToScene();
-            if (options.y && options.x && options.z) {
-                map.setSpawnCoordinates(Number(options.x), Number(options.y), Number(options.z));
-            }
+    hudController.onLoadMap(async (selectedMap, options)=> {
+        if (!map) {
+            map = await GltfScene.CreateMap(selectedMap, scene, controls);
+            map.initPlayerEvents();
+        } else {
+            await map.updateScene(selectedMap);
+        }
+        await map.addToScene();
+        if (options.y && options.x && options.z) {
+            map.setSpawnCoordinates(Number(options.x), Number(options.y), Number(options.z));
+        }
 
-            map.respawn(camera as THREE.PerspectiveCamera, heroPlayer);
+        map.respawn(camera as THREE.PerspectiveCamera, heroPlayer);
 
-            if (!animationRunning) {
-                animate();
-            }
-        })
-    }
+        if (!animationRunning) {
+            animate();
+        }
+    })
+
 
     return {
         camera, renderer, controls, scene, hero, raycaster
@@ -260,7 +261,7 @@ function animate() {
 
         socket.emit("position", [pos.x, pos.y, pos.z])
 
-        if(shoot) {
+        if (shoot) {
             let dir: Vector3 = camera.getWorldDirection(direction);
 
             shoot = false
@@ -280,15 +281,20 @@ function animate() {
 
         const delta = ( time - prevTime ) / 1000;
         //heroPlayer.position.copy(camera.position);
-        controls.maxPolarAngle = Math.PI / 2;
-        controls.minDistance = 1;
-        controls.maxDistance = 20;
-        /*
-        //FPS
-        controls.maxPolarAngle = Math.PI;
-        controls.minDistance = 1e-4;
-        controls.maxDistance = 1e-4;*/
+        if (creatorController.view === 'tps') {
+            controls.maxPolarAngle = Math.PI / 2;
+            controls.minDistance = 1;
+            controls.maxDistance = 20;
+        } else if (creatorController.view === 'fps') {
+            controls.maxPolarAngle = Math.PI;
+            controls.minDistance = 1e-4;
+            controls.maxDistance = 1e-4;
+        }
+
         map.updatePlayer(delta, camera, heroPlayer);
+
+        controls.update();
+
         creatorController.update(delta)
 
     }

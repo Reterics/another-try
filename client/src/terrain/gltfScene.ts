@@ -75,7 +75,7 @@ export class GltfScene {
             gravity: - 30,
             playerSpeed: 10,
             physicsSteps: 1,  //5
-            spawnCoordinates: [15, 30, 10] // X Y Z
+            spawnCoordinates: [12, 15, 80] // X Y Z
         };
         return this;
     }
@@ -213,7 +213,6 @@ export class GltfScene {
     }
 
     respawn(_camera: THREE.PerspectiveCamera, player: Mesh) {
-        console.error('Respawn');
         player.position.set(
             this.params.spawnCoordinates[0],
             this.params.spawnCoordinates[1],

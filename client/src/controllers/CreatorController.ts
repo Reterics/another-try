@@ -3,7 +3,7 @@ import { Object3D } from "three/src/core/Object3D";
 import * as THREE from "three";
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { isCollisionDetected } from "../utils/model";
-import { Active3DMode } from "../types/three";
+import {Active3DMode, ControllerView} from "../types/three";
 import { roundToPrecision } from "../utils/math";
 import {AssetObject} from "../types/assets";
 import {HUDController} from "./HUDController.ts";
@@ -23,6 +23,7 @@ export class CreatorController {
     assets?: AssetObject[]
     reference?: AssetObject
     private readonly hero;
+    view: ControllerView;
 
     constructor(scene: Scene, hudController: HUDController, hero: Hero, controls: OrbitControls) {
         this.controls =  controls;
@@ -43,19 +44,17 @@ export class CreatorController {
         this.active = 'pointer';
         this.precision = 10;
         this.hero = hero;
+        this.view = 'tps';
 
-        //this.controls.lock();
         document.addEventListener('keyup', this.onKeyUp.bind(this));
         document.addEventListener('dblclick', this.onDblClick.bind(this));
         document.addEventListener('mousemove', this.onMouseMove.bind(this));
         document.addEventListener('wheel', this.onScroll.bind(this));
-        //this.controls.addEventListener('lock', this.updateShadowObject.bind(this));
         this.hud = hudController;
     }
 
     onKeyUp (event: KeyboardEvent) {
         switch (event.code) {
-
             case 'KeyR':
                 const shadow = this.getShadowObject() || {} as Object3D;
                 if (this.active === 'far') {
@@ -70,6 +69,13 @@ export class CreatorController {
                 }
                 shadow.visible = this.active !== 'pointer';
                 this.hud.update(null, this);
+                break;
+            case 'KeyV':
+                if (this.view === 'tps') {
+                    this.view = 'fps';
+                } else {
+                    this.view = 'tps';
+                }
                 break;
             case 'Escape':
                 this.hud.renderPauseMenu();
@@ -198,9 +204,4 @@ export class CreatorController {
         document.removeEventListener('wheel', this.onScroll.bind(this));
         this.controls.dispose();
     }
-
-    /**
-     * @deprecated
-     */
-    lock() {}
 }
