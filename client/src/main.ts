@@ -102,9 +102,9 @@ function init() {
     };
 
     const onClick = function() {
-        /*if(controls.enabled) {
+        if(controls.enabled) {
             shoot = true
-        }*/
+        }
     }
 
     document.addEventListener( 'keydown', onKeyDown, false );
@@ -254,8 +254,7 @@ function animate() {
     const time = performance.now();
 
     if (socket != null && !isChatActive) {
-        let controlsObject = controls.object;
-        let pos = controlsObject.position
+        const pos = heroPlayer.position;
         //let rotation = controlsObject.rotation;
         //let touchedTerrain = false;
 
