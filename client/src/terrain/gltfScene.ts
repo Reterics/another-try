@@ -79,6 +79,17 @@ export class GltfScene {
         };
         return this;
     }
+
+    static CreateMap(model: string, scene: Scene, controls:OrbitControls): Promise<GltfScene> {
+        return new Promise(resolve => {
+            new GltfScene(model, scene, controls, resolve);
+        })
+    }
+    setSpawnCoordinates (x: number, y: number, z: number) {
+        console.log('Set Spawn ', x, y, z);
+        this.params.spawnCoordinates = [x, y, z];
+    }
+
     // eslint-disable-next-line @typescript-eslint/ban-types
     _loadGLTF(callback: Function|undefined): Promise<GltfScene> {
         let targetModel = this.selectedModel.startsWith('https://') || this.selectedModel.startsWith('http://') ?
@@ -202,19 +213,20 @@ export class GltfScene {
     }
 
     respawn(_camera: THREE.PerspectiveCamera, player: Mesh) {
+        console.error('Respawn');
         player.position.set(
             this.params.spawnCoordinates[0],
-            this.params.spawnCoordinates[1] + 50,
+            this.params.spawnCoordinates[1],
             this.params.spawnCoordinates[2]);
 
-       /* camera
+       _camera
             .position
             .sub( this.controls.target )
             .normalize()
             .multiplyScalar( 10 )
-            .add( this.controls.target );*/
-        //velocity.set( 0, 0, 0 );
-        // camera.position.copy(player.position);
+            .add( this.controls.target );
+
+       this.controls.update();
     }
     initPlayerEvents() {
         window.addEventListener( 'keydown', e => {

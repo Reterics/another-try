@@ -12,8 +12,12 @@ export class Hero {
 
     constructor(scene: Scene) {
         this.scene = scene;
-        this.geometry = new RoundedBoxGeometry( 20.0, 20.0, 1.0, 10, 10.5 );
-        this.material = new THREE.MeshStandardMaterial({color: 0x00ff00, wireframe: true});
+        this.geometry = new RoundedBoxGeometry( 1.0, 2.0, 1.0, 10, 0.5 );
+        this.material = new THREE.MeshStandardMaterial({
+            color: 0x00ff00,
+            wireframe: false,
+            side: THREE.DoubleSide
+        });
         this.mesh = new THREE.Mesh(this.geometry, this.material);
         this.mesh.geometry.translate( 0, - 0.5, 0 );
 

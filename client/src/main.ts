@@ -58,9 +58,6 @@ createShadowObject({
 
 function init() {
     const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 2000 );
-    camera.position.y = 10;
-    camera.position.x = 15;
-    camera.position.z = 1;
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("white");
     const hero = new Hero(scene);
@@ -117,39 +114,27 @@ function init() {
     window.addEventListener( 'resize', onWindowResize, false );
 
     hudController.renderMenu();
+    initSky(scene);
     if (controls) {
-        hudController.onLoadMap((selectedMap, options)=>{
-            if (map) {console.log(map);
-                return map.updateScene(selectedMap).then(async (map: GltfScene) => {
-                    await map.addToScene();
-                    map.respawn(camera as THREE.PerspectiveCamera, heroPlayer);
-                    if (options.y) {
-                        camera.position.y = Number(options.y);
-                    }
-
-                    if (options.x) {
-                        camera.position.x = Number(options.x);
-                    }
-
-                    if (options.z) {
-                        camera.position.y = Number(options.z);
-                    }
-                });
-            }
-            map = new GltfScene(selectedMap, scene, controls,async (map:GltfScene)=>{ //'dungeon_low_poly_game_level_challenge/scene.gltf'
-                await map.addToScene();
+        hudController.onLoadMap(async (selectedMap, options)=>{
+            if (!map) {
+                map = await GltfScene.CreateMap(selectedMap, scene, controls);
                 map.initPlayerEvents();
-                map.respawn(camera as THREE.PerspectiveCamera, heroPlayer);
+            } else {
+                await map.updateScene(selectedMap);
+            }
+            await map.addToScene();
+            if (options.y && options.x && options.z) {
+                map.setSpawnCoordinates(Number(options.x), Number(options.y), Number(options.z));
+            }
 
-                // map.addWater(-10);
-            });
+            map.respawn(camera as THREE.PerspectiveCamera, heroPlayer);
+
             if (!animationRunning) {
                 animate();
             }
         })
     }
-
-    initSky(scene);
 
     return {
         camera, renderer, controls, scene, hero, raycaster
@@ -267,8 +252,7 @@ function animate() {
     }
     const time = performance.now();
 
-    const locked = controls.enabled;
-    if ( locked && socket != null && !isChatActive) {
+    if (socket != null && !isChatActive) {
         let controlsObject = controls.object;
         let pos = controlsObject.position
         //let rotation = controlsObject.rotation;
