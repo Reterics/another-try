@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import {Mesh, Object3D, Vector3} from 'three'
+import {Object3D, PerspectiveCamera, Raycaster, Scene, Vector3, WebGLRenderer} from 'three'
 import type {Socket} from 'socket.io-client';
 import {io} from 'socket.io-client';
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
@@ -33,44 +33,36 @@ let shoot = false,
 
 let prevTime = performance.now();
 const direction = new THREE.Vector3();
-let heroPlayer: Mesh;
+let heroPlayer: Object3D;
 let map: GltfScene;
 let animationRunning = false;
 
 const hudController = new HUDController();
-const {
-    camera,
-    renderer,
-    scene,
-    hero,
-    controls,
-    raycaster} = init();
-const creatorController = new CreatorController(scene, hudController, hero, controls);
-createShadowObject({
-    "type": "rect",
-    "w": 3,
-    "h": 3
-} as AssetObject).then(shadowObject=>{
-    scene.add(shadowObject);
-    creatorController.updateShadowObject();
-})
+let camera: PerspectiveCamera;
+let renderer: WebGLRenderer;
+let scene: Scene;
+let hero: Hero;
+let controls: OrbitControls;
+let raycaster: Raycaster;
+let creatorController: CreatorController;
 
+init();
 
-function init() {
-    const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 2000 );
-    const scene = new THREE.Scene();
+async function init() {
+    camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 2000 );
+    scene = new THREE.Scene();
     scene.background = new THREE.Color("white");
-    const hero = new Hero(scene);
-    heroPlayer = hero.getMesh();
+    hero = new Hero(scene, null); // Preparing to await Hero.Create();
+    heroPlayer = hero.getObject();
     //heroPlayer.position.copy(camera.position);
     hero.addToScene();
 
-    const renderer = new THREE.WebGLRenderer( { antialias: true } );
+    renderer = new THREE.WebGLRenderer( { antialias: true } );
     renderer.setPixelRatio( window.devicePixelRatio );
     renderer.setSize( window.innerWidth, window.innerHeight );
     document.body.appendChild( renderer.domElement );
 
-    const controls = new OrbitControls( camera, renderer.domElement );
+    controls = new OrbitControls( camera, renderer.domElement );
     controls.mouseButtons = {
         LEFT: null,
         MIDDLE: THREE.MOUSE.DOLLY,
@@ -110,7 +102,7 @@ function init() {
     document.addEventListener( 'keydown', onKeyDown, false );
     document.addEventListener("click", onClick, false);
 
-    const raycaster = new THREE.Raycaster( new THREE.Vector3(), new THREE.Vector3( 0, - 1, 0 ), 0, 10 );
+    raycaster = new THREE.Raycaster( new THREE.Vector3(), new THREE.Vector3( 0, - 1, 0 ), 0, 10 );
 
 
     window.addEventListener( 'resize', onWindowResize, false );
@@ -134,12 +126,17 @@ function init() {
         if (!animationRunning) {
             animate();
         }
-    })
+    });
 
-
-    return {
-        camera, renderer, controls, scene, hero, raycaster
-    }
+    creatorController = new CreatorController(scene, hudController, hero, controls);
+    createShadowObject({
+        "type": "rect",
+        "w": 3,
+        "h": 3
+    } as AssetObject).then(shadowObject=>{
+        scene.add(shadowObject);
+        creatorController.updateShadowObject();
+    });
 }
 
 function loadSocket() {

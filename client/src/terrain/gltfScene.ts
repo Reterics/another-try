@@ -212,7 +212,7 @@ export class GltfScene {
         });
     }
 
-    respawn(_camera: THREE.PerspectiveCamera, player: Mesh) {
+    respawn(_camera: THREE.PerspectiveCamera, player: Mesh|Object3D) {
         player.position.set(
             this.params.spawnCoordinates[0],
             this.params.spawnCoordinates[1],
@@ -289,7 +289,7 @@ export class GltfScene {
         }
     }
 
-    updatePlayer(delta:number, camera: THREE.PerspectiveCamera, player: Mesh) {
+    updatePlayer(delta:number, camera: THREE.PerspectiveCamera, player: Mesh|Object3D) {
         if (this.collider && camera && player && this.visualizer) {
             this.collider.visible = this.params.displayCollider;
             this.visualizer.visible = this.params.displayBVH;
