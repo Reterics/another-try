@@ -11,10 +11,10 @@ export class Hero {
     private readonly root: Object3D;
     protected scene: Scene;
     private mixer: AnimationMixer;
-    private dimensions: ObjectDimensions = {
+    private static dimensions: ObjectDimensions = {
         width: 1.0,
-        height: 2.0,
-        depth: 1.0
+        height: 1.0,
+        depth: 0.2
     };
 
     constructor(scene: Scene, object: Object3D|undefined|null) {
@@ -40,7 +40,7 @@ export class Hero {
 
     createRoundedBox() {
         const geometry = new RoundedBoxGeometry(
-            this.dimensions.width, this.dimensions.height, this.dimensions.depth, 10, 0.5 );
+            Hero.dimensions.width, Hero.dimensions.height, Hero.dimensions.depth, 10, 0.5 );
         const material = new THREE.MeshStandardMaterial({
             color: 0x00ff00,
             wireframe: false,
@@ -72,6 +72,15 @@ export class Hero {
                 if (object instanceof Mesh) {
                     object.castShadow = true;
                     object.receiveShadow = false;
+
+                    const boundingBox = new THREE.Box3().setFromObject(group);
+                    const currentDimensions = boundingBox.getSize(new THREE.Vector3());
+
+                    const scaleX = Hero.dimensions.width / currentDimensions.x;
+                    const scaleY = Hero.dimensions.height / currentDimensions.y;
+                    const scaleZ = Hero.dimensions.depth / currentDimensions.z;
+                    object.scale.set(scaleX, scaleY, scaleZ);
+                    object.position.set(0,0,0);
                 }
             });
         }

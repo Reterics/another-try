@@ -52,7 +52,7 @@ async function init() {
     camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 2000 );
     scene = new THREE.Scene();
     scene.background = new THREE.Color("white");
-    hero = new Hero(scene, null); // Preparing to await Hero.Create();
+    hero = await Hero.Create(scene);
     heroPlayer = hero.getObject();
     //heroPlayer.position.copy(camera.position);
     hero.addToScene();
