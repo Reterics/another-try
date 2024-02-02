@@ -4,12 +4,18 @@ import {AnimationMixer, Mesh, Scene} from "three";
 import { CapsuleInfo } from "../types/main";
 import {loadModel} from "../utils/model.ts";
 import {Object3D} from "three/src/core/Object3D";
+import {ObjectDimensions} from "../types/assets.ts";
 
 
 export class Hero {
     private readonly root: Object3D;
     protected scene: Scene;
     private mixer: AnimationMixer;
+    private dimensions: ObjectDimensions = {
+        width: 1.0,
+        height: 2.0,
+        depth: 1.0
+    };
 
     constructor(scene: Scene, object: Object3D|undefined|null) {
         const root = object || this.createRoundedBox();
@@ -26,13 +32,15 @@ export class Hero {
 
         this.scene = scene;
         this.root = root;
+        this.applyCapsuleInfo();
     }
     update(delta: number) {
         this.mixer.update( delta );
     }
 
     createRoundedBox() {
-        const geometry = new RoundedBoxGeometry( 1.0, 2.0, 1.0, 10, 0.5 );
+        const geometry = new RoundedBoxGeometry(
+            this.dimensions.width, this.dimensions.height, this.dimensions.depth, 10, 0.5 );
         const material = new THREE.MeshStandardMaterial({
             color: 0x00ff00,
             wireframe: false,
@@ -41,26 +49,31 @@ export class Hero {
         const mesh = new THREE.Mesh(geometry, material);
         mesh.geometry.translate( 0, - 0.5, 0 );
 
-        // @ts-ignore
-        mesh.capsuleInfo = {
-            radius: 0.5,
-            segment: new THREE.Line3( new THREE.Vector3(), new THREE.Vector3( 0, - 1.0, 0.0 ) )
-        } as CapsuleInfo;
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         mesh.material.shadowSide = 2;
         return mesh;
     }
 
+    applyCapsuleInfo() {
+        if (this.root) {
+            // @ts-ignore
+            this.root.capsuleInfo = {
+                radius: 0.5,
+                segment: new THREE.Line3( new THREE.Vector3(), new THREE.Vector3( 0, - 1.0, 0.0 ) )
+            } as CapsuleInfo;
+        }
+    }
+
     static async Create(scene: Scene) {
-        const group = await loadModel.fbx('./assets/characters/lpcharacter.fbx');
+        const group = await loadModel.fbx('./assets/characters/lps1.fbx');
         if (group) {
             group.traverse((object: Object3D|Mesh) => {
                 if (object instanceof Mesh) {
                     object.castShadow = true;
                     object.receiveShadow = false;
                 }
-            })
+            });
         }
         return new Hero(scene, group)
     }
