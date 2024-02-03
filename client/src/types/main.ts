@@ -1,8 +1,8 @@
-import {Player} from "../models/player.ts";
 import * as THREE from "three";
+import {Hero} from "../models/hero.ts";
 
 export interface PlayerList {
-    [key: number|string]: Player
+    [key: number|string]: Hero
 }
 export interface PlayerNames {
     [key: number|string]: string|null|undefined

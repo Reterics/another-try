@@ -1,6 +1,6 @@
 import {RoundedBoxGeometry} from "three/examples/jsm/geometries/RoundedBoxGeometry";
 import * as THREE from "three";
-import {AnimationMixer, Mesh, Scene} from "three";
+import {AnimationMixer, Group, Mesh, Object3DEventMap, Scene} from "three";
 import { CapsuleInfo } from "../types/main";
 import {loadModel} from "../utils/model.ts";
 import {Object3D} from "three/src/core/Object3D";
@@ -17,7 +17,7 @@ export class Hero {
         depth: 0.2
     };
 
-    constructor(scene: Scene, object: Object3D|undefined|null) {
+    constructor(scene: Scene, object: Group<Object3DEventMap>|undefined|null) {
         const root = object || this.createRoundedBox();
         this.mixer = new AnimationMixer( root );
         const clips = root.animations;
@@ -91,8 +91,16 @@ export class Hero {
         return this.root;
     }
 
-    addToScene() {
+    moveTo(x: number, y: number, z: number) {
+        const tempVector = new THREE.Vector3();
+        tempVector.set(x, y, z)
+        this.root.lookAt(tempVector);
+        this.root.position.set(x, y, z)
+    }
+
+    addToScene(): Hero {
         this.scene.add(this.root);
+        return this;
     }
 
     getPosition() {

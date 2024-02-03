@@ -3,7 +3,6 @@ import {Object3D, PerspectiveCamera, Raycaster, Scene, Vector3, WebGLRenderer} f
 import type {Socket} from 'socket.io-client';
 import {io} from 'socket.io-client';
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
-import {Player} from "./models/player";
 import {Sphere} from "./models/sphere";
 import {initSky} from "./initMethods";
 import {GltfScene} from "./terrain/gltfScene";
@@ -146,9 +145,11 @@ function loadSocket() {
 
         socket = io('//localhost:3000/')
 
-        socket.on('position', function(msg) {
-            if(players[msg[3]] == null) {createPlayer(msg[3])}
-            players[msg[3]].setPosition(msg[0], msg[1], msg[2]);
+        socket.on('position', async function(msg) {
+            if(players[msg[3]] == null) {
+                players[msg[3]] = (await Hero.Create(scene)).addToScene()
+            }
+            players[msg[3]].moveTo(msg[0], msg[1], msg[2]);
         });
 
         socket.on('data', function(msg: ServerMessage) {
@@ -223,11 +224,6 @@ function createBullet(msg: number[]) {
     sphere.setPosition(msg[0], msg[1], msg[2]);
     sphere.name = "bullet" + msg[4];
     sphere.addToScene();
-}
-
-function createPlayer(playerNo: string|number) {
-    players[playerNo] = new Player(scene);
-    players[playerNo].addToScene()
 }
 
 function onWindowResize() {
