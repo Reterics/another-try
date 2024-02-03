@@ -346,26 +346,31 @@ export class GltfScene {
             player.position.addScaledVector( velocity, delta );
 
             const angle = this.controls.getAzimuthalAngle(); // Get Azimuth for OrbitControl
-            if ( this.fwdPressed ) {
-                tempVector.set( 0, 0, - 1 ).applyAxisAngle( upVector, angle );
-                player.position.addScaledVector( tempVector, this.params.playerSpeed * delta );
+            tempVector.set(0,0,0);
+
+            if (this.fwdPressed) {
+                tempVector.z = -1;
             }
 
-            if ( this.bkdPressed ) {
-                tempVector.set( 0, 0, 1 ).applyAxisAngle( upVector, angle );
-                player.position.addScaledVector( tempVector, this.params.playerSpeed * delta );
+            if (this.bkdPressed) {
+                tempVector.z = 1;
             }
 
-            if ( this.lftPressed ) {
-                tempVector.set( - 1, 0, 0 ).applyAxisAngle( upVector, angle );
-                player.position.addScaledVector( tempVector, this.params.playerSpeed * delta );
+            if (this.lftPressed) {
+                tempVector.x = -1;
             }
 
-            if ( this.rgtPressed ) {
-                tempVector.set( 1, 0, 0 ).applyAxisAngle( upVector, angle );
-                player.position.addScaledVector( tempVector, this.params.playerSpeed * delta );
+            if (this.rgtPressed) {
+                tempVector.x = 1;
             }
 
+            tempVector.normalize();
+            tempVector.applyAxisAngle(upVector, angle);
+
+            if (this.fwdPressed || this.bkdPressed || this.lftPressed || this.rgtPressed) {
+                player.position.addScaledVector( tempVector, this.params.playerSpeed * delta );
+                player.lookAt(player.position.clone().add(tempVector));
+            }
 
             player.updateMatrixWorld();
 
