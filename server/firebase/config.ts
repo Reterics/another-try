@@ -14,7 +14,7 @@ const firebaseConfig = {
 export const firebaseCollections = {
     assets: process.env.FIREBASE_DB_ASSETS || 'assets',
     maps: process.env.FIREBASE_DB_MAPS || 'maps'
-};console.log(firebaseConfig);
+};
 
 // Initialize Firebase
 export const app = initializeApp(firebaseConfig);

@@ -111,8 +111,13 @@ async function init() {
         }
 
         serverManager.connect();
+        serverManager.on('connect', async () => {
+            const assets = serverManager.get('assets');
+            if (Array.isArray(assets)) {
+                creatorController.updateAssets(assets);
+            }
+        })
     });
-
 }
 
 

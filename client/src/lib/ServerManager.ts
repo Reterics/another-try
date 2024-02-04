@@ -1,5 +1,5 @@
 import {io, Socket} from "socket.io-client";
-import {PlayerList, PlayerNames, PlayerScores, ServerMessage} from "../types/main.ts";
+import {EventList, PlayerList, PlayerNames, PlayerScores, ServerMessage} from "../types/main.ts";
 import {Hero} from "../models/hero.ts";
 import {Object3D, Scene} from "three";
 import {PositionMessage} from "../../../types/messages.ts";
@@ -16,6 +16,7 @@ export class ServerManager {
     private readonly name: string;
     private playerIndex: number | undefined;
     private hud: HUDController;
+    private readonly events: EventList;
 
     constructor(scene: Scene, hud: HUDController) {
         this.scene = scene;
@@ -29,6 +30,34 @@ export class ServerManager {
         this.players = {} as PlayerList;
         this.scores = {} as PlayerScores;
         this.hud = hud;
+        this.events = {};
+    }
+
+    on (event: string, method: () => void, preventAll = false) {
+        if (!this.events[event]) {
+            this.events[event] = [];
+        }
+        if (preventAll || !this.events[event].find(ev=>ev === method)) {
+            this.events[event].push(method);
+        }
+    }
+
+    trigger(event: string) {
+        if (this.events[event]) {
+            for (let i = 0; i < this.events['connect'].length; i++) {
+                this.events[event][i]();
+            }
+        }
+    }
+
+    async get(uri: string): Promise<object | null> {
+        const response = await fetch(serverURL +
+            (uri.startsWith('/') ? uri.substring(1) : uri))
+            .catch(e=>console.error(e));
+        if (response && response.ok) {
+            return await response.json()
+        }
+        return null;
     }
 
     disconnect() {
@@ -42,6 +71,7 @@ export class ServerManager {
         this.socket.on('position', this.position.bind(this));
         this.socket.on('data', this.data.bind(this));
         this.socket.on('shoot', this.shoot.bind(this));
+        this.socket.on('connect', () => this.trigger('connect'));
     }
 
     private async position(msg: PositionMessage) {

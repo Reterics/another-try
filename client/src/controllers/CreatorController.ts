@@ -76,6 +76,17 @@ export class CreatorController {
         this.shadowTypeIndex = 0;
     }
 
+    updateAssets(assets: AssetObject[]) {
+        this.shadowTypes = [
+            {
+                "type": "rect",
+                "w": 3,
+                "h": 3,
+                "name": "Cube"
+            },
+            ...assets
+        ]
+    }
     onKeyUp (event: KeyboardEvent) {
         switch (event.code) {
             case 'KeyR':
