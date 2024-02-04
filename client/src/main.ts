@@ -11,8 +11,6 @@ import {HUDController} from "./controllers/HUDController.ts";
 import {acceleratedRaycast, computeBoundsTree, disposeBoundsTree} from "three-mesh-bvh";
 import {CreatorController} from "./controllers/CreatorController.ts";
 import {PlayerList, PlayerNames, PlayerScores, ServerMessage} from "./types/main.ts";
-import {createShadowObject} from "./utils/model.ts";
-import {AssetObject} from "./types/assets.ts";
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
@@ -128,14 +126,7 @@ async function init() {
     });
 
     creatorController = new CreatorController(scene, hudController, hero, controls);
-    createShadowObject({
-        "type": "rect",
-        "w": 3,
-        "h": 3
-    } as AssetObject).then(shadowObject=>{
-        scene.add(shadowObject);
-        creatorController.updateShadowObject();
-    });
+    void creatorController.updateShadowObject();
 }
 
 function loadSocket() {

@@ -2,7 +2,7 @@ import { Mesh, Scene } from "three";
 import { Object3D } from "three/src/core/Object3D";
 import * as THREE from "three";
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { isCollisionDetected } from "../utils/model";
+import {createShadowObject, isCollisionDetected} from "../utils/model";
 import {Active3DMode, ControllerView} from "../types/three";
 import { roundToPrecision } from "../utils/math";
 import {AssetObject} from "../types/assets";
@@ -24,6 +24,9 @@ export class CreatorController {
     reference?: AssetObject
     private readonly hero;
     view: ControllerView;
+    shadowTypes: AssetObject[];
+    shadowTypeIndex: number;
+    private _shadowLoad: Promise<void>|undefined;
 
     constructor(scene: Scene, hudController: HUDController, hero: Hero, controls: OrbitControls) {
         this.controls =  controls;
@@ -51,6 +54,21 @@ export class CreatorController {
         document.addEventListener('mousemove', this.onMouseMove.bind(this));
         document.addEventListener('wheel', this.onScroll.bind(this));
         this.hud = hudController;
+
+        this.shadowTypes = [
+            {
+                "type": "rect",
+                "w": 3,
+                "h": 3,
+                "name": "Cube"
+            },
+            {
+                "type": "model",
+                "path": "assets/models/ship.gltf",
+                "name": "Ship"
+            }
+        ];
+        this.shadowTypeIndex = 0;
     }
 
     onKeyUp (event: KeyboardEvent) {
@@ -75,6 +93,29 @@ export class CreatorController {
                     this.view = 'fps';
                 } else {
                     this.view = 'tps';
+                }
+                break;
+            case 'KeyE':
+                this.shadowTypeIndex++;
+                if (!this.shadowTypes[this.shadowTypeIndex]) {
+                    this.shadowTypeIndex = 0;
+                }
+                if (this.shadowObject) {
+                    this.scene.remove(this.shadowObject);
+                    this.shadowObject = undefined;
+                    void this.updateShadowObject();
+                }
+                break;
+            case 'KeyQ':
+                if (this.shadowTypeIndex === 0) {
+                    this.shadowTypeIndex = this.shadowTypes.length - 1;
+                } else {
+                    this.shadowTypeIndex--;
+                }
+                if (this.shadowObject) {
+                    this.scene.remove(this.shadowObject);
+                    this.shadowObject = undefined;
+                    void this.updateShadowObject();
                 }
                 break;
             case 'Escape':
@@ -110,6 +151,17 @@ export class CreatorController {
             .find(m => m.name === "shadowObject");
         if (this.shadowObject) {
             this.shadowObject.visible = this.active !== 'pointer';
+        } else {
+            if (this._shadowLoad) {
+                return this._shadowLoad;
+            }
+            this._shadowLoad = createShadowObject(this.shadowTypes[this.shadowTypeIndex])
+                .then(shadowObject=>{
+                    this.scene.add(shadowObject);
+                    this.shadowObject = shadowObject;
+                    this.shadowObject.visible = this.active !== 'pointer';
+                    this._shadowLoad = undefined;
+                });
         }
     }
 

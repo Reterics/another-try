@@ -171,6 +171,9 @@ export class HUDController {
                     controller.reference.type :
                     controller.reference.name || controller.reference.id || ""));
             }
+            if (controller.active !== 'pointer') {
+                tableData.push("Object: " + controller.shadowTypes[controller.shadowTypeIndex].name);
+            }
 
             const position = controller.getPosition();
             this.updateText('X: ' + position.x.toFixed(2) +
