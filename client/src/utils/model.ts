@@ -131,6 +131,18 @@ export const getMeshForItem = async (item: AssetObject): Promise<Mesh|Group> => 
             position2 = new Vector3(line.x2, 0, line.y2);
             const height = position1.distanceTo(position2);
             geometry = new CylinderGeometry(5, 5, height, 32);
+            break;
+        case "model":
+            if (item.path && item.path.endsWith(".gltf")) {
+                const group = await loadModel.gltf(item.path);
+                if (group) {
+                    const rect = item as Rectangle;
+                    const z = rect.z || 0;
+                    group.position.set(rect.x + rect.w / 2, z + Math.round((rect.w + rect.h) / 2) / 2,
+                        rect.y + rect.h / 2);
+                    return group;
+                }
+            }
     }
     model = new Mesh(geometry, material);
     model.castShadow = true; //default is false
