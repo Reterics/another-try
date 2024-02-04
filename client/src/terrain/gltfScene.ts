@@ -44,7 +44,7 @@ export class GltfScene {
     protected environment: Group;
     params: SceneParams;
     protected scene: Scene;
-    private readonly initMethod;
+    private initMethod: Promise<GltfScene>;
     private loaded = false;
     private controls: OrbitControls;
     playerIsOnGround = false;
@@ -90,7 +90,6 @@ export class GltfScene {
         this.params.spawnCoordinates = [x, y, z];
     }
 
-    // eslint-disable-next-line @typescript-eslint/ban-types
     _loadGLTF(callback: Function|undefined): Promise<GltfScene> {
         let targetModel = this.selectedModel.startsWith('https://') || this.selectedModel.startsWith('http://') ?
             this.selectedModel : 'assets/scenes/' + this.selectedModel;

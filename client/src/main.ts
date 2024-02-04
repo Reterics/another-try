@@ -1,29 +1,17 @@
 import * as THREE from 'three'
-import {Object3D, PerspectiveCamera, Raycaster, Scene, Vector3, WebGLRenderer} from 'three'
-import type {Socket} from 'socket.io-client';
-import {io} from 'socket.io-client';
+import {Object3D, PerspectiveCamera, Scene, Vector3, WebGLRenderer} from 'three'
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
-import {Sphere} from "./models/sphere";
 import {initSky} from "./initMethods";
 import {GltfScene} from "./terrain/gltfScene";
 import {Hero} from "./models/hero";
 import {HUDController} from "./controllers/HUDController.ts";
 import {acceleratedRaycast, computeBoundsTree, disposeBoundsTree} from "three-mesh-bvh";
 import {CreatorController} from "./controllers/CreatorController.ts";
-import {PlayerList, PlayerNames, PlayerScores, ServerMessage} from "./types/main.ts";
+import {ServerManager} from "./lib/ServerManager.ts";
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
-
-let socket: Socket;
-let playerNames:PlayerNames = {}
-
-let players: PlayerList = {}
-
-let playerNo: string|number;
-
-let scores: PlayerScores = {}
 
 let shoot = false,
     isChatActive = false;
@@ -40,8 +28,8 @@ let renderer: WebGLRenderer;
 let scene: Scene;
 let hero: Hero;
 let controls: OrbitControls;
-let raycaster: Raycaster;
 let creatorController: CreatorController;
+let serverManager: ServerManager;
 
 init();
 
@@ -66,8 +54,6 @@ async function init() {
         RIGHT: THREE.MOUSE.ROTATE,
     }
 
-    loadSocket();
-
     scene.add( controls.object );
     const onKeyDown = function ( event: KeyboardEvent ) {
          isChatActive = hudController.isChatActive();
@@ -75,7 +61,7 @@ async function init() {
             if(event.key == "Enter") {
                 const text = hudController.getMessage();
                 if (text) {
-                    socket.emit("data", {type: "msg", msg: text})
+                    serverManager.emit("data", {type: "msg", msg: text})
                 }
                 hudController.clearMessage();
                 hudController.toggleChat();
@@ -98,14 +84,15 @@ async function init() {
 
     document.addEventListener( 'keydown', onKeyDown, false );
     document.addEventListener("click", onClick, false);
-
-    raycaster = new THREE.Raycaster( new THREE.Vector3(), new THREE.Vector3( 0, - 1, 0 ), 0, 10 );
-
-
     window.addEventListener( 'resize', onWindowResize, false );
 
     hudController.renderMenu();
     initSky(scene);
+    creatorController = new CreatorController(scene, hudController, hero, controls);
+    await creatorController.updateShadowObject();
+
+    serverManager = new ServerManager(scene, hudController);
+
     hudController.onLoadMap(async (selectedMap, options)=> {
         if (!map) {
             map = await GltfScene.CreateMap(selectedMap, scene, controls);
@@ -117,105 +104,17 @@ async function init() {
         if (options.y && options.x && options.z) {
             map.setSpawnCoordinates(Number(options.x), Number(options.y), Number(options.z));
         }
-
         map.respawn(camera as THREE.PerspectiveCamera, heroPlayer);
-
+        renderer.render( scene, camera );
         if (!animationRunning) {
             animate();
         }
+
+        serverManager.connect();
     });
 
-    creatorController = new CreatorController(scene, hudController, hero, controls);
-    void creatorController.updateShadowObject();
 }
 
-function loadSocket() {
-    const name:HTMLInputElement = document.getElementById("name") as HTMLInputElement;
-
-    if(socket == null) {
-
-        socket = io('//localhost:3000/')
-
-        socket.on('position', async function(msg) {
-            if(players[msg[3]] == null) {
-                players[msg[3]] = (await Hero.Create(scene)).addToScene()
-            }
-            players[msg[3]].moveTo(msg[0], msg[1], msg[2]);
-        });
-
-        socket.on('data', function(msg: ServerMessage) {
-            let message: string = "";
-
-            if(msg.type == "bul col") {
-                if(msg.player == playerNo) {
-                    message = "You just got shot"
-                }
-                else if (msg.attacker) {
-                    message = "\"" + playerNames[msg.player] + "\" was shot by \"" + playerNames[msg.attacker] + "\""
-                }
-
-                if(msg.attacker && scores[msg.attacker] == null) { scores[msg.attacker] = 0 }
-
-                if (msg.attacker) {
-                    scores[msg.attacker] += 1
-                }
-
-                hudController.updateScores(playerNames, scores);
-            }
-            else if(msg.type == "config") {
-                playerNo = msg.player
-                message = "Welcome. You have successfully joined the game. Good luck :)"
-
-                if (name) {
-                    socket.emit("data", {type: "name", name: name.value})
-                    playerNames[playerNo] = name.value
-                }
-            }
-            else if(msg.type == "name") {
-                message = "\"" + msg.name + "\" has just joined."
-                playerNames[msg.player] = msg.name;
-            }
-            else if(msg.type == "msg") {
-                message = "<b>" + playerNames[msg.player] + ": </b>" + msg.msg
-            }
-            else if(msg.type == "disconnected") {
-                message = "Player \"" + playerNames[msg.player] + "\" just disconnected."
-            }
-
-            if(message) {
-                hudController.onMessage(message);
-            }
-        });
-
-        socket.on('shoot', function(msg) {
-            if(msg.length == 1) {
-                let bullet = scene.getObjectByName("bullet" + msg[0]);
-                if (bullet instanceof Object3D) {
-                    scene.remove(bullet)
-                }
-            }
-            else {
-                let bullet = scene.getObjectByName("bullet" + msg[4]);
-                if (!bullet) {
-                    createBullet(msg)
-                }
-                else {
-                    bullet.position.set(msg[0], msg[1], msg[2])
-                }
-            }
-        });
-    }
-}
-
-
-function createBullet(msg: number[]) {
-    console.log("create bullet")
-    console.log(msg)
-    const sphere = new Sphere(scene, 0.5, 15, 15, 'red');
-    sphere.setPosition(msg[0], msg[1], msg[2]);
-    sphere.name = "bullet" + msg[4];
-    sphere.addToScene();
-}
 
 function onWindowResize() {
 
@@ -237,30 +136,24 @@ function animate() {
     }
     const time = performance.now();
 
-    if (socket != null && !isChatActive) {
+    if (serverManager.isActive() && !isChatActive) {
         const pos = heroPlayer.position;
         //let rotation = controlsObject.rotation;
         //let touchedTerrain = false;
 
-        socket.emit("position", [pos.x, pos.y, pos.z])
+        serverManager.emit("position", [pos.x, pos.y, pos.z])
 
         if (shoot) {
             let dir: Vector3 = camera.getWorldDirection(direction);
 
             shoot = false
-            socket.emit("shoot", [pos.x, pos.y, pos.z, {
+            serverManager.emit("shoot", [pos.x, pos.y, pos.z, {
                 x: round(dir.x),
                 y: round(dir.y),
                 z: round(dir.z)
             }])
         }
 
-        raycaster.ray.origin.copy(pos);
-        raycaster.ray.origin.y -= 9;
-
-        // const intersections = raycaster.intersectObjects( objects );
-
-        // const onObject = intersections.length > 1;
 
         const delta = ( time - prevTime ) / 1000;
         //heroPlayer.position.copy(camera.position);
