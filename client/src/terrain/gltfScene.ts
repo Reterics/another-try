@@ -74,8 +74,8 @@ export class GltfScene {
             visualizeDepth: 10,
             gravity: - 30,
             playerSpeed: 10,
-            physicsSteps: 1,  //5
-            spawnCoordinates: [12, 15, 80] // X Y Z
+            physicsSteps: 5,  //5
+            spawnCoordinates: [12, 15, 120] // X Y Z
         };
         return this;
     }
@@ -452,7 +452,7 @@ export class GltfScene {
             camera.position.add( player.position );
 
             // if the player has fallen too far below the level reset their position to the start
-            if ( player.position.y < - 25 ) {
+            if ( player.position.y < - 500 ) {
                 this.respawn(camera, player);
             }
         }
