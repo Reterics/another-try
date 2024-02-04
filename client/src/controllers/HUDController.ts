@@ -216,6 +216,7 @@ export class HUDController {
             const div = document.createElement('div');
             div.innerHTML = message;
             this.messageList.appendChild(div);
+            this.messageList.scrollTop = this.messageList.scrollHeight;
         }
     }
 

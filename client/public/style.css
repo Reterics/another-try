@@ -188,3 +188,8 @@ a.logo-title {
     right: 6px;
     text-align: end;
 }
+
+#messageList {
+    height: calc(100% - 22px);
+    overflow-y: hidden;
+}

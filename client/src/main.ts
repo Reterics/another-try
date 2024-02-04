@@ -67,7 +67,7 @@ async function init() {
                 hudController.toggleChat();
                 isChatActive = !isChatActive;
             }
-            else {
+            else if (event.key.length === 1) {
                 hudController.type(event.key);
             }
         } else if(event.code == "KeyT") {
