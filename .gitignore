@@ -26,6 +26,7 @@ dist-ssr
 
 /server/node_modules
 /server/dist
+/server/.env
 /server/pnpm-lock.yaml
 /server/package-lock.json
 /client/node_modules

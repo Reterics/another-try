@@ -5,13 +5,14 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
-    "start": "tsc && node ./dist/index.js"
+    "start": "tsc && node ./dist/server/index.js"
   },
   "author": "Attila Reterics",
   "license": "ISC",
   "dependencies": {
     "dotenv": "^16.4.1",
     "express": "^4.18.2",
+    "firebase": "^10.8.0",
     "socket.io": "latest",
     "three": "0.160.0"
   },
