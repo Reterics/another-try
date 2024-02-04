@@ -5,9 +5,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {createShadowObject, isCollisionDetected} from "../utils/model";
 import {Active3DMode, ControllerView} from "../types/three";
 import { roundToPrecision } from "../utils/math";
-import {AssetObject} from "../types/assets";
 import {HUDController} from "./HUDController.ts";
 import {Hero} from "../models/hero.ts";
+import {AssetObject} from "../../../types/assets";
 
 let prevTime = performance.now();
 
@@ -164,7 +164,9 @@ export class CreatorController {
                 .then(shadowObject=>{
                     this.scene.add(shadowObject);
                     this.shadowObject = shadowObject;
-                    this.shadowObject.visible = this.active !== 'pointer';
+                    if (this.shadowObject) {
+                        this.shadowObject.visible = this.active !== 'pointer';
+                    }
                     this._shadowLoad = undefined;
                 });
         }

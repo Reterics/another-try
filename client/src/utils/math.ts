@@ -1,4 +1,4 @@
-import {Point, Rectangle} from "../types/assets.ts";
+import {Point, Rectangle} from "../../../types/assets.ts";
 
 export const degToRad = (degrees: number) => (Math.PI / 180) * degrees;
 

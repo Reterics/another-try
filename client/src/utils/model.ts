@@ -24,7 +24,8 @@ import { Loader } from "three/src/Three";
 import { ColladaLoader } from "three/examples/jsm/loaders/ColladaLoader";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader";
 import { Object3D } from "three/src/core/Object3D";
-import { AssetObject, Circle, Line, Rectangle, ShadowType } from "../types/assets.ts";
+import { AssetObject, Circle, Line, Rectangle } from "../../../types/assets.ts";
+import { ShadowType } from "../types/controller.ts";
 
 const genericLoader = (file: File|string, modelLoader: Loader) => {
     return new Promise(resolve => {

@@ -4,7 +4,7 @@ import {AnimationMixer, Group, Mesh, Object3DEventMap, Scene} from "three";
 import { CapsuleInfo } from "../types/main";
 import {loadModel} from "../utils/model.ts";
 import {Object3D} from "three/src/core/Object3D";
-import {ObjectDimensions} from "../types/assets.ts";
+import {ObjectDimensions} from "../../../types/assets.ts";
 
 
 export class Hero {
