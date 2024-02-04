@@ -66,6 +66,11 @@ export class CreatorController {
                 "type": "model",
                 "path": "assets/models/ship.gltf",
                 "name": "Ship"
+            },
+            {
+                "type": "model",
+                "path": "assets/models/tree.gltf",
+                "name": "Tree"
             }
         ];
         this.shadowTypeIndex = 0;
