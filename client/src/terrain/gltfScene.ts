@@ -195,6 +195,7 @@ export class GltfScene {
                 mergedGeometry.boundsTree = new MeshBVH( mergedGeometry );
 
                 this.collider = new THREE.Mesh( mergedGeometry );
+                this.collider.name = 'collider';
                 const colliderMaterial: MeshStandardMaterial = this.collider.material as MeshStandardMaterial;
                 colliderMaterial.wireframe = true;
                 colliderMaterial.opacity = 0.5;

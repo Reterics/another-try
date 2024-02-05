@@ -163,7 +163,7 @@ function animate() {
         if (creatorController.view === 'tps') {
             controls.maxPolarAngle = Math.PI / 2;
             controls.minDistance = 1;
-            controls.maxDistance = 20;
+            controls.maxDistance = 40;
         } else if (creatorController.view === 'fps') {
             controls.maxPolarAngle = Math.PI;
             controls.minDistance = 1e-4;

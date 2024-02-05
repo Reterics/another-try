@@ -150,13 +150,25 @@ export class CreatorController {
         }
     }
 
-    getCursorPosition() {
+    getCenterPosition() {
         const domElement = this.controls.domElement as HTMLElement;
         const rect = domElement.getBoundingClientRect();
         const mouse = new THREE.Vector2();
 
         mouse.x = ((rect.width / 2) / rect.width) * 2 - 1;
         mouse.y = -((rect.height / 2) / rect.height) * 2 + 1;
+
+        return mouse;
+    }
+
+    getCursorPosition(event: MouseEvent) {
+        const domElement = this.controls.domElement as HTMLElement;
+        const rect = domElement.getBoundingClientRect();
+        const mouse = new THREE.Vector2();
+
+        mouse.x = ((event.clientX) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY) / rect.height) * 2 + 1;
+
         return mouse;
     }
 
@@ -197,33 +209,39 @@ export class CreatorController {
         return this.hero.getPosition()
     }
 
-    dropObject (object: Object3D|undefined) {
+    dropObject (object: Object3D|undefined, event: MouseEvent) {
         if (object) {
             const camera = this.controls.object;
             const movementSpeed = 3; // Adjust the speed as needed
             object.position.copy(camera.position)
 
-            const mouse = this.getCursorPosition();
+            const mouse = this.view === "tps" ? this.getCursorPosition(event) : this.getCenterPosition();
             const rayCaster = new THREE.Raycaster();
             rayCaster.setFromCamera(mouse, camera);
             const intersectObjects = this.scene.children.filter((mesh: Object3D) =>
-                mesh.name.startsWith("mesh") || mesh.name === "plane");
+                mesh.name.startsWith("mesh") || mesh.name === "plane" || mesh.name === "collider");
             const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
 
-            const directionVector = forward.multiplyScalar(movementSpeed);
-            rayCaster.set(object.position, forward);
+            if (this.view === "fps") {
+                rayCaster.set(camera.position, forward);
+            }
             const intersects = rayCaster.intersectObjects(intersectObjects,
                 true);
             const objectsInPath = intersects.map(o=>o.object);
 
 
-            let i = 0;
-            while (!objectsInPath.find(o=> isCollisionDetected(o, object))) {
-                object.position.add(directionVector);
-                i++;
-                if (i >= this.far) {
-                    break;
+            if (this.view === "fps") {
+                const directionVector = forward.multiplyScalar(movementSpeed);
+                let i = 0;
+                while (!objectsInPath.find(o=> isCollisionDetected(o, object))) {
+                    object.position.add(directionVector);
+                    i++;
+                    if (i >= this.far) {
+                        break;
+                    }
                 }
+            } else if (intersects[0]) {
+                object.position.copy(intersects[0].point);
             }
 
             object.position.x = roundToPrecision(object.position.x, this.precision);
@@ -235,7 +253,7 @@ export class CreatorController {
     onMouseMove (event: MouseEvent) {
         event.preventDefault();
         const shadowObject = this.getShadowObject();
-        this.dropObject(shadowObject);
+        this.dropObject(shadowObject, event);
     }
 
     onDblClick (event: MouseEvent) {
@@ -244,7 +262,7 @@ export class CreatorController {
         if (shadowObject) {
             const bulletObject = shadowObject.clone();
             this.scene.add(bulletObject);
-            this.dropObject(bulletObject);
+            this.dropObject(bulletObject, event);
             bulletObject.name = "mesh_bullet_brick";
         }
     }
@@ -259,7 +277,7 @@ export class CreatorController {
                 this.far = 10;
             }
             const shadowObject = this.getShadowObject();
-            this.dropObject(shadowObject);
+            this.dropObject(shadowObject, event);
         } else if (this.active === 'size') {
             const shadowObject: Mesh = this.getShadowObject() as Mesh;
             const currentScale = [shadowObject.scale.x, shadowObject.scale.y, shadowObject.scale.z];
