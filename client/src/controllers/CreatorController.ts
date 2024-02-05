@@ -251,11 +251,13 @@ export class CreatorController {
 
     onScroll (event: WheelEvent) {
         // Normalize wheel delta across different browsers
-        // @ts-ignore
-        const delta = Math.max(-1, Math.min(1, (event.wheelDelta || -event.detail)));
+        const delta = Math.max(-1, Math.min(1, (-event.deltaY || -event.detail)));
 
         if (this.active === 'far') {
             this.far += delta * 5;
+            if (this.far < 10) {
+                this.far = 10;
+            }
             const shadowObject = this.getShadowObject();
             this.dropObject(shadowObject);
         } else if (this.active === 'size') {
