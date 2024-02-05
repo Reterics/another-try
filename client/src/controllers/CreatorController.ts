@@ -26,7 +26,8 @@ export class CreatorController {
     view: ControllerView;
     shadowTypes: AssetObject[];
     shadowTypeIndex: number;
-    private _shadowLoad: Promise<void>|undefined;
+    shadowInstances: Object3D[];
+    private _shadowLoad:  Promise<Object3D>|undefined;
 
     constructor(scene: Scene, hudController: HUDController, hero: Hero, controls: OrbitControls) {
         this.controls =  controls;
@@ -74,6 +75,7 @@ export class CreatorController {
             }
         ];
         this.shadowTypeIndex = 0;
+        this.shadowInstances = [];
     }
 
     updateAssets(assets: AssetObject[]) {
@@ -85,7 +87,9 @@ export class CreatorController {
                 "name": "Cube"
             },
             ...assets
-        ]
+        ];
+        this.shadowTypeIndex = 0;
+        this.shadowInstances = [];
     }
     onKeyUp (event: KeyboardEvent) {
         switch (event.code) {
@@ -162,7 +166,7 @@ export class CreatorController {
         return this.shadowObject;
     }
 
-    updateShadowObject() {
+    async updateShadowObject() {
         this.shadowObject = this.scene.children
             .find(m => m.name === "shadowObject");
         if (this.shadowObject) {
@@ -171,15 +175,21 @@ export class CreatorController {
             if (this._shadowLoad) {
                 return this._shadowLoad;
             }
-            this._shadowLoad = createShadowObject(this.shadowTypes[this.shadowTypeIndex])
-                .then(shadowObject=>{
-                    this.scene.add(shadowObject);
-                    this.shadowObject = shadowObject;
-                    if (this.shadowObject) {
-                        this.shadowObject.visible = this.active !== 'pointer';
-                    }
-                    this._shadowLoad = undefined;
-                });
+            let shadowObject;
+            if (this.shadowInstances[this.shadowTypeIndex]) {
+                shadowObject = this.shadowInstances[this.shadowTypeIndex].clone();
+            } else {
+                this._shadowLoad = createShadowObject(this.shadowTypes[this.shadowTypeIndex]);
+                shadowObject = await this._shadowLoad;
+                this.shadowInstances[this.shadowTypeIndex] = shadowObject;
+            }
+
+            this.scene.add(shadowObject);
+            this.shadowObject = shadowObject;
+            if (this.shadowObject) {
+                this.shadowObject.visible = this.active !== 'pointer';
+            }
+            this._shadowLoad = undefined;
         }
     }
 
