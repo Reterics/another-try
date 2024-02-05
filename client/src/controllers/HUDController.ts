@@ -4,12 +4,6 @@ import inGameTemplate from '../pages/ingame.html?raw'
 import {CreatorController} from "./CreatorController.ts";
 import {PlayerNames, PlayerScores} from "../types/main.ts";
 
-interface MapOptions {
-    y?: number|string;
-    x?: number|string;
-    z?: number|string;
-}
-
 export class HUDController {
     private readonly inGame: HTMLDivElement;
     private readonly mainMenu: HTMLDivElement;
@@ -67,11 +61,11 @@ export class HUDController {
             if (target && target.parentElement && target.parentElement.id === 'maps' && target.id) {
                 const level = target.getAttribute('data-location') || target.id;
                 console.log('Selected map: ', level);
-                this.renderGame(level, target);
+                this.renderGame(level);
             }
         };
         this.pauseMenu.onclick = () => {
-            this.renderGame(null, null);
+            this.renderGame(null);
         };
     }
 
@@ -117,17 +111,17 @@ export class HUDController {
         return options;
     }
 
-    renderGame (level: string|null, node: HTMLElement|null|undefined) {
+    renderGame (level: string|null) {
         console.log('Render level: ', level);
         this.inGame.style.display = 'block';
         this.pauseMenu.style.display = 'none';
         this.mainMenu.style.display = 'none';
         if (this.onload && level) {
-            this.onload(level, this.getOptionsFromNode(node));
+            this.onload(level);
         }
     }
 
-    onLoadMap(param: (selectedMap: string, options: MapOptions) => void) {
+    onLoadMap(param: (selectedMap: string) => void) {
         this.onload = param;
     }
 

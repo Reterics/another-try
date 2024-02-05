@@ -93,7 +93,7 @@ async function init() {
 
     serverManager = new ServerManager(scene, hudController);
 
-    hudController.onLoadMap(async (selectedMap, options)=> {
+    hudController.onLoadMap(async (selectedMap)=> {
         if (!map) {
             map = await GltfScene.CreateMap(selectedMap, scene, controls);
             map.initPlayerEvents();
@@ -101,10 +101,8 @@ async function init() {
             await map.updateScene(selectedMap);
         }
         await map.addToScene();
-        if (options.y && options.x && options.z) {
-            map.setSpawnCoordinates(Number(options.x), Number(options.y), Number(options.z));
-        }
-        map.respawn(camera as THREE.PerspectiveCamera, heroPlayer);
+
+        map.respawn(heroPlayer);
         renderer.render( scene, camera );
         if (!animationRunning) {
             animate();

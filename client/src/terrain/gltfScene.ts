@@ -127,8 +127,8 @@ export class GltfScene {
                         // We always need to clone the light, otherwise it fails
                         this.scene.add( c.clone(true) as Object3D);
                     } else if(c instanceof Camera && c.isCamera) {
-                        this.controls.object.position.copy(c.position);
-
+                        this.setSpawnCoordinates(c.position.x, c.position.y, c.position.z);
+                        // this.controls.object.position.copy(c.position);
                     }
                 } );
 
@@ -211,18 +211,18 @@ export class GltfScene {
         });
     }
 
-    respawn(_camera: THREE.PerspectiveCamera, player: Mesh|Object3D) {
+    respawn(player: Mesh|Object3D) {
         player.position.set(
             this.params.spawnCoordinates[0],
             this.params.spawnCoordinates[1],
             this.params.spawnCoordinates[2]);
 
-       _camera
+        this.controls.object
             .position
-            .sub( this.controls.target )
+            .sub( player.position )
             .normalize()
-            .multiplyScalar( 10 )
-            .add( this.controls.target );
+            .multiplyScalar( 100)
+            .add( player.position );
 
        this.controls.update();
     }
@@ -452,7 +452,7 @@ export class GltfScene {
 
             // if the player has fallen too far below the level reset their position to the start
             if ( player.position.y < - 500 ) {
-                this.respawn(camera, player);
+                this.respawn(player);
             }
         }
     }
