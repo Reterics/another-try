@@ -1,4 +1,4 @@
-import { GLTF, GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import {GLTF, GLTFLoader} from "three/examples/jsm/loaders/GLTFLoader";
 import * as THREE from "three";
 import {
     ArrowHelper,
@@ -16,16 +16,16 @@ import {
     Quaternion,
     SphereGeometry,
     TextureLoader,
-    Vector3,
+    Vector3
 } from "three";
-import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader";
-import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader";
-import { Loader } from "three/src/Three";
-import { ColladaLoader } from "three/examples/jsm/loaders/ColladaLoader";
-import { STLLoader } from "three/examples/jsm/loaders/STLLoader";
-import { Object3D } from "three/src/core/Object3D";
-import { AssetObject, Circle, Line, Rectangle } from "../../../types/assets.ts";
-import { ShadowType } from "../types/controller.ts";
+import {FBXLoader} from "three/examples/jsm/loaders/FBXLoader";
+import {OBJLoader} from "three/examples/jsm/loaders/OBJLoader";
+import {Loader} from "three/src/Three";
+import {ColladaLoader} from "three/examples/jsm/loaders/ColladaLoader";
+import {STLLoader} from "three/examples/jsm/loaders/STLLoader";
+import {Object3D} from "three/src/core/Object3D";
+import {AssetObject, Circle, Line, Rectangle} from "../../../types/assets.ts";
+import {ShadowType} from "../types/controller.ts";
 
 const genericLoader = (file: File|string, modelLoader: Loader) => {
     return new Promise(resolve => {
@@ -40,11 +40,10 @@ const genericLoader = (file: File|string, modelLoader: Loader) => {
 };
 
 export const loadModel = {
-    gltf: async (file: File|string): Promise<Group<Object3DEventMap> | null> => {
+    gltf: async (file: File|string): Promise<GLTF | null> => {
         const object = await genericLoader(file, new GLTFLoader());
         if (object) {
-            const gltf = object as GLTF;
-            return gltf.scene;
+            return object as GLTF;
         }
         return null;
     },
@@ -137,11 +136,12 @@ export const getMeshForItem = async (item: AssetObject): Promise<Mesh|Group> => 
             if (item.path && item.path.endsWith(".gltf")) {
                 const group = await loadModel.gltf(item.path);
                 if (group) {
+                    const model = group.scene;
                     const rect = item as Rectangle;
                     const z = rect.z || 0;
-                    group.position.set(rect.x + rect.w / 2, z + Math.round((rect.w + rect.h) / 2) / 2,
+                    model.position.set(rect.x + rect.w / 2, z + Math.round((rect.w + rect.h) / 2) / 2,
                         rect.y + rect.h / 2);
-                    return group;
+                    return model;
                 }
             }
     }

@@ -1,6 +1,6 @@
 import {RoundedBoxGeometry} from "three/examples/jsm/geometries/RoundedBoxGeometry";
 import * as THREE from "three";
-import {AnimationMixer, Group, Mesh, Object3DEventMap, Scene} from "three";
+import {AnimationMixer, Group, Object3DEventMap, Scene} from "three";
 import { CapsuleInfo } from "../types/main";
 import {loadModel} from "../utils/model.ts";
 import {Object3D} from "three/src/core/Object3D";
@@ -20,10 +20,9 @@ export class Hero {
     constructor(scene: Scene, object: Group<Object3DEventMap>|undefined|null) {
         const root = object || this.createRoundedBox();
         this.mixer = new AnimationMixer( root );
-        const clips = root.animations;
 
         // Play a specific animation
-        const clip = THREE.AnimationClip.findByName( clips, 'rig|rigAction' );
+        const clip = THREE.AnimationClip.findByName( root.animations, 'Idle' );
         const action = this.mixer.clipAction( clip );
 
         if (action) {
@@ -66,9 +65,16 @@ export class Hero {
     }
 
     static async Create(scene: Scene) {
-        const group = await loadModel.fbx('./assets/characters/lps1.fbx');
+        const group = await loadModel.gltf('./assets/characters/mixamo_leonard.glb');
+        let player = null;
         if (group) {
-            group.traverse((object: Object3D|Mesh) => {
+            player = group.scene;
+            player.animations = group.animations;
+            player.castShadow = true;
+            player.receiveShadow = false;
+
+            player.children[0].position.set(0,-1.5,0);
+            /*group.traverse((object: Object3D|Mesh) => {
                 if (object instanceof Mesh) {
                     object.castShadow = true;
                     object.receiveShadow = false;
@@ -82,9 +88,9 @@ export class Hero {
                     object.scale.set(scaleX, scaleY, scaleZ);
                     object.position.set(0,0,0);
                 }
-            });
+            });*/
         }
-        return new Hero(scene, group)
+        return new Hero(scene, player)
     }
 
     getObject() {

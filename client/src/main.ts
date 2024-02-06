@@ -177,8 +177,9 @@ function animate() {
 
         controls.update();
 
-        creatorController.update(delta)
+        creatorController.update(delta);
 
+        hero.update(delta);
     }
 
     prevTime = time;
