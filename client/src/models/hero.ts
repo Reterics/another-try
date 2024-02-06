@@ -1,6 +1,6 @@
 import {RoundedBoxGeometry} from "three/examples/jsm/geometries/RoundedBoxGeometry";
 import * as THREE from "three";
-import {AnimationMixer, Group, Object3DEventMap, Scene} from "three";
+import {AnimationAction, AnimationMixer, Group, Object3DEventMap, Scene} from "three";
 import { CapsuleInfo } from "../types/main";
 import {loadModel} from "../utils/model.ts";
 import {Object3D} from "three/src/core/Object3D";
@@ -16,17 +16,20 @@ export class Hero {
         height: 1.0,
         depth: 0.2
     };
+    private currentAnimation: string;
+    private action: AnimationAction;
 
     constructor(scene: Scene, object: Group<Object3DEventMap>|undefined|null) {
         const root = object || this.createRoundedBox();
         this.mixer = new AnimationMixer( root );
 
         // Play a specific animation
+        this.currentAnimation = 'Idle';
         const clip = THREE.AnimationClip.findByName( root.animations, 'Idle' );
-        const action = this.mixer.clipAction( clip );
+        this.action = this.mixer.clipAction( clip );
 
-        if (action) {
-            action.play();
+        if (this.action) {
+            this.action.play();
         }
 
         this.scene = scene;
@@ -111,5 +114,22 @@ export class Hero {
 
     getPosition() {
         return this.root.position.clone();
+    }
+
+    changeAnimation(name: string) {
+        if (this.currentAnimation === name) {
+            return;
+        }
+        const clip = THREE.AnimationClip.findByName( this.root.animations, name );
+        if (clip) {
+            //this.action.stop();
+            this.mixer.stopAllAction();
+
+            const action = this.mixer.clipAction( clip );
+            if (action) {
+                this.currentAnimation = name;
+                action.play();
+            }
+        }
     }
 }

@@ -172,7 +172,7 @@ function animate() {
 
         const physicsSteps = map.params.physicsSteps || 1;
         for ( let i = 0; i < physicsSteps; i ++ ) {
-            map.updatePlayer(delta / physicsSteps, camera, heroPlayer);
+            map.updatePlayer(delta / physicsSteps, camera, hero);
         }
 
         controls.update();

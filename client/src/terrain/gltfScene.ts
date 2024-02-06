@@ -6,6 +6,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import {Water} from "three/examples/jsm/objects/Water2";
 import {CapsuleInfo, SceneParams} from "../types/main.ts";
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
+import {Hero} from "../models/hero.ts";
 
 let tempVector = new THREE.Vector3();
 let tempVector2 = new THREE.Vector3();
@@ -289,7 +290,8 @@ export class GltfScene {
         }
     }
 
-    updatePlayer(delta:number, camera: THREE.PerspectiveCamera, player: Mesh|Object3D) {
+    updatePlayer(delta:number, camera: THREE.PerspectiveCamera, hero: Hero) {
+        const player = hero ? hero.getObject() : null;
         if (this.collider && camera && player && this.visualizer) {
             this.collider.visible = this.params.displayCollider;
             this.visualizer.visible = this.params.displayBVH;
@@ -370,6 +372,9 @@ export class GltfScene {
             if (this.fwdPressed || this.bkdPressed || this.lftPressed || this.rgtPressed) {
                 player.position.addScaledVector( tempVector, this.params.playerSpeed * delta );
                 player.lookAt(player.position.clone().add(tempVector));
+                hero.changeAnimation('Walk');
+            } else {
+                hero.changeAnimation(this.playerIsOnGround ? 'Idle' : 'Jump');
             }
 
             player.updateMatrixWorld();
