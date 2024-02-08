@@ -9,7 +9,7 @@ export class EventManager {
         this._maxListeners = 10;
     }
 
-    on (event: string, method: () => void, preventAll = false) {
+    on (event: string, method: Function, preventAll = false) {
         if (!this._events[event]) {
             this._events[event] = [];
         }
@@ -22,10 +22,10 @@ export class EventManager {
         return this;
     }
 
-    emit(event: string) {
+    emit(event: string, arg?: any) {
         if (this._events[event]) {
             for (let i = 0; i < this._events[event].length; i++) {
-                this._events[event][i]();
+                this._events[event][i](arg);
             }
         }
         return this;

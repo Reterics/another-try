@@ -181,6 +181,10 @@ export class CreatorController extends EventManager {
         return this.shadowObject;
     }
 
+    getShadowObjectByIndex (index: number) {
+        return createShadowObject(this.shadowTypes[index]);
+    }
+
     async updateShadowObject() {
         this.shadowObject = this.scene.children
             .find(m => m.name === "shadowObject");
@@ -267,6 +271,11 @@ export class CreatorController extends EventManager {
             this.scene.add(bulletObject);
             this.dropObject(bulletObject, event);
             bulletObject.name = "mesh_bullet_brick";
+
+            this.emit('object', {
+                position: bulletObject.position.toArray(),
+                asset: this.shadowTypeIndex
+            });
         }
     }
 

@@ -54,6 +54,9 @@ export class ServerManager extends EventManager {
         this.socket.on('position', this.position.bind(this));
         this.socket.on('data', this.data.bind(this));
         this.socket.on('shoot', this.shoot.bind(this));
+        this.socket.on('object', (msg: ServerMessage)=> {
+            this.emit('object', msg);
+        });
         this.socket.on('connect', () => this.emit('connect'));
     }
 

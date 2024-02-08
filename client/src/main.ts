@@ -8,6 +8,7 @@ import {HUDController} from "./controllers/HUDController.ts";
 import {acceleratedRaycast, computeBoundsTree, disposeBoundsTree} from "three-mesh-bvh";
 import {CreatorController} from "./controllers/CreatorController.ts";
 import {ServerManager} from "./lib/ServerManager.ts";
+import {ServerMessage} from "./types/main.ts";
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
@@ -88,6 +89,11 @@ async function init() {
             shoot = true;
         }
     });
+    creatorController.on('object', (msg: any) => {
+        if (msg && Array.isArray(msg.coordinates) && typeof msg.asset === "number") {
+            serverManager.send("object", msg);
+        }
+    });
 
     serverManager = new ServerManager(scene, hudController);
 
@@ -111,6 +117,20 @@ async function init() {
             const assets = serverManager.get('assets');
             if (Array.isArray(assets)) {
                 creatorController.updateAssets(assets);
+            }
+        });
+        serverManager.on('object', async (msg: ServerMessage) => {
+            if (msg.type === "object" && Array.isArray(msg.coordinates) && typeof msg.asset === "number") {
+                const obj = await creatorController.getShadowObjectByIndex(msg.asset);
+                if (obj &&
+                    typeof msg.coordinates[0] === "number" &&
+                    typeof msg.coordinates[1] === "number" &&
+                    typeof msg.coordinates[3] === "number"
+                ) {
+                    obj.name = "mesh_bullet_brick";
+                    obj.position.set(msg.coordinates[0], msg.coordinates[1], msg.coordinates[3]);
+                    scene.add(obj);
+                }
             }
         })
     });

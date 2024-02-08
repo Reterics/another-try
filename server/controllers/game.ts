@@ -82,6 +82,12 @@ export class GameController {
             }
         });
 
+        socket.on('object', (msg) => {
+            if (msg && msg.type === "object" && Array.isArray(msg.coordinates) && msg.asset) {
+                this.io.to(lastGameId.toString()).emit("object", {coordinates: msg.coordinates, asset: msg.asset});
+            }
+        })
+
         socket.on('position', (msg) => {
             if (Array.isArray(msg) && msg.length == 3) {
                 if (typeof msg[0] == "number" && typeof msg[1] == "number" && typeof msg[2] == "number") {

@@ -10,10 +10,14 @@ export interface PlayerList {
 export interface PlayerNames {
     [key: number|string]: string|null|undefined
 }
+export interface GeneralObject {
+    [key: string]: string|null|undefined|string[]|number[]|boolean|number
+}
+
 export interface PlayerScores {
     [key: number|string]: number
 }
-export interface ServerMessage {
+export interface ServerMessage extends GeneralObject {
     type: string;
     player: string|number;
     attacker?: string|number;
