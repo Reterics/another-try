@@ -2,7 +2,7 @@ import {io, Socket} from "socket.io-client";
 import {PlayerList, PlayerNames, PlayerScores, ServerMessage} from "../types/main.ts";
 import {Hero} from "../models/hero.ts";
 import {Object3D, Scene} from "three";
-import {PositionMessage} from "../../../types/messages.ts";
+import {ObjectPositionMessage, PositionMessage} from "../../../types/messages.ts";
 import {HUDController} from "../controllers/HUDController.ts";
 import {Sphere} from "../models/sphere.ts";
 import {EventManager} from "./EventManager.ts";
@@ -54,7 +54,7 @@ export class ServerManager extends EventManager {
         this.socket.on('position', this.position.bind(this));
         this.socket.on('data', this.data.bind(this));
         this.socket.on('shoot', this.shoot.bind(this));
-        this.socket.on('object', (msg: ServerMessage)=> {
+        this.socket.on('object', (msg: ObjectPositionMessage)=> {
             this.emit('object', msg);
         });
         this.socket.on('connect', () => this.emit('connect'));

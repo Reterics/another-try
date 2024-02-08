@@ -8,7 +8,7 @@ import {HUDController} from "./controllers/HUDController.ts";
 import {acceleratedRaycast, computeBoundsTree, disposeBoundsTree} from "three-mesh-bvh";
 import {CreatorController} from "./controllers/CreatorController.ts";
 import {ServerManager} from "./lib/ServerManager.ts";
-import {ServerMessage} from "./types/main.ts";
+import {ObjectPositionMessage} from "../../types/messages.ts";
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
@@ -89,8 +89,8 @@ async function init() {
             shoot = true;
         }
     });
-    creatorController.on('object', (msg: any) => {
-        if (msg && Array.isArray(msg.coordinates) && typeof msg.asset === "number") {
+    creatorController.on('object', (msg: ObjectPositionMessage) => {
+        if (msg && Array.isArray(msg.coordinates) && msg.asset) {
             serverManager.send("object", msg);
         }
     });
@@ -119,8 +119,8 @@ async function init() {
                 creatorController.updateAssets(assets);
             }
         });
-        serverManager.on('object', async (msg: ServerMessage) => {
-            if (msg.type === "object" && Array.isArray(msg.coordinates) && typeof msg.asset === "number") {
+        serverManager.on('object', async (msg: ObjectPositionMessage) => {
+            if (msg.type === "object" && Array.isArray(msg.coordinates) && msg.asset) {
                 const obj = await creatorController.getShadowObjectByIndex(msg.asset);
                 if (obj &&
                     typeof msg.coordinates[0] === "number" &&

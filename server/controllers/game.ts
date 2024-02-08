@@ -2,6 +2,7 @@ import {Game} from "../types/commonGame";
 import {DefaultEventsMap} from "socket.io/dist/typed-events";
 import {Server, Socket} from "socket.io";
 import {isInMargin} from "../lib/commons";
+import {ObjectPositionMessage} from "../../types/messages";
 
 
 export class GameController {
@@ -82,7 +83,7 @@ export class GameController {
             }
         });
 
-        socket.on('object', (msg) => {
+        socket.on('object', (msg: ObjectPositionMessage) => {
             if (msg && msg.type === "object" && Array.isArray(msg.coordinates) && msg.asset) {
                 this.io.to(lastGameId.toString()).emit("object", {coordinates: msg.coordinates, asset: msg.asset});
             }

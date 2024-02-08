@@ -317,6 +317,7 @@ export class CreatorController extends EventManager {
     dispose() {
         document.removeEventListener('keyup', this.onKeyUp.bind(this));
         document.removeEventListener('dblclick', this.onDblClick.bind(this));
+        document.removeEventListener('click', this.onClick.bind(this));
         document.removeEventListener('mousemove', this.onMouseMove.bind(this));
         document.removeEventListener('wheel', this.onScroll.bind(this));
         this.controls.dispose();
