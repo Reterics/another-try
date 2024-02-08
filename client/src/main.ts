@@ -61,7 +61,7 @@ async function init() {
             if(event.key == "Enter") {
                 const text = hudController.getMessage();
                 if (text) {
-                    serverManager.emit("data", {type: "msg", msg: text})
+                    serverManager.send("data", {type: "msg", msg: text})
                 }
                 hudController.clearMessage();
                 hudController.toggleChat();
@@ -144,13 +144,13 @@ function animate() {
         //let rotation = controlsObject.rotation;
         //let touchedTerrain = false;
 
-        serverManager.emit("position", [pos.x, pos.y, pos.z])
+        serverManager.send("position", [pos.x, pos.y, pos.z])
 
         if (shoot) {
             let dir: Vector3 = camera.getWorldDirection(direction);
 
             shoot = false
-            serverManager.emit("shoot", [pos.x, pos.y, pos.z, {
+            serverManager.send("shoot", [pos.x, pos.y, pos.z, {
                 x: round(dir.x),
                 y: round(dir.y),
                 z: round(dir.z)

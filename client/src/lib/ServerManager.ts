@@ -1,13 +1,14 @@
 import {io, Socket} from "socket.io-client";
-import {EventList, PlayerList, PlayerNames, PlayerScores, ServerMessage} from "../types/main.ts";
+import {PlayerList, PlayerNames, PlayerScores, ServerMessage} from "../types/main.ts";
 import {Hero} from "../models/hero.ts";
 import {Object3D, Scene} from "three";
 import {PositionMessage} from "../../../types/messages.ts";
 import {HUDController} from "../controllers/HUDController.ts";
 import {Sphere} from "../models/sphere.ts";
+import {EventManager} from "./EventManager.ts";
 
 const serverURL = '//localhost:3000/';
-export class ServerManager {
+export class ServerManager extends EventManager {
     private socket: Socket|undefined;
     private readonly players: PlayerList;
     private readonly playerNames: PlayerNames;
@@ -16,9 +17,9 @@ export class ServerManager {
     private readonly name: string;
     private playerIndex: number | undefined;
     private hud: HUDController;
-    private readonly events: EventList;
 
     constructor(scene: Scene, hud: HUDController) {
+        super();
         this.scene = scene;
         const nameNode = document.getElementById("name") as HTMLInputElement;
         if (nameNode) {
@@ -30,24 +31,6 @@ export class ServerManager {
         this.players = {} as PlayerList;
         this.scores = {} as PlayerScores;
         this.hud = hud;
-        this.events = {};
-    }
-
-    on (event: string, method: () => void, preventAll = false) {
-        if (!this.events[event]) {
-            this.events[event] = [];
-        }
-        if (preventAll || !this.events[event].find(ev=>ev === method)) {
-            this.events[event].push(method);
-        }
-    }
-
-    trigger(event: string) {
-        if (this.events[event]) {
-            for (let i = 0; i < this.events['connect'].length; i++) {
-                this.events[event][i]();
-            }
-        }
     }
 
     async get(uri: string): Promise<object | null> {
@@ -71,7 +54,7 @@ export class ServerManager {
         this.socket.on('position', this.position.bind(this));
         this.socket.on('data', this.data.bind(this));
         this.socket.on('shoot', this.shoot.bind(this));
-        this.socket.on('connect', () => this.trigger('connect'));
+        this.socket.on('connect', () => this.emit('connect'));
     }
 
     private async position(msg: PositionMessage) {
@@ -146,7 +129,7 @@ export class ServerManager {
         }
     }
 
-    emit (ev:string, ...args: any[]) {
+    send (ev:string, ...args: any[]) {
         if (this.socket) {
             this.socket.emit(ev, ...args);
         }
