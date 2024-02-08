@@ -76,20 +76,18 @@ async function init() {
         }
     };
 
-    const onClick = function() {
-        if(controls.enabled) {
-            shoot = true
-        }
-    }
-
     document.addEventListener( 'keydown', onKeyDown, false );
-    document.addEventListener("click", onClick, false);
     window.addEventListener( 'resize', onWindowResize, false );
 
     hudController.renderMenu();
     initSky(scene);
     creatorController = new CreatorController(scene, hudController, hero, controls);
     await creatorController.updateShadowObject();
+    creatorController.on('click', () => {
+        if (creatorController.active === 'pointer') {
+            shoot = true;
+        }
+    });
 
     serverManager = new ServerManager(scene, hudController);
 

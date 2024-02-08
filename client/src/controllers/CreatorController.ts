@@ -8,10 +8,11 @@ import { roundToPrecision } from "../utils/math";
 import {HUDController} from "./HUDController.ts";
 import {Hero} from "../models/hero.ts";
 import {AssetObject} from "../../../types/assets";
+import {EventManager} from "../lib/EventManager.ts";
 
 let prevTime = performance.now();
 
-export class CreatorController {
+export class CreatorController extends EventManager {
     controls: OrbitControls;
     private scene: Scene;
     target: null;
@@ -30,6 +31,7 @@ export class CreatorController {
     private _shadowLoad:  Promise<Object3D>|undefined;
 
     constructor(scene: Scene, hudController: HUDController, hero: Hero, controls: OrbitControls) {
+        super();
         this.controls =  controls;
 
         const obj = this.controls.object;
@@ -52,6 +54,7 @@ export class CreatorController {
 
         document.addEventListener('keyup', this.onKeyUp.bind(this));
         document.addEventListener('dblclick', this.onDblClick.bind(this));
+        document.addEventListener('click', this.onClick.bind(this));
         document.addEventListener('mousemove', this.onMouseMove.bind(this));
         document.addEventListener('wheel', this.onScroll.bind(this));
         this.hud = hudController;
@@ -265,6 +268,11 @@ export class CreatorController {
             this.dropObject(bulletObject, event);
             bulletObject.name = "mesh_bullet_brick";
         }
+    }
+
+    onClick (event: MouseEvent) {
+        event.preventDefault()
+        this.emit('click');
     }
 
     onScroll (event: WheelEvent) {
