@@ -70,9 +70,18 @@ export class ServerManager extends EventManager {
             this.players[msg[3]].changeAnimation('Walk');
             this.players[msg[3]].timeout(()=>{
                 this.players[msg[3]].changeAnimation('Idle');
-            }, 1000);
+            }, 300);
         }
         this.players[msg[3]].moveTo(msg[0], msg[1], msg[2]);
+    }
+
+    update(delta: number) {
+        for(const i in this.players) {
+            const player = this.players[i];
+            if (player) {
+                player.update(delta);
+            }
+        }
     }
 
     private async data(msg: ServerMessage) {

@@ -203,6 +203,7 @@ function animate() {
         creatorController.update(delta);
 
         hero.update(delta);
+        serverManager.update(delta);
     }
 
     prevTime = time;

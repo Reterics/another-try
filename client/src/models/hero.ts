@@ -73,15 +73,6 @@ export class Hero {
         return this;
     }
 
-    clone() {
-        // TODO: Investigate: Not visible in scene after adding
-        const object = this.root.clone();
-        object.position.set(0,0,0);
-        object.scale.set(1,1,1);
-        object.animations = this.root.animations.map(a=>a.clone());
-        return new Hero(this.scene, object);
-    }
-
     async reloadFromGltf(file = './assets/characters/mixamo_leonard.glb') {
         const group = await loadModel.gltf(file);
 
