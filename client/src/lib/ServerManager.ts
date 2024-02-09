@@ -15,11 +15,10 @@ export class ServerManager extends EventManager {
     private readonly scene: Scene;
     private readonly scores: PlayerScores;
     private readonly name: string;
-    private readonly hero: Hero;
     private playerIndex: number | undefined;
     private hud: HUDController;
 
-    constructor(scene: Scene, hud: HUDController, hero: Hero) {
+    constructor(scene: Scene, hud: HUDController) {
         super();
         this.scene = scene;
         const nameNode = document.getElementById("name") as HTMLInputElement;
@@ -32,7 +31,6 @@ export class ServerManager extends EventManager {
         this.players = {} as PlayerList;
         this.scores = {} as PlayerScores;
         this.hud = hud;
-        this.hero = hero;
     }
 
     async get(uri: string): Promise<object | null> {
@@ -64,7 +62,11 @@ export class ServerManager extends EventManager {
 
     private position(msg: PositionMessage) {
         if(!this.players[msg[3]]) {
-            this.players[msg[3]] = this.hero.clone().addToScene();
+            this.players[msg[3]] = new Hero(this.scene, null)
+                .setName(this.playerNames[msg[3]] || ('Player ' + msg[3]))
+                .addToScene();
+            // Async Model Load
+            void this.players[msg[3]].reloadFromGltf();
         }
         this.players[msg[3]].moveTo(msg[0], msg[1], msg[2]);
     }

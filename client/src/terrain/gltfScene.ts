@@ -292,22 +292,10 @@ export class GltfScene {
 
     updatePlayer(delta:number, camera: THREE.PerspectiveCamera, hero: Hero) {
         const player = hero ? hero.getObject() : null;
+        let moving = false;
         if (this.collider && camera && player && this.visualizer) {
             this.collider.visible = this.params.displayCollider;
             this.visualizer.visible = this.params.displayBVH;
-
-            // move the player
-            //velocity.x -= velocity.x * this.params.playerSpeed * delta;
-            //velocity.z -= velocity.z * this.params.playerSpeed * delta;
-
-            //velocity.y -= 9.8 * 100.0 * delta; // 100.0 = mass
-
-            //direction.z = Number( this.fwdPressed ) - Number( this.bkdPressed  );
-            //direction.x = Number( this.rgtPressed ) - Number( this.lftPressed );
-            //direction.normalize(); // this ensures consistent movements in all directions
-
-            //if ( this.fwdPressed  ||  this.bkdPressed ) velocity.z -= direction.z * 100.0 * delta;
-            //if ( this.rgtPressed  || this.lftPressed ) velocity.x -= direction.x * 100.0 * delta;
 
             if(this.sprinting) {
                 if(this.energy > 0) {
@@ -337,14 +325,7 @@ export class GltfScene {
                 velocity.y += delta * this.params.gravity;
             }
 
-            /*if (this.controls instanceof PointerLockControls) {
-                this.controls.getObject().position.y += ( velocity.y * delta );
 
-                this.controls.moveRight( - velocity.x * delta );
-                this.controls.moveForward( - velocity.z * delta );
-                player.rotation.copy(camera.rotation);
-                player.position.copy(camera.position);
-            }*/
             player.position.addScaledVector( velocity, delta );
 
             const angle = this.controls.getAzimuthalAngle(); // Get Azimuth for OrbitControl
@@ -373,6 +354,7 @@ export class GltfScene {
                 player.position.addScaledVector( tempVector, this.params.playerSpeed * delta );
                 player.lookAt(player.position.clone().add(tempVector));
                 hero.changeAnimation('Walk');
+                moving = true;
             } else {
                 hero.changeAnimation(this.playerIsOnGround ? 'Idle' : 'Jump');
             }
@@ -459,7 +441,9 @@ export class GltfScene {
             // if the player has fallen too far below the level reset their position to the start
             if ( player.position.y < - 500 ) {
                 this.respawn(player);
+                moving = false;
             }
+            return moving;
         }
     }
 

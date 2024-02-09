@@ -8,7 +8,7 @@ import {ObjectDimensions} from "../../../types/assets.ts";
 
 
 export class Hero {
-    private readonly root: Object3D;
+    private root: Object3D;
     protected scene: Scene;
     private mixer: AnimationMixer;
     private static dimensions: ObjectDimensions = {
@@ -16,7 +16,7 @@ export class Hero {
         height: 1.0,
         depth: 0.2
     };
-    private currentAnimation: string;
+    public currentAnimation: string;
     private action: AnimationAction;
 
     constructor(scene: Scene, object: Object3D|undefined|null) {
@@ -67,9 +67,35 @@ export class Hero {
         }
     }
 
+    setName(string:string) {
+        this.root.name = string;
+        return this;
+    }
+
     clone() {
+        // TODO: Investigate: Not visitble in scene after adding
         const object = this.root.clone();
+        object.position.set(0,0,0);
+        object.scale.set(1,1,1);
+        object.animations = this.root.animations.map(a=>a.clone());
         return new Hero(this.scene, object);
+    }
+
+    async reloadFromGltf(file = './assets/characters/mixamo_leonard.glb') {
+        const group = await loadModel.gltf(file);
+
+        if (group) {
+            if (this.root) {
+                this.scene.remove(this.root);
+            }
+            this.root = group.scene;
+            this.root.animations = group.animations;
+            this.root.castShadow = true;
+            this.root.receiveShadow = false;
+
+            this.root.children[0].position.set(0,-1.5,0);
+            this.scene.add(this.root);
+        }
     }
 
     static async Create(scene: Scene) {
@@ -77,6 +103,7 @@ export class Hero {
         let player = null;
         if (group) {
             player = group.scene;
+            player.name = 'Player';
             player.animations = group.animations;
             player.castShadow = true;
             player.receiveShadow = false;
@@ -98,7 +125,7 @@ export class Hero {
                 }
             });*/
         }
-        return new Hero(scene, player)
+        return new Hero(scene, player);
     }
 
     getObject() {

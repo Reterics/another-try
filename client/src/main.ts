@@ -95,7 +95,7 @@ async function init() {
         }
     });
 
-    serverManager = new ServerManager(scene, hudController, hero);
+    serverManager = new ServerManager(scene, hudController);
 
     hudController.onLoadMap(async (selectedMap)=> {
         if (!map) {
@@ -162,7 +162,6 @@ function animate() {
         //let rotation = controlsObject.rotation;
         //let touchedTerrain = false;
 
-        serverManager.send("position", [pos.x, pos.y, pos.z])
 
         if (shoot) {
             let dir: Vector3 = camera.getWorldDirection(direction);
@@ -189,8 +188,14 @@ function animate() {
         }
 
         const physicsSteps = map.params.physicsSteps || 1;
+        let moving = false;
         for ( let i = 0; i < physicsSteps; i ++ ) {
-            map.updatePlayer(delta / physicsSteps, camera, hero);
+            if (map.updatePlayer(delta / physicsSteps, camera, hero)) {
+                moving = true;
+            }
+        }
+        if (moving) {
+            serverManager.send("position", [pos.x, pos.y, pos.z]);
         }
 
         controls.update();
