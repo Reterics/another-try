@@ -95,7 +95,7 @@ async function init() {
         }
     });
 
-    serverManager = new ServerManager(scene, hudController);
+    serverManager = new ServerManager(scene, hudController, hero);
 
     hudController.onLoadMap(async (selectedMap)=> {
         if (!map) {

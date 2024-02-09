@@ -1,6 +1,6 @@
 import {RoundedBoxGeometry} from "three/examples/jsm/geometries/RoundedBoxGeometry";
 import * as THREE from "three";
-import {AnimationAction, AnimationMixer, Group, Object3DEventMap, Scene} from "three";
+import {AnimationAction, AnimationMixer, Scene} from "three";
 import { CapsuleInfo } from "../types/main";
 import {loadModel} from "../utils/model.ts";
 import {Object3D} from "three/src/core/Object3D";
@@ -19,7 +19,7 @@ export class Hero {
     private currentAnimation: string;
     private action: AnimationAction;
 
-    constructor(scene: Scene, object: Group<Object3DEventMap>|undefined|null) {
+    constructor(scene: Scene, object: Object3D|undefined|null) {
         const root = object || this.createRoundedBox();
         this.mixer = new AnimationMixer( root );
 
@@ -65,6 +65,11 @@ export class Hero {
                 segment: new THREE.Line3( new THREE.Vector3(), new THREE.Vector3( 0, - 1.0, 0.0 ) )
             } as CapsuleInfo;
         }
+    }
+
+    clone() {
+        const object = this.root.clone();
+        return new Hero(this.scene, object);
     }
 
     static async Create(scene: Scene) {
