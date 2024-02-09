@@ -18,6 +18,7 @@ export class Hero {
     };
     public currentAnimation: string;
     private action: AnimationAction;
+    private _timeout: number | NodeJS.Timeout | undefined;
 
     constructor(scene: Scene, object: Object3D|undefined|null) {
         const root = object || this.createRoundedBox();
@@ -73,7 +74,7 @@ export class Hero {
     }
 
     clone() {
-        // TODO: Investigate: Not visitble in scene after adding
+        // TODO: Investigate: Not visible in scene after adding
         const object = this.root.clone();
         object.position.set(0,0,0);
         object.scale.set(1,1,1);
@@ -85,17 +86,21 @@ export class Hero {
         const group = await loadModel.gltf(file);
 
         if (group) {
+            this.mixer.stopAllAction();
             if (this.root) {
                 this.scene.remove(this.root);
             }
             this.root = group.scene;
             this.root.animations = group.animations;
+            this.mixer = new AnimationMixer( this.root );
             this.root.castShadow = true;
             this.root.receiveShadow = false;
 
             this.root.children[0].position.set(0,-1.5,0);
             this.scene.add(this.root);
+            this.root.updateMatrixWorld();
         }
+        return this;
     }
 
     static async Create(scene: Scene) {
@@ -139,6 +144,15 @@ export class Hero {
         this.root.position.set(x, y, z)
     }
 
+    timeout(method:Function, ms = 1000) {
+        if (this._timeout) {
+            clearTimeout(this._timeout);
+        }
+        this._timeout = setTimeout(()=>{
+            method.call(this);
+        }, ms);
+    }
+
     addToScene(): Hero {
         this.scene.add(this.root);
         return this;
@@ -152,6 +166,7 @@ export class Hero {
         if (this.currentAnimation === name) {
             return;
         }
+
         const clip = THREE.AnimationClip.findByName( this.root.animations, name );
         if (clip) {
             //this.action.stop();
@@ -161,7 +176,11 @@ export class Hero {
             if (action) {
                 this.currentAnimation = name;
                 action.play();
+            } else {
+                console.warn('No clip found for ', clip);
             }
+        } else {
+            console.warn('No clip found for ' + name);
         }
     }
 }

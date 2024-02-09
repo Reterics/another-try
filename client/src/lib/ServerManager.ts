@@ -63,10 +63,14 @@ export class ServerManager extends EventManager {
     private position(msg: PositionMessage) {
         if(!this.players[msg[3]]) {
             this.players[msg[3]] = new Hero(this.scene, null)
-                .setName(this.playerNames[msg[3]] || ('Player ' + msg[3]))
-                .addToScene();
+                .setName(this.playerNames[msg[3]] || ('Player ' + msg[3]));
             // Async Model Load
             void this.players[msg[3]].reloadFromGltf();
+        } else {
+            this.players[msg[3]].changeAnimation('Walk');
+            this.players[msg[3]].timeout(()=>{
+                this.players[msg[3]].changeAnimation('Idle');
+            }, 1000);
         }
         this.players[msg[3]].moveTo(msg[0], msg[1], msg[2]);
     }
