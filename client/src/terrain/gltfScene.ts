@@ -2,11 +2,12 @@ import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {ExtendedTriangle, MeshBVH, MeshBVHHelper, StaticGeometryGenerator} from 'three-mesh-bvh';
 import {Box3, BufferGeometry, Camera, Group, Light, Mesh, MeshStandardMaterial, Object3D, Scene} from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import {Water} from "three/examples/jsm/objects/Water2";
 import {CapsuleInfo, SceneParams} from "../types/main.ts";
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
 import {Hero} from "../models/hero.ts";
+import {Object3DEventMap} from "three/src/core/Object3D";
+import {loadModel} from "../utils/model.ts";
 
 let tempVector = new THREE.Vector3();
 let tempVector2 = new THREE.Vector3();
@@ -19,16 +20,7 @@ const upVector = new THREE.Vector3( 0, 1, 0 );
 const velocity = new THREE.Vector3();
 let timeUntilSprintOptionDisables: Date | undefined | null;
 
-interface MapSegment {
-    visualizer: MeshBVHHelper;
-    collider: Mesh;
-    environment: Group;
-}
 
-// @ts-ignore
-interface MapSegments {
-    [key: string]: MapSegment
-}
 interface toMergeType {
     [key: number]: (Mesh|Light|undefined)[]
 }
@@ -91,126 +83,123 @@ export class GltfScene {
         this.params.spawnCoordinates = [x, y, z];
     }
 
-    _loadGLTF(callback: Function|undefined): Promise<GltfScene> {
+    async _loadGLTF(callback: Function|undefined): Promise<GltfScene> {
         let targetModel = this.selectedModel.startsWith('https://') || this.selectedModel.startsWith('http://') ?
             this.selectedModel : 'assets/scenes/' + this.selectedModel;
         if (!targetModel.endsWith('.gtlf') && !targetModel.endsWith('.glb')) {
             targetModel += '.gltf';
         }
-        return new Promise(resolve=> {
 
-            new GLTFLoader().load( targetModel, res => {
-                const gltfScene:THREE.Group = res.scene;
-                //gltfScene.scale.setScalar( .01 );
+        const group = await loadModel.gltf(targetModel);
+        if (!group) {
+            console.warn('Failed to load GLTF from: ', targetModel);
+            return this;
+        }
 
-                // const box = new THREE.Box3();
-                // box.setFromObject( gltfScene );
-                // box.getCenter( gltfScene.position ).negate();
-                gltfScene.updateMatrixWorld( true );
-                // visual geometry setup
-                const toMerge:toMergeType = {};
-                const toMergeTexture:toMergeTextureType = {};
-                this.environment = new THREE.Group();
-                // @ts-ignore
-                gltfScene.traverse( (c: Mesh|Light|Camera) => {
-                    if (c instanceof Mesh && c.isMesh) {
-                        const material:MeshStandardMaterial = c.material as MeshStandardMaterial;
-                        let hex = material.color.getHex() || 0;
-                        if (material.map) {
-                            hex = Number(hex.toString() + '999');
-                            toMergeTexture[hex] = material;
-                        }
-                        if (!Array.isArray(toMerge[ hex ])) {
-                            toMerge[ hex ] =  [];
-                        }
-                        toMerge[ hex ].push( c );
-                    } else if (c instanceof Light && c.isLight) {
-                        // We always need to clone the light, otherwise it fails
-                        this.scene.add( c.clone(true) as Object3D);
-                    } else if(c instanceof Camera && c.isCamera) {
-                        this.setSpawnCoordinates(c.position.x, c.position.y, c.position.z);
-                        // this.controls.object.position.copy(c.position);
-                    }
-                } );
+        const gltfScene:THREE.Group = group.scene;
 
-                for ( const hex in toMerge ) {
-                    // @ts-ignore
-                    const arr = toMerge[ hex ];
-                    const visualGeometries: BufferGeometry[] = [];
-                    arr.forEach( (element) => {
-                        if (element) {
-                            const mesh = element as Mesh;
-                            const material = mesh.material as MeshStandardMaterial;
-                            if ( material.emissive.r !== 0 ) {
-                                this.environment.attach( mesh );
-                            } else if(material.map) {
-                                const geom = mesh.geometry.clone();
-                                geom.applyMatrix4( mesh.matrixWorld );
-                                const newMesh = new THREE.Mesh( geom, material );
-                                newMesh.castShadow = true;
-                                newMesh.receiveShadow = true;
-                                newMesh.material.shadowSide = 2;
-                                newMesh.material.side = THREE.DoubleSide;
-                                this.environment.add( newMesh );
+        gltfScene.updateMatrixWorld( true );
+        // visual geometry setup
+        const toMerge:toMergeType = {};
+        const toMergeTexture:toMergeTextureType = {};
+        this.environment = new THREE.Group();
+        gltfScene.traverse( (c: Object3D<Object3DEventMap>|Mesh|Light|Camera) => {
+            if (c instanceof Mesh && c.isMesh) {
+                const material:MeshStandardMaterial = c.material as MeshStandardMaterial;
+                let hex = material.color.getHex() || 0;
+                if (material.map) {
+                    hex = Number(hex.toString() + '999');
+                    toMergeTexture[hex] = material;
+                }
 
-                            } else {
-                                const geom = mesh.geometry.clone();
-                                geom.applyMatrix4( mesh.matrixWorld );
-                                visualGeometries.push( geom );
-                            }
-                        }
+                if (!Array.isArray(toMerge[ hex ])) {
+                    toMerge[ hex ] =  [];
+                }
+                toMerge[ hex ].push( c );
+            } else if (c instanceof Light && c.isLight) {
+                // We always need to clone the light, otherwise it fails
+                this.scene.add( c.clone(true) as Object3D);
+            } else if(c instanceof Camera && c.isCamera) {
+                this.setSpawnCoordinates(c.position.x, c.position.y, c.position.z);
+            }
+        } );
 
-                    } );
+        for ( const hex in toMerge ) {
+            // @ts-ignore
+            const arr = toMerge[ hex ];
+            const visualGeometries: BufferGeometry[] = [];
+            arr.forEach( (element) => {
+                if (element) {
+                    const mesh = element as Mesh;
+                    const material = mesh.material as MeshStandardMaterial;
+                    if ( material.emissive.r !== 0 ) {
+                        this.environment.attach( mesh );
+                    } else if(material.map) {
+                        const geom = mesh.geometry.clone();
+                        geom.applyMatrix4( mesh.matrixWorld );
+                        const newMesh = new THREE.Mesh( geom, material );
+                        newMesh.castShadow = true;
+                        newMesh.receiveShadow = true;
+                        newMesh.material.shadowSide = 2;
+                        newMesh.material.side = THREE.DoubleSide;
+                        this.environment.add( newMesh );
 
-                    if ( visualGeometries.length ) {
-                        const newGeom = BufferGeometryUtils.mergeGeometries(visualGeometries);
-                            // BufferGeometryUtils.mergeBufferGeometries( visualGeometries ) ;
-                        if (newGeom) {
-                            let material;
-                            if (toMergeTexture[hex]) {
-                                material = toMergeTexture[hex] as MeshStandardMaterial;
-                            } else {
-                                material = new THREE.MeshStandardMaterial( {
-                                    color: parseInt( hex )
-                                    , shadowSide: 2 } );
-                            }
-                            const newMesh = new THREE.Mesh( newGeom, material );
-                            newMesh.castShadow = true;
-                            newMesh.receiveShadow = true;
-                            newMesh.material.shadowSide = 2;
-                            newMesh.material.side = THREE.DoubleSide;
-
-                            this.environment.add( newMesh );
-                        } else {
-                            console.error('Merging visual geometries failed');
-                        }
                     } else {
-                        console.error('No visual geometries found')
+                        const geom = mesh.geometry.clone();
+                        geom.applyMatrix4( mesh.matrixWorld );
+                        visualGeometries.push( geom );
                     }
                 }
 
-                const staticGenerator = new StaticGeometryGenerator( this.environment );
-                staticGenerator.attributes = [ 'position' ];
-
-                const mergedGeometry = staticGenerator.generate();
-                mergedGeometry.boundsTree = new MeshBVH( mergedGeometry );
-
-                this.collider = new THREE.Mesh( mergedGeometry );
-                this.collider.name = 'collider';
-                const colliderMaterial: MeshStandardMaterial = this.collider.material as MeshStandardMaterial;
-                colliderMaterial.wireframe = true;
-                colliderMaterial.opacity = 0.5;
-                colliderMaterial.transparent = true;
-
-                this.visualizer = new MeshBVHHelper( this.collider, this.params.visualizeDepth );
-
-                this.loaded = true;
-                if (typeof callback === 'function') {
-                    callback(this);
-                }
-                resolve(this);
             } );
-        });
+
+            if ( visualGeometries.length ) {
+                const newGeom = BufferGeometryUtils.mergeGeometries(visualGeometries);
+                    // BufferGeometryUtils.mergeBufferGeometries( visualGeometries ) ;
+                if (newGeom) {
+                    let material;
+                    if (toMergeTexture[hex]) {
+                        material = toMergeTexture[hex] as MeshStandardMaterial;
+                    } else {
+                        material = new THREE.MeshStandardMaterial( {
+                            color: parseInt( hex )
+                            , shadowSide: 2 } );
+                    }
+                    const newMesh = new THREE.Mesh( newGeom, material );
+                    newMesh.castShadow = true;
+                    newMesh.receiveShadow = true;
+                    newMesh.material.shadowSide = 2;
+                    newMesh.material.side = THREE.DoubleSide;
+
+                    this.environment.add( newMesh );
+                } else {
+                    console.error('Merging visual geometries failed');
+                }
+            } else {
+                console.error('No visual geometries found')
+            }
+        }
+
+        const staticGenerator = new StaticGeometryGenerator( this.environment );
+        staticGenerator.attributes = [ 'position' ];
+
+        const mergedGeometry = staticGenerator.generate();
+        mergedGeometry.boundsTree = new MeshBVH( mergedGeometry );
+
+        this.collider = new THREE.Mesh( mergedGeometry );
+        this.collider.name = 'collider';
+        const colliderMaterial: MeshStandardMaterial = this.collider.material as MeshStandardMaterial;
+        colliderMaterial.wireframe = true;
+        colliderMaterial.opacity = 0.5;
+        colliderMaterial.transparent = true;
+
+        this.visualizer = new MeshBVHHelper( this.collider, this.params.visualizeDepth );
+
+        this.loaded = true;
+        if (typeof callback === 'function') {
+            callback(this);
+        }
+        return this;
     }
 
     respawn(player: Mesh|Object3D) {
