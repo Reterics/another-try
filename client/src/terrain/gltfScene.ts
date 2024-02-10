@@ -66,7 +66,7 @@ export class GltfScene {
             gravity: - 30,
             playerSpeed: 10,
             physicsSteps: 5,  //5
-            spawnCoordinates: [12, 0, 120] // X Y Z
+            spawnCoordinates: [12, -7, 120] // X Y Z
         };
         return this;
     }
@@ -219,7 +219,9 @@ export class GltfScene {
             .multiplyScalar( 100)
             .add( player.position );
 
-       this.controls.update();
+        velocity.set(0,0,0);
+
+        this.controls.update();
     }
     initPlayerEvents() {
         window.addEventListener( 'keydown', e => {
