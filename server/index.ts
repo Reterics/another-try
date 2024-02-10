@@ -1,4 +1,5 @@
 import express, { Express, Request, Response } from 'express';
+import cors from 'cors';
 import dotenv from 'dotenv';
 import { Server } from "socket.io";
 import {GameController} from "./controllers/game";
@@ -11,11 +12,17 @@ const app: Express = express();
 const port = process.env.PORT || 3000;
 
 import AssetController from "./controllers/assetController";
+import MapController from "./controllers/mapController";
+
+app.use(cors())
+
 
 app.route('/assets')
     .get(AssetController.getAll)
 app.route('/asset')
     .get(AssetController.get)
+app.route('/map')
+    .get(MapController.get)
 
 app.get('/', (req: Request, res: Response) => {
     res.send('Another Try Server');

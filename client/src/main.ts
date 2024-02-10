@@ -9,6 +9,7 @@ import {acceleratedRaycast, computeBoundsTree, disposeBoundsTree} from "three-me
 import {CreatorController} from "./controllers/CreatorController.ts";
 import {ServerManager} from "./lib/ServerManager.ts";
 import {ObjectPositionMessage} from "../../types/messages.ts";
+import {ATMap} from "../../types/map.ts";
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
@@ -36,6 +37,7 @@ init();
 
 async function init() {
     hudController.renderMenu();
+
     camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 2000 );
     scene = new THREE.Scene();
     scene.background = new THREE.Color("white");
@@ -96,44 +98,51 @@ async function init() {
     });
 
     serverManager = new ServerManager(scene, hudController);
+    hudController.renderMaps();
 
-    hudController.onLoadMap(async (selectedMap)=> {
+    serverManager.connect();
+    serverManager.on('connect', async () => {
+        const map = await serverManager.get('map');
+        if (map) {
+            hudController.setMaps([map as ATMap]);
+            hudController.renderMaps();
+        }
+        const assets = await serverManager.get('assets');
+        if (Array.isArray(assets)) {
+            creatorController.updateAssets(assets);
+        }
+
+    });
+    serverManager.on('object', async (msg: ObjectPositionMessage) => {
+        if (msg.type === "object" && Array.isArray(msg.coordinates) && msg.asset) {
+            const obj = await creatorController.getShadowObjectByIndex(msg.asset);
+            if (obj &&
+                typeof msg.coordinates[0] === "number" &&
+                typeof msg.coordinates[1] === "number" &&
+                typeof msg.coordinates[3] === "number"
+            ) {
+                obj.name = "mesh_bullet_brick";
+                obj.position.set(msg.coordinates[0], msg.coordinates[1], msg.coordinates[3]);
+                scene.add(obj);
+            }
+        }
+    })
+    hudController.on('map:select', async (selected: ATMap)=> {
         if (!map) {
-            map = await GltfScene.CreateMap(selectedMap, scene, controls);
+            map = await GltfScene.CreateMap(selected, scene, controls);
             map.initPlayerEvents();
         } else {
-            await map.updateScene(selectedMap);
+            await map.updateScene(selected);
         }
         await map.addToScene();
 
-        map.respawn(heroPlayer);
         renderer.render( scene, camera );
         if (!animationRunning) {
             animate();
         }
-
-        serverManager.connect();
-        serverManager.on('connect', async () => {
-            const assets = serverManager.get('assets');
-            if (Array.isArray(assets)) {
-                creatorController.updateAssets(assets);
-            }
-        });
-        serverManager.on('object', async (msg: ObjectPositionMessage) => {
-            if (msg.type === "object" && Array.isArray(msg.coordinates) && msg.asset) {
-                const obj = await creatorController.getShadowObjectByIndex(msg.asset);
-                if (obj &&
-                    typeof msg.coordinates[0] === "number" &&
-                    typeof msg.coordinates[1] === "number" &&
-                    typeof msg.coordinates[3] === "number"
-                ) {
-                    obj.name = "mesh_bullet_brick";
-                    obj.position.set(msg.coordinates[0], msg.coordinates[1], msg.coordinates[3]);
-                    scene.add(obj);
-                }
-            }
-        })
+        map.respawn(heroPlayer);
     });
+
 }
 
 

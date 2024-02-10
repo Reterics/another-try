@@ -26,6 +26,7 @@ import {STLLoader} from "three/examples/jsm/loaders/STLLoader";
 import {Object3D} from "three/src/core/Object3D";
 import {AssetObject, Circle, Line, Rectangle} from "../../../types/assets.ts";
 import {ShadowType} from "../types/controller.ts";
+import {MeshOrGroup} from "../types/three.ts";
 
 const genericLoader = (file: File|string, modelLoader: Loader) => {
     return new Promise(resolve => {
@@ -76,6 +77,16 @@ export const loadModel = {
             return new Mesh(geometry as BufferGeometry, material);
         }
         return null;
+    },
+    items: async (objects: AssetObject[]): Promise<MeshOrGroup[]> => {
+        const items: MeshOrGroup[] = [];
+        for (let i = 0; i < objects.length; i++) {
+            const mesh = await getMeshForItem(objects[i]);
+            if (mesh) {
+                items.push(mesh);
+            }
+        }
+        return items;
     }
 }
 
@@ -96,7 +107,7 @@ export const lookAtObject = (models: Object3D, camera: PerspectiveCamera): void 
     camera.lookAt(boundingBoxCenter);
 }
 
-export const getMeshForItem = async (item: AssetObject): Promise<Mesh|Group> => {
+export const getMeshForItem = async (item: AssetObject): Promise<Mesh|Group|null> => {
     let model;
 
     let material;
@@ -133,17 +144,34 @@ export const getMeshForItem = async (item: AssetObject): Promise<Mesh|Group> => 
             geometry = new CylinderGeometry(5, 5, height, 32);
             break;
         case "model":
-            if (item.path && item.path.endsWith(".gltf")) {
+            if(!item.path) {
+                return null;
+            }
+            if (item.path.endsWith(".gltf") || item.path.endsWith(".glb")) {
                 const group = await loadModel.gltf(item.path);
                 if (group) {
                     const model = group.scene;
                     const rect = item as Rectangle;
-                    const z = rect.z || 0;
-                    model.position.set(rect.x + rect.w / 2, z + Math.round((rect.w + rect.h) / 2) / 2,
-                        rect.y + rect.h / 2);
+                    const rZ = rect.z || 0;
+                    const rX = rect.x || 0;
+                    const rY = rect.y || 0;
+                    const rW = rect.w || 0;
+                    const rH = rect.h || 0;
+                    model.position.set(rX + rW / 2, rZ + Math.round((rW + rH) / 2) / 2,
+                        rY + rH / 2);
                     return model;
                 }
+                return null;
+            } else if (item.path.endsWith('.fbx')) {
+                return await loadModel.fbx(item.path);
+            } else if (item.path.endsWith('.obj')) {
+                return await loadModel.obj(item.path);
+            } else if (item.path.endsWith('.collada')) {
+                return await loadModel.collada(item.path);
+            } else if (item.path.endsWith('.stl')) {
+                return await loadModel.stl(item.path);
             }
+            return null;
     }
     model = new Mesh(geometry, material);
     model.castShadow = true; //default is false

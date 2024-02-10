@@ -8,6 +8,7 @@ import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
 import {Hero} from "../models/hero.ts";
 import {Object3DEventMap} from "three/src/core/Object3D";
 import {loadModel} from "../utils/model.ts";
+import {ATMap} from "../../../types/map.ts";
 
 let tempVector = new THREE.Vector3();
 let tempVector2 = new THREE.Vector3();
@@ -46,18 +47,15 @@ export class GltfScene {
     energy = 10;
     fwdPressed = false; bkdPressed = false; lftPressed = false; rgtPressed = false;
     private readonly energyNode: HTMLProgressElement | null;
-    private selectedModel: string;
+    private map: ATMap;
 
-    constructor(model: string, scene: Scene, controls:OrbitControls, callback: Function) {
-        if (model.startsWith('/')) {
-            model = model.substring(1);
-        }
+    constructor(model: ATMap, scene: Scene, controls:OrbitControls, callback: Function) {
         this.scene = scene;
         this.controls = controls;
         this.environment = new THREE.Group();
         this.collider = new THREE.Mesh();
-        this.selectedModel = model;
-        this.initMethod = this._loadGLTF(callback);
+        this.map = model;
+        this.initMethod = this._loadMapItems(callback);
 
         this.energyNode = document.getElementById("HUD-energy") as HTMLProgressElement;
 
@@ -68,44 +66,55 @@ export class GltfScene {
             gravity: - 30,
             playerSpeed: 10,
             physicsSteps: 5,  //5
-            spawnCoordinates: [12, 15, 120] // X Y Z
+            spawnCoordinates: [12, 0, 120] // X Y Z
         };
         return this;
     }
 
-    static CreateMap(model: string, scene: Scene, controls:OrbitControls): Promise<GltfScene> {
+    static CreateMap(map: ATMap, scene: Scene, controls:OrbitControls): Promise<GltfScene> {
         return new Promise(resolve => {
-            new GltfScene(model, scene, controls, resolve);
+            new GltfScene(map, scene, controls, resolve);
         })
     }
     setSpawnCoordinates (x: number, y: number, z: number) {
-        console.log('Set Spawn ', x, y, z);
         this.params.spawnCoordinates = [x, y, z];
     }
 
-    async _loadGLTF(callback: Function|undefined): Promise<GltfScene> {
-        let targetModel = this.selectedModel.startsWith('https://') || this.selectedModel.startsWith('http://') ?
-            this.selectedModel : 'assets/scenes/' + this.selectedModel;
-        if (!targetModel.endsWith('.gtlf') && !targetModel.endsWith('.glb')) {
-            targetModel += '.gltf';
-        }
-
-        const group = await loadModel.gltf(targetModel);
-        if (!group) {
-            console.warn('Failed to load GLTF from: ', targetModel);
-            return this;
-        }
-
-        const gltfScene:THREE.Group = group.scene;
-
-        gltfScene.updateMatrixWorld( true );
+    async _loadMapItems(callback: Function|undefined): Promise<GltfScene> {
         // visual geometry setup
         const toMerge:toMergeType = {};
         const toMergeTexture:toMergeTextureType = {};
         this.environment = new THREE.Group();
-        gltfScene.traverse( (c: Object3D<Object3DEventMap>|Mesh|Light|Camera) => {
-            if (c instanceof Mesh && c.isMesh) {
-                const material:MeshStandardMaterial = c.material as MeshStandardMaterial;
+
+        const items = await loadModel.items(this.map.items);
+
+        for (let i = 0; i < items.length; i++){
+            const item = items[i];
+            item.updateMatrixWorld( true );
+
+            if (item instanceof THREE.Group) {
+                item.traverse( (c: Object3D<Object3DEventMap>|Mesh|Light|Camera) => {
+                    if (c instanceof Mesh && c.isMesh) {
+                        const material:MeshStandardMaterial = c.material as MeshStandardMaterial;
+                        let hex = material.color.getHex() || 0;
+                        if (material.map) {
+                            hex = Number(hex.toString() + '999');
+                            toMergeTexture[hex] = material;
+                        }
+
+                        if (!Array.isArray(toMerge[ hex ])) {
+                            toMerge[ hex ] =  [];
+                        }
+                        toMerge[ hex ].push( c );
+                    } else if (c instanceof Light && c.isLight) {
+                        // We always need to clone the light, otherwise it fails
+                        this.scene.add( c.clone(true) as Object3D);
+                    } else if(c instanceof Camera && c.isCamera) {
+                        this.setSpawnCoordinates(c.position.x, c.position.y, c.position.z);
+                    }
+                } );
+            } else {
+                const material:MeshStandardMaterial = item.material as MeshStandardMaterial;
                 let hex = material.color.getHex() || 0;
                 if (material.map) {
                     hex = Number(hex.toString() + '999');
@@ -115,14 +124,9 @@ export class GltfScene {
                 if (!Array.isArray(toMerge[ hex ])) {
                     toMerge[ hex ] =  [];
                 }
-                toMerge[ hex ].push( c );
-            } else if (c instanceof Light && c.isLight) {
-                // We always need to clone the light, otherwise it fails
-                this.scene.add( c.clone(true) as Object3D);
-            } else if(c instanceof Camera && c.isCamera) {
-                this.setSpawnCoordinates(c.position.x, c.position.y, c.position.z);
+                toMerge[ hex ].push( item );
             }
-        } );
+        }
 
         for ( const hex in toMerge ) {
             // @ts-ignore
@@ -436,8 +440,8 @@ export class GltfScene {
         }
     }
 
-    async updateScene (selectedMap: string): Promise<GltfScene> {
-        if (this.selectedModel !== selectedMap && this.visualizer) {
+    async updateScene (selectedMap: ATMap): Promise<GltfScene> {
+        if (this.map.id !== selectedMap.id && this.visualizer) {
             this.visualizer.clear();
             this.collider.clear();
             this.environment.clear();
@@ -445,8 +449,8 @@ export class GltfScene {
             this.scene.remove(this.collider);
             this.scene.remove(this.environment);
 
-            this.selectedModel = selectedMap;
-            return this._loadGLTF(undefined);
+            this.map = selectedMap;
+            return this._loadMapItems(undefined);
         }
         return this;
     }

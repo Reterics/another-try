@@ -24,15 +24,17 @@ class AssetService {
 
     async get(id: string) {
         const asset = await getById(id, firebaseCollections.assets) as AssetObject|null;
-        if (asset) {
-            if (!asset.image && asset.name) {
-                asset.image = await getFileURL('screenshots/' + asset.name + '.png');
-                if (asset.image) {
-                    const url = asset.image as string;
-                    const imageBuffer = await downloadURL(url).catch(e=>console.error(e));
-                    if (imageBuffer && imageBuffer.body) {
-                        asset.image = imageBuffer.body.toString('base64');
-                    }
+        if (!asset) {
+            return asset;
+        }
+
+        if (!asset.image && asset.name) {
+            asset.image = await getFileURL('screenshots/' + asset.name + '.png');
+            if (asset.image) {
+                const url = asset.image as string;
+                const imageBuffer = await downloadURL(url).catch(e=>console.error(e));
+                if (imageBuffer && imageBuffer.body) {
+                    asset.image = imageBuffer.body.toString('base64');
                 }
             }
         }

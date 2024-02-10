@@ -3,12 +3,13 @@ import pauseMenuTemplate from '../pages/pause.html?raw'
 import inGameTemplate from '../pages/ingame.html?raw'
 import {CreatorController} from "./CreatorController.ts";
 import {PlayerNames, PlayerScores} from "../types/main.ts";
+import {EventManager} from "../lib/EventManager.ts";
+import {ATMap} from "../../../types/map.ts";
 
-export class HUDController {
+export class HUDController extends EventManager{
     private readonly inGame: HTMLDivElement;
     private readonly mainMenu: HTMLDivElement;
     private readonly pauseMenu: HTMLDivElement;
-    private onload: Function|undefined;
     element: HTMLElement|null;
     private _updatePeriod: number;
     private _elapsed: number;
@@ -18,8 +19,10 @@ export class HUDController {
     private messageInput: HTMLElement|null;
     private messageList: HTMLElement|null;
     private footer: HTMLElement|null;
+    private maps: ATMap[];
 
     constructor() {
+        super();
         // We use createElement because it is DOM level 1 feature, faster than innerHTML
         const inGame = document.createElement('div');
         inGame.id = 'inGame';
@@ -59,14 +62,28 @@ export class HUDController {
         this.mainMenu.onclick = (event: MouseEvent) => {
             const target: HTMLElement = event.target as HTMLElement;
             if (target && target.parentElement && target.parentElement.id === 'maps' && target.id) {
-                const level = target.getAttribute('data-location') || target.id;
-                console.log('Selected map: ', level);
+                const level = target.id;
                 this.renderGame(level);
             }
         };
         this.pauseMenu.onclick = () => {
             this.renderGame(null);
         };
+
+        this.maps = [
+            {
+                // For development purposes
+                id: 'fallback',
+                name: 'Scene on Siménai by hillforts.eu',
+                items: [
+                    {
+                        type: "model",
+                        path: 'assets/scenes/simenai/simenai.glb',
+                        name: 'simenai'
+                    }
+                ]
+            }
+        ];
     }
 
     _loadHUD() {
@@ -111,18 +128,17 @@ export class HUDController {
         return options;
     }
 
-    renderGame (level: string|null) {
-        console.log('Render level: ', level);
+    renderGame (id: string|null) {
+        console.log('Render map: ', id);
         this.inGame.style.display = 'block';
         this.pauseMenu.style.display = 'none';
         this.mainMenu.style.display = 'none';
-        if (this.onload && level) {
-            this.onload(level);
+        const map = this.maps.find(map=>map.id === id);
+        if (map) {
+            this.emit('map:select', map);
+        } else {
+            console.warn('Map is not found for ', id);
         }
-    }
-
-    onLoadMap(param: (selectedMap: string) => void) {
-        this.onload = param;
     }
 
     updateText (string: string|number, target: HTMLElement|null) {
@@ -248,5 +264,25 @@ export class HUDController {
         if (this.messageInput) {
             return this.messageInput.innerText += key;
         }
+    }
+
+    setMaps(maps: ATMap[]) {
+        this.maps = maps;
+    }
+
+    renderMaps() {
+        let mapsParent = this.mainMenu.querySelector('#maps');
+        if (!mapsParent) {
+            mapsParent = document.createElement('div');
+            mapsParent.id = 'maps';
+            this.mainMenu.appendChild(mapsParent);
+        }
+        mapsParent.innerHTML = '';
+        this.maps.forEach(map=>{
+            const a = document.createElement('a');
+            a.id = map.id;
+            a.innerHTML = map.name || 'Play';
+            mapsParent?.appendChild(a);
+        });
     }
 }

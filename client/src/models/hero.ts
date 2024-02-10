@@ -105,21 +105,6 @@ export class Hero {
             player.receiveShadow = false;
 
             player.children[0].position.set(0,-1.5,0);
-            /*group.traverse((object: Object3D|Mesh) => {
-                if (object instanceof Mesh) {
-                    object.castShadow = true;
-                    object.receiveShadow = false;
-
-                    const boundingBox = new THREE.Box3().setFromObject(group);
-                    const currentDimensions = boundingBox.getSize(new THREE.Vector3());
-
-                    const scaleX = Hero.dimensions.width / currentDimensions.x;
-                    const scaleY = Hero.dimensions.height / currentDimensions.y;
-                    const scaleZ = Hero.dimensions.depth / currentDimensions.z;
-                    object.scale.set(scaleX, scaleY, scaleZ);
-                    object.position.set(0,0,0);
-                }
-            });*/
         }
         return new Hero(scene, player);
     }
