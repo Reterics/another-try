@@ -35,6 +35,7 @@ let serverManager: ServerManager;
 init();
 
 async function init() {
+    hudController.renderMenu();
     camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 2000 );
     scene = new THREE.Scene();
     scene.background = new THREE.Color("white");
@@ -80,7 +81,6 @@ async function init() {
     document.addEventListener( 'keydown', onKeyDown, false );
     window.addEventListener( 'resize', onWindowResize, false );
 
-    hudController.renderMenu();
     initSky(scene);
     creatorController = new CreatorController(scene, hudController, hero, controls);
     await creatorController.updateShadowObject();

@@ -436,7 +436,7 @@ export class GltfScene {
         }
     }
 
-    updateScene (selectedMap: string): Promise<GltfScene> {
+    async updateScene (selectedMap: string): Promise<GltfScene> {
         if (this.selectedModel !== selectedMap && this.visualizer) {
             this.visualizer.clear();
             this.collider.clear();
@@ -448,7 +448,7 @@ export class GltfScene {
             this.selectedModel = selectedMap;
             return this._loadGLTF(undefined);
         }
-        return new Promise<GltfScene>(resolve => resolve(this));
+        return this;
     }
 
     addWater (y = -10, flowMapURL = 'textures/water/flowmap_water.png') {
