@@ -173,9 +173,11 @@ export class HUDController extends EventManager{
                     + Math.round(memory.jsHeapSizeLimit / 1048576) + " (MB Memory)");
             }
             tableData.push("Mode: " + controller.active + " (KeyR)");
-            if (controller.active !== 'pointer') {
+            if (controller.active === 'far') {
                 tableData.push("Far: " + controller.far);
+            } else if (controller.active === 'precision') {
                 tableData.push("Precision: " + controller.precision);
+            } else if (controller.active === 'size') {
                 tableData.push("Size/Scale: " + controller.getScale());
             }
 

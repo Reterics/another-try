@@ -9,6 +9,7 @@ import {HUDController} from "./HUDController.ts";
 import {Hero} from "../models/hero.ts";
 import {AssetObject} from "../../../types/assets";
 import {EventManager} from "../lib/EventManager.ts";
+import {MouseEventLike} from "../types/controller.ts";
 
 let prevTime = performance.now();
 
@@ -29,6 +30,7 @@ export class CreatorController extends EventManager {
     shadowTypeIndex: number;
     shadowInstances: Object3D[];
     private _shadowLoad:  Promise<Object3D>|undefined;
+    private _lastMouse: MouseEventLike;
 
     constructor(scene: Scene, hudController: HUDController, hero: Hero, controls: OrbitControls) {
         super();
@@ -79,6 +81,11 @@ export class CreatorController extends EventManager {
         ];
         this.shadowTypeIndex = 0;
         this.shadowInstances = [];
+
+        this._lastMouse = {
+            clientX: window.innerWidth / 2,
+            clientY: window.innerHeight / 2
+        };
     }
 
     updateAssets(assets: AssetObject[]) {
@@ -95,9 +102,29 @@ export class CreatorController extends EventManager {
         this.shadowInstances = [];
     }
     onKeyUp (event: KeyboardEvent) {
+        const shadow = this.getShadowObject() || {} as Object3D;
         switch (event.code) {
+            case 'Digit1':
+                this.active = 'pointer';
+                shadow.visible = false;
+                this.hud.update(null, this);
+                break;
+            case 'Digit2':
+                this.active = 'far';
+                shadow.visible = true;
+                this.hud.update(null, this);
+                break;
+            case 'Digit3':
+                this.active = 'size';
+                shadow.visible = true;
+                this.hud.update(null, this);
+                break;
+            case 'Digit4':
+                this.active = 'precision';
+                shadow.visible = true;
+                this.hud.update(null, this);
+                break;
             case 'KeyR':
-                const shadow = this.getShadowObject() || {} as Object3D;
                 if (this.active === 'far') {
                     this.active = 'size';
                 } else if (this.active === 'size') {
@@ -164,13 +191,18 @@ export class CreatorController extends EventManager {
         return mouse;
     }
 
-    getCursorPosition(event: MouseEvent) {
+    getCursorPosition(event: MouseEventLike) {
         const domElement = this.controls.domElement as HTMLElement;
         const rect = domElement.getBoundingClientRect();
         const mouse = new THREE.Vector2();
 
         mouse.x = ((event.clientX) / rect.width) * 2 - 1;
         mouse.y = -((event.clientY) / rect.height) * 2 + 1;
+
+        this._lastMouse = {
+            clientX: event.clientX,
+            clientY: event.clientY
+        };
 
         return mouse;
     }
@@ -216,7 +248,7 @@ export class CreatorController extends EventManager {
         return this.hero.getPosition()
     }
 
-    dropObject (object: Object3D|undefined, event: MouseEvent) {
+    dropObject (object: Object3D|undefined, event: MouseEventLike) {
         if (object) {
             const camera = this.controls.object;
             const movementSpeed = 3; // Adjust the speed as needed
@@ -289,33 +321,47 @@ export class CreatorController extends EventManager {
         return shadowObject.scale.x.toFixed(4);
     }
 
+    protected _changeFar(delta: number, event?: MouseEventLike) {
+        this.far += delta * 5;
+        if (this.far < 10) {
+            this.far = 10;
+        }
+        const shadowObject = this.getShadowObject();
+        this.dropObject(shadowObject, event || this._lastMouse);
+    }
+
+    protected _changeSize(delta: number) {
+        const shadowObject: Mesh = this.getShadowObject() as Mesh;
+        const currentScale = [shadowObject.scale.x, shadowObject.scale.y, shadowObject.scale.z];
+        // Calculate the new scale based on the wheel delta && Clamp the new scale to prevent it from becoming too
+        // small or too large
+        const clampedScale = currentScale.map(scale => Math.max(0.1,
+            Math.min(scale + delta * 0.010, 3)));
+
+        shadowObject.scale.set(clampedScale[0], clampedScale[1], clampedScale[2]);
+    }
+
+    protected _changePrecision(delta: number) {
+        this.precision += delta;
+        if (this.precision < 0) {
+            this.precision = 0;
+        }
+    }
+
     onScroll (event: WheelEvent) {
         // Normalize wheel delta across different browsers
         const delta = Math.max(-1, Math.min(1, (-event.deltaY || -event.detail)));
 
-        if (this.active === 'far') {
-            this.far += delta * 5;
-            if (this.far < 10) {
-                this.far = 10;
-            }
-            const shadowObject = this.getShadowObject();
-            this.dropObject(shadowObject, event);
-        } else if (this.active === 'size') {
-            const shadowObject: Mesh = this.getShadowObject() as Mesh;
-            const currentScale = [shadowObject.scale.x, shadowObject.scale.y, shadowObject.scale.z];
-            // Calculate the new scale based on the wheel delta && Clamp the new scale to prevent it from becoming too
-            // small or too large
-            const clampedScale = currentScale.map(scale => Math.max(0.1,
-                Math.min(scale + delta * 0.010, 3)));
-
-            shadowObject.scale.set(clampedScale[0], clampedScale[1], clampedScale[2]);
-            return; // preventDefault
-        } else if (this.active === 'precision') {
-            this.precision += delta;
-            if (this.precision < 0) {
-                this.precision = 0;
+        if (this.view === 'fps') {
+            if (this.active === 'far') {
+                this._changeFar(delta, event);
+            } else if (this.active === 'size') {
+                this._changeSize(delta);
+            } else if (this.active === 'precision') {
+                this._changePrecision(delta);
             }
         }
+
         this.hud.update(null, this);
     }
 
