@@ -19,6 +19,7 @@ let shoot = false,
     isChatActive = false;
 
 let prevTime = performance.now();
+let isTabActive: boolean;
 const direction = new THREE.Vector3();
 let heroPlayer: Object3D;
 let map: GltfScene;
@@ -56,7 +57,14 @@ async function init() {
         LEFT: null,
         MIDDLE: THREE.MOUSE.DOLLY,
         RIGHT: THREE.MOUSE.ROTATE,
-    }
+    };
+    window.onfocus = function () {
+        isTabActive = true;
+    };
+
+    window.onblur = function () {
+        isTabActive = false;
+    };
 
     scene.add( controls.object );
     const onKeyDown = function ( event: KeyboardEvent ) {
@@ -164,7 +172,15 @@ function animate() {
     if (!animationRunning) {
         animationRunning = true;
     }
+    if (document.hidden || !isTabActive) { // No render if the tab is not open
+        prevTime = 0;
+        return;
+    }
     const time = performance.now();
+
+    if (prevTime === 0) { // We came from hidden
+        prevTime = time;
+    }
 
     if (serverManager.isActive() && !isChatActive) {
         const pos = heroPlayer.position;

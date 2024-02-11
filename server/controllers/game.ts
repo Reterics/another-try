@@ -13,7 +13,7 @@ export class GameController {
     constructor(io: Server, maxPlayers: number = 4) {
         this.games = [];
         this.io = io;
-        this.maxPlayers = 4;
+        this.maxPlayers = maxPlayers;
     }
 
     connectPlayer(socket: Socket<DefaultEventsMap>) {
