@@ -250,11 +250,11 @@ export const createShadowObject = async (reference: AssetObject): Promise<Shadow
     };
     switch (reference.type) {
         case "rect":
-            (config as Rectangle).w = 50;
-            (config as Rectangle).h = 50;
+            (config as Rectangle).w = 5;
+            (config as Rectangle).h = 5;
             break;
         case "circle":
-            (config as Circle).radius = 25;
+            (config as Circle).radius = 5;
             break;
     }
     const shadowObject = await getMeshForItem(config) as ShadowType;

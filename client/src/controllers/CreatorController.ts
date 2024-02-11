@@ -1,4 +1,4 @@
-import { Mesh, Scene } from "three";
+import {Mesh, Scene} from "three";
 import { Object3D } from "three/src/core/Object3D";
 import * as THREE from "three";
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -282,6 +282,11 @@ export class CreatorController extends EventManager {
     onClick (event: MouseEvent) {
         event.preventDefault()
         this.emit('click');
+    }
+
+    getScale() {
+        const shadowObject: Mesh = this.getShadowObject() as Mesh;
+        return shadowObject.scale.x.toFixed(4);
     }
 
     onScroll (event: WheelEvent) {
