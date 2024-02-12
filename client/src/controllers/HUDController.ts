@@ -239,10 +239,10 @@ export class HUDController extends EventManager{
         if (this.messageInput && this.messageList && this.messageList.parentElement) {
             if (this.messageInput.style.display !== 'none') {
                 this.messageInput.style.display = "none";
-                this.messageList.parentElement.style.backgroundColor = '#4e4e4e4f';
+                // this.messageList.parentElement.style.backgroundColor = '#4e4e4e4f';
             } else {
                 this.messageInput.style.display = "flex";
-                this.messageList.parentElement.style.backgroundColor = '#808080';
+                // this.messageList.parentElement.style.backgroundColor = '#808080';
             }
         }
     }

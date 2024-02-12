@@ -176,10 +176,14 @@ a.logo-title {
     left: 6px;
     position: absolute;
     width: 280px;
-    background: #4e4e4e4f;
+    /*background: #4e4e4e4f;*/
+    background-image: url("./textures/hud_messages.png");
+    background-position: center top;
+    background-repeat: no-repeat;
+    background-size: contain;
     height: 145px;
     padding: 4px;
-
+    color: #c5c5c5;
     z-index: 10;
     display: flex;
     flex-flow: column;
@@ -202,4 +206,5 @@ a.logo-title {
 #messageList {
     height: calc(100% - 22px);
     overflow-y: hidden;
+    width: calc(100% - 13px);
 }
