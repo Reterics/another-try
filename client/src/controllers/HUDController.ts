@@ -81,7 +81,8 @@ export class HUDController extends EventManager{
                         path: 'assets/scenes/simenai/simenai.glb',
                         name: 'simenai'
                     }
-                ]
+                ],
+                texture: './assets/scenes/simenai/textures/Simenai_diffuse.jpeg'
             }
         ];
     }

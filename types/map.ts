@@ -4,5 +4,6 @@ export interface ATMap {
     id: string,
     name?: string,
     author?: string,
-    items: AssetObject[]
+    items: AssetObject[],
+    texture?: string
 }

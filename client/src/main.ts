@@ -10,6 +10,7 @@ import {CreatorController} from "./controllers/CreatorController.ts";
 import {ServerManager} from "./lib/ServerManager.ts";
 import {ObjectPositionMessage} from "../../types/messages.ts";
 import {ATMap} from "../../types/map.ts";
+import {MinimapController} from "./controllers/MinimapController.ts";
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
@@ -33,6 +34,9 @@ let hero: Hero;
 let controls: OrbitControls;
 let creatorController: CreatorController;
 let serverManager: ServerManager;
+
+let minimap: MinimapController;
+
 
 init();
 
@@ -149,6 +153,10 @@ async function init() {
             animate();
         }
         map.respawn(heroPlayer);
+        minimap = new MinimapController({
+            boundingBox: map.getBoundingBox() || undefined,
+            texture: selected.texture || ''
+        });
     });
 
 }
@@ -234,5 +242,7 @@ function animate() {
     prevTime = time;
 
     renderer.render( scene, camera );
-
+    if (minimap) {
+        minimap.update(heroPlayer.position, heroPlayer.rotation);
+    }
 }
