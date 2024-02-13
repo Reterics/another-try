@@ -1,17 +1,23 @@
 import * as THREE from "three";
 import {Euler, OrthographicCamera, Scene, Vector3, WebGLRenderer} from "three";
 import {MinimapDimensions, MinimapInputArguments} from "../types/controller.ts";
+import {EventManager} from "../lib/EventManager.ts";
 
 
-export class MinimapController {
+export class MinimapController extends EventManager{
     private readonly scene: Scene;
     private readonly camera: OrthographicCamera;
     private renderer: WebGLRenderer;
     private dimensions: MinimapDimensions;
-    constructor({boundingBox, texture}: MinimapInputArguments) {
-        const minimapCanvas = document.createElement('canvas');
-        minimapCanvas.classList.add('minimap');
-        document.body.appendChild(minimapCanvas);
+    private outer: HTMLDivElement;
+    constructor({boundingBox, texture, target}: MinimapInputArguments) {
+        super();
+
+        this.outer = target || this.renderHTML();
+        const minimapCanvas = this.outer.querySelector('canvas');
+        if (!minimapCanvas) {
+            throw Error('Target Element must have a canvas to render');
+        }
 
         const mapTexture = new THREE.TextureLoader().load(texture);
         const material = new THREE.SpriteMaterial({ map: mapTexture, color: 0xffffff });
@@ -50,7 +56,6 @@ export class MinimapController {
     update(position?: Vector3, rotation?: Euler) {
         if (position) {
             //const vector2D = position.clone().project(this.camera); // Assuming `camera` is your orthographic camera
-
             this.camera.position.set(position.x, 15, position.z);
             this.camera.lookAt(position.x, 0, position.z);
         }
@@ -59,5 +64,54 @@ export class MinimapController {
         }
         this.camera.updateProjectionMatrix();
         this.renderer.render(this.scene, this.camera);
+    }
+
+    zoom (delta: number) {
+        this.camera.zoom += delta;
+        this.camera.updateProjectionMatrix();
+    }
+
+    protected renderHTML() {
+        if(this.outer) {
+            return this.outer;
+        }
+        const outer = document.createElement('div');
+        outer.classList.add('minimap-outer');
+
+        const map = document.createElement('div');
+        map.classList.add('map');
+        const canvas = document.createElement('canvas');
+        canvas.classList.add('minimap');
+
+        const controllers = document.createElement('div');
+        controllers.classList.add('controllers');
+
+        const zoomIn = document.createElement('button');
+        zoomIn.innerHTML = '+';
+        zoomIn.classList.add('zoom');
+        zoomIn.classList.add('zoom-in');
+        zoomIn.onclick = () => {
+            this.zoom(1);
+            this.emit('zoom', 1);
+        };
+        const zoomOut = document.createElement('button');
+        zoomOut.innerHTML = '-';
+        zoomOut.classList.add('zoom');
+        zoomOut.classList.add('zoom-out');
+        zoomOut.onclick = () => {
+            this.zoom(-1);
+            this.emit('zoom', -1);
+        };
+
+        map.appendChild(canvas);
+        controllers.appendChild(zoomIn);
+        controllers.appendChild(zoomOut);
+
+
+        outer.appendChild(map);
+        outer.appendChild(controllers);
+        this.outer = outer;
+        document.body.appendChild(this.outer);
+        return outer;
     }
 }

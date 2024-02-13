@@ -14,6 +14,7 @@ export type MouseEventLike = WheelEvent|MouseEvent|MousePositionType
 export interface MinimapInputArguments {
     boundingBox?: Box3
     texture: string
+    target?: HTMLDivElement
 }
 
 export interface MinimapDimensions {
