@@ -1,20 +1,21 @@
 import * as THREE from "three";
-import {Box3, Euler, OrthographicCamera, Scene, Vector3, WebGLRenderer} from "three";
+import {Euler, OrthographicCamera, Scene, Vector3, WebGLRenderer} from "three";
+import {MinimapDimensions, MinimapInputArguments} from "../types/controller.ts";
 
 
 export class MinimapController {
     private readonly scene: Scene;
     private readonly camera: OrthographicCamera;
     private renderer: WebGLRenderer;
-    private dimensions: { top: number; left: number; bottom: number; right: number, width: number, height: number };
-    constructor(boundingBox?: Box3) {
+    private dimensions: MinimapDimensions;
+    constructor({boundingBox, texture}: MinimapInputArguments) {
         const minimapCanvas = document.createElement('canvas');
         minimapCanvas.classList.add('minimap');
         document.body.appendChild(minimapCanvas);
 
-        const mapTexture = new THREE.TextureLoader().load('./assets/scenes/simenai/textures/Simenai_diffuse.jpeg');
-        var material = new THREE.SpriteMaterial({ map: mapTexture, color: 0xffffff });
-        var sprite = new THREE.Sprite(material);
+        const mapTexture = new THREE.TextureLoader().load(texture);
+        const material = new THREE.SpriteMaterial({ map: mapTexture, color: 0xffffff });
+        const sprite = new THREE.Sprite(material);
         sprite.position.set(0,0,0);
         this.scene = new THREE.Scene();
         this.scene.add(sprite);
