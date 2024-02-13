@@ -10,6 +10,7 @@ import {CreatorController} from "./controllers/CreatorController.ts";
 import {ServerManager} from "./lib/ServerManager.ts";
 import {ObjectPositionMessage} from "../../types/messages.ts";
 import {ATMap} from "../../types/map.ts";
+import {MinimapController} from "./controllers/MinimapController.ts";
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
@@ -34,9 +35,7 @@ let controls: OrbitControls;
 let creatorController: CreatorController;
 let serverManager: ServerManager;
 
-let minimapRenderer: THREE.WebGLRenderer,
-    minimapScene: THREE.Scene,
-    minimapCamera: THREE.OrthographicCamera;
+let minimap: MinimapController;
 
 
 init();
@@ -155,53 +154,7 @@ async function init() {
         }
         map.respawn(heroPlayer);
     });
-
-
-    try {
-        const minimapCanvas = document.createElement('canvas');
-        minimapCanvas.setAttribute('style', 'width: 300px;\n' +
-            '    height: 150px;\n' +
-            '    z-index: 777;\n' +
-            '    position: fixed;\n' +
-            '    top: 85px;\n' +
-            '    right: 29px ');
-        document.body.appendChild(minimapCanvas);
-
-        const mapTexture = new THREE.TextureLoader().load('./assets/scenes/simenai/textures/Simenai_diffuse.jpeg');
-        var material = new THREE.SpriteMaterial({ map: mapTexture, color: 0xffffff });
-        var sprite = new THREE.Sprite(material);
-        minimapScene = new THREE.Scene();
-        minimapScene.add(sprite);
-        window.scene = minimapScene;
-
-        minimapCamera = new THREE.OrthographicCamera(
-            minimapCanvas.width / -2, // left
-            minimapCanvas.width / 2, // right
-            minimapCanvas.height / 2, // top
-            minimapCanvas.height / -2, // bottom
-            1, // near
-            1000 // far
-        );
-        minimapCamera.position.set(0, 0, 10); // Set camera position
-        minimapCamera.lookAt(0, 0, 0); // Look at the center
-
-        minimapRenderer = new THREE.WebGLRenderer({ canvas: minimapCanvas });
-        minimapRenderer.setSize(minimapCanvas.width, minimapCanvas.height);
-        sprite.scale.set(minimapCanvas.width, minimapCanvas.height, 1);
-    } catch (e) {
-        console.error(e);
-    }
-
-}
-
-function updateMinimapCamera() {
-    if (minimapCamera && heroPlayer && minimapScene && minimapRenderer) {
-        minimapCamera.position.copy(heroPlayer.position);
-
-        minimapCamera.rotation.copy(heroPlayer.rotation);
-
-        minimapRenderer.render(minimapScene, minimapCamera);
-    }
+    minimap = new MinimapController();
 }
 
 
@@ -285,6 +238,7 @@ function animate() {
     prevTime = time;
 
     renderer.render( scene, camera );
-    updateMinimapCamera();
-
+    if (minimap) {
+        minimap.update(heroPlayer.position, heroPlayer.rotation);
+    }
 }

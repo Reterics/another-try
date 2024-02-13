@@ -193,3 +193,13 @@ a.logo-title {
     height: calc(100% - 22px);
     overflow-y: hidden;
 }
+
+
+canvas.minimap {
+    width: 300px;
+    height: 150px;
+    z-index: 777;
+    position: fixed;
+    top: 85px;
+    right: 29px;
+}
