@@ -153,8 +153,10 @@ async function init() {
             animate();
         }
         map.respawn(heroPlayer);
+        console.log(map.getBoundingBox());
+        minimap = new MinimapController(map.getBoundingBox() || undefined);
     });
-    minimap = new MinimapController();
+
 }
 
 

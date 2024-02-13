@@ -473,4 +473,8 @@ export class GltfScene {
         water.rotation.x = Math.PI * - 0.5;
         this.scene.add( water );
     }
+
+    getBoundingBox() {
+        return this.collider.geometry.boundingBox;
+    }
 }
