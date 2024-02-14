@@ -167,8 +167,14 @@ a.logo-title {
     display: flex;
     z-index: 99 !important;
     position: absolute;
-    padding: 3px;
-    background-color: rgba(78, 78, 78, 0.31);
+    background-image: url(./textures/hud_messages.png);
+    background-position: center top;
+    background-repeat: no-repeat;
+    background-size: cover;
+    padding: 9px;
+    color: #d1d1d1;
+    top: 177px;
+    right: 5px
 }
 
 .HUD-messages {
@@ -212,8 +218,8 @@ a.logo-title {
 .minimap-outer {
     z-index: 777;
     position: absolute;
-    top: 85px;
-    right: 29px;
+    top: 5px;
+    right: 5px;
     background-image: url(./textures/hud_messages.png);
     background-position: center top;
     background-repeat: no-repeat;
