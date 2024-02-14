@@ -67,8 +67,32 @@ export class HUDController extends EventManager{
                 this.renderGame(level);
             }
         };
-        this.pauseMenu.onclick = () => {
-            this.renderGame(null);
+        this.pauseMenu.onclick = (e) => {
+            const target = e.target as Element;
+            let pauseParent = document.getElementById('pauseParent');
+
+            const targetId = target ? target.getAttribute('data-target') : null;
+            if (targetId === 'menu') {
+                return this.renderMenu();
+            }
+            const targetNode = targetId ? document.getElementById(targetId) : null;
+            if (!targetNode) {
+                return this.renderGame(null);
+            }
+
+            if (!pauseParent) {
+                pauseParent = targetNode.parentElement;
+            }
+            if (pauseParent) {
+                for(let i = 0; i < pauseParent.children.length; i++) {
+                    const element = pauseParent.children[i] as HTMLElement;
+                    if (element === targetNode) {
+                        element.style.display = 'block';
+                    } else {
+                        element.style.display = 'none';
+                    }
+                }
+            }
         };
 
         this.maps = [
@@ -113,6 +137,16 @@ export class HUDController extends EventManager{
         this.inGame.style.display = 'none';
         this.pauseMenu.style.display = 'block';
         this.mainMenu.style.display = 'none';
+    }
+
+    switchPauseMenu() {
+        if (this.pauseMenu.style.display === 'none') {
+            this.renderPauseMenu();
+        } else {
+            this.inGame.style.display = 'block';
+            this.pauseMenu.style.display = 'none';
+            this.mainMenu.style.display = 'none';
+        }
     }
 
     getOptionsFromNode(node: HTMLElement|null|undefined) {

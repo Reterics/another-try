@@ -169,7 +169,7 @@ export class CreatorController extends EventManager {
                 }
                 break;
             case 'Escape':
-                this.hud.renderPauseMenu();
+                this.hud.switchPauseMenu();
         }
     }
 

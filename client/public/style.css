@@ -8,6 +8,7 @@ html, body {
     width: 100%;
     height: 100%;
     background-color: rgba(0,0,0,0.5);
+    z-index: 999;
 }
 
 .background-image {
@@ -46,12 +47,12 @@ h3.table-title {
     margin-bottom: 0.5em;
 }
 
-#maps > a {
+#maps > a, #pauseMenu .option {
     border: 1px solid #6c727f;
     padding: 4px 9px;
     color: #6c727f;
 }
-#maps > a:hover {
+#maps > a:hover, #pauseMenu .option:hover {
     border: 1px solid #e0e0e0;
     color: #e0e0e0;
     background-color: #6c727f;
@@ -278,4 +279,31 @@ a.logo-title {
 
 .modal > .body {
     padding: 8px;
+}
+
+
+table {
+    font-family: arial, sans-serif;
+    border-collapse: collapse;
+    width: 100%;
+}
+
+td, th {
+    border: 1px solid #6c727f;
+    text-align: left;
+    padding: 5px;
+}
+
+tr:nth-child(even) {
+    background-color: #6c727f;
+}
+
+#pauseMenu .option {
+    margin: 6px;
+}
+.menu-column {
+    margin: auto;
+    max-width: 250px;
+    display: flex;
+    flex-direction: column;
 }
