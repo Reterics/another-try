@@ -477,4 +477,8 @@ export class GltfScene {
     getBoundingBox() {
         return this.collider.geometry.boundingBox;
     }
+
+    getMap() {
+        return this.map;
+    }
 }

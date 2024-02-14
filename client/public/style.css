@@ -233,3 +233,28 @@ a.logo-title {
     width: 250px;
     height: 200px;
 }
+
+.modal {
+    position: absolute;
+    top: 50%;
+    right: 50%;
+    transform: translate(50%,-50%);
+    background-image: url(./textures/hud_messages.png);
+    background-position: center top;
+    background-repeat: no-repeat;
+    background-size: cover;
+    min-width: 260px;
+    min-height: 125px;
+    display: flex;
+    flex-flow: column;
+    color: #d0d0d0;
+}
+
+.modal > .header > .title {
+    margin: 0;
+    padding: 8px;
+}
+
+.modal > .body {
+    padding: 8px;
+}

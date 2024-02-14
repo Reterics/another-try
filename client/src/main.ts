@@ -20,7 +20,7 @@ let shoot = false,
     isChatActive = false;
 
 let prevTime = performance.now();
-let isTabActive: boolean;
+let isTabActive: boolean = true;
 const direction = new THREE.Vector3();
 let heroPlayer: Object3D;
 let map: GltfScene;
@@ -140,15 +140,17 @@ async function init() {
         }
     })
     hudController.on('map:select', async (selected: ATMap)=> {
+        hudController.openDialog('Loading', 'Create Map...');
         if (!map) {
             map = await GltfScene.CreateMap(selected, scene, controls);
             map.initPlayerEvents();
         } else {
             await map.updateScene(selected);
         }
+        hudController.openDialog('Loading', 'Add to scene');
         await map.addToScene();
 
-        renderer.render( scene, camera );
+        // renderer.render( scene, camera );
         if (!animationRunning) {
             animate();
         }
@@ -157,6 +159,8 @@ async function init() {
             boundingBox: map.getBoundingBox() || undefined,
             texture: selected.texture || ''
         });
+
+        hudController.closeDialog();
     });
 
 }
@@ -190,7 +194,8 @@ function animate() {
         prevTime = time;
     }
 
-    if (serverManager.isActive() && !isChatActive) {
+    if ((serverManager.isActive() || map.getMap().id === 'fallback')
+        && !isChatActive) {
         const pos = heroPlayer.position;
         //let rotation = controlsObject.rotation;
         //let touchedTerrain = false;

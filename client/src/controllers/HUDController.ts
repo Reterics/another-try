@@ -20,6 +20,7 @@ export class HUDController extends EventManager{
     private messageList: HTMLElement|null;
     private footer: HTMLElement|null;
     private maps: ATMap[];
+    private dialog: HTMLDivElement|undefined;
 
     constructor() {
         super();
@@ -290,5 +291,44 @@ export class HUDController extends EventManager{
             a.innerHTML = map.name || 'Play';
             mapsParent?.appendChild(a);
         });
+    }
+
+    openDialog(title: string, body: string | Element | Node) {
+        this.dialog = this.dialog || document.createElement('div');
+        this.dialog.innerHTML = '';
+        this.dialog.classList.add('modal');
+
+        const header = document.createElement('div');
+        header.classList.add('header');
+        header.innerHTML = '<h3 class="title">' + title + '</h3>'
+
+        const content = document.createElement('div');
+        content.classList.add('body');
+        if (typeof body === 'string') {
+            content.innerHTML = body;
+        } else if (body instanceof Element || body instanceof Node) {
+            content.appendChild(body);
+        }
+
+        this.dialog.appendChild(header);
+        this.dialog.appendChild(content);
+        document.body.appendChild(this.dialog);
+    }
+
+    updateDialog(body: string | Element | Node) {
+        if (this.dialog) {
+            if (typeof body === 'string') {
+                this.dialog.innerHTML = body;
+            } else if (body instanceof Element || body instanceof Node) {
+                this.dialog.appendChild(body);
+            }
+        }
+    }
+
+    closeDialog() {
+        if (this.dialog) {
+            this.dialog.outerHTML = '';
+            this.dialog = undefined;
+        }
     }
 }
