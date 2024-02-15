@@ -77,6 +77,9 @@ async function init() {
             if(event.key == "Enter") {
                 const text = hudController.getMessage(true);
                 if (text) {
+                    if (!serverManager.isActive()) {
+                        hudController.bufferMessage(text);
+                    }
                     serverManager.send("data", {type: "msg", msg: text})
                 }
                 hudController.clearMessage();

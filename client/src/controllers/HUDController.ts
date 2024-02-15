@@ -19,6 +19,7 @@ export class HUDController extends EventManager{
     private messageInput: HTMLElement|null;
     private messageList: HTMLElement|null;
     private cursor: number;
+    private messageBuffer: HTMLElement[];
     private footer: HTMLElement|null;
     private maps: ATMap[];
     private dialog: HTMLDivElement|undefined;
@@ -113,6 +114,7 @@ export class HUDController extends EventManager{
         ];
 
         this.cursor = 0;
+        this.messageBuffer = [];
     }
 
     _loadHUD() {
@@ -265,12 +267,30 @@ export class HUDController extends EventManager{
     }
 
 
+    bufferMessage(message: string) {
+        const messageDiv = this.onMessage(message);
+        if (messageDiv) {
+            messageDiv.classList.add('unsent');
+            this.messageBuffer.push(messageDiv);
+        }
+    }
     onMessage(message: string) {
         if (this.messageList) {
             const div = document.createElement('div');
             div.innerHTML = message;
             this.messageList.appendChild(div);
             this.messageList.scrollTop = this.messageList.scrollHeight;
+            const index = this.messageBuffer.findIndex(element=>element.innerText === message);
+            if (index !== -1) {
+                this.messageBuffer[index].outerHTML = '';
+                this.messageBuffer = this.messageBuffer.splice(index, 1);
+            } else if(this.messageBuffer.length >= 3) {
+                const first = this.messageBuffer.shift();
+                if (first) {
+                    first.outerHTML = '';
+                }
+            }
+            return div;
         }
     }
 
