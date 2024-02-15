@@ -23,6 +23,7 @@ export class HUDController extends EventManager{
     private footer: HTMLElement|null;
     private maps: ATMap[];
     private dialog: HTMLDivElement|undefined;
+    private side: HTMLDivElement|undefined;
 
     constructor() {
         super();
@@ -57,6 +58,7 @@ export class HUDController extends EventManager{
         this.messageInput = document.querySelector('#messageInput') as HTMLElement;
         this.messageList = document.querySelector('#messageList') as HTMLElement;
         this.footer = document.querySelector('#HUD-footer') as HTMLElement;
+        this.side = document.querySelector('.side-buttons') as HTMLDivElement;
         if(!this.element) {
             this._loadHUD();
         }
@@ -130,6 +132,7 @@ export class HUDController extends EventManager{
         this.messageInput = document.querySelector('#messageInput') as HTMLElement;
         this.messageList = document.querySelector('#messageList') as HTMLElement;
         this.footer = document.querySelector('#HUD-footer') as HTMLElement;
+        this.side = document.querySelector('.side-buttons') as HTMLDivElement;
     }
 
     renderMenu() {
@@ -213,7 +216,6 @@ export class HUDController extends EventManager{
                 tableData.push(Math.round(memory.usedJSHeapSize / 1048576) + " / "
                     + Math.round(memory.jsHeapSizeLimit / 1048576) + " (MB Memory)");
             }
-            tableData.push("Mode: " + controller.active + " (KeyR)");
             if (controller.active === 'far') {
                 tableData.push("Far: " + controller.far);
             } else if (controller.active === 'precision') {
@@ -330,18 +332,21 @@ export class HUDController extends EventManager{
 
     type(key: string) {
         if (this.messageInput) {
+            const message = this.messageInput.innerText;
+            const beforeCursor = message.substring(0, this.cursor);
+            const afterCursor = message.substring(this.cursor);
+            this.messageInput.innerText = beforeCursor + key + afterCursor;
             this.cursor+=key.length;
-            return this.messageInput.innerText += key;
         }
     }
 
     backspace() {
         if (this.messageInput && this.cursor) {
-            this.cursor--;
             const message = this.messageInput.innerText;
             const beforeCursor = message.substring(0, this.cursor - 1);
             const afterCursor = message.substring(this.cursor);
             this.messageInput.innerText = beforeCursor + afterCursor;
+            this.cursor--;
         }
     }
 
@@ -426,5 +431,19 @@ export class HUDController extends EventManager{
             this.dialog.outerHTML = '';
             this.dialog = undefined;
         }
+    }
+
+    setActiveSide(active: string) {
+        if (!this.side) {
+            return;
+        }
+        const activeNode = this.side.querySelector('[data-active=' + active + ']');
+        this.side.querySelectorAll('.side-button').forEach(node=>{
+            if (node === activeNode) {
+                node.classList.add('selected');
+            } else {
+                node.classList.remove('selected');
+            }
+        });
     }
 }

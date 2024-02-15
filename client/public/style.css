@@ -214,6 +214,7 @@ a.logo-title {
     height: calc(100% - 22px);
     overflow-y: hidden;
     width: calc(100% - 13px);
+    padding-left: 2px;
 }
 
 .minimap-outer {
@@ -310,4 +311,33 @@ tr:nth-child(even) {
 
 .unsent {
     color: #6c727f;
+}
+
+.side-button {
+    padding: 4px 4px 4px 2px;
+    background-color: #3b3b3b;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    border: 2px solid #777777;
+    display: flex;
+    justify-content: space-between;
+}
+.side-button > span {
+    font-size: xx-small;
+}
+.side-button.selected {
+    border: 2px solid #c3c3c3;
+}
+.side-button img {
+    width: calc(100% - 7px);
+    height: 100%;
+    object-fit: fill;
+}
+
+.side-buttons {
+    right: 5px;
+    bottom: 300px;
+    position: absolute;
 }

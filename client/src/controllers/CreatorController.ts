@@ -110,21 +110,25 @@ export class CreatorController extends EventManager {
             case 'Digit1':
                 this.active = 'pointer';
                 shadow.visible = false;
+                this.hud.setActiveSide(this.active);
                 this.hud.update(null, this);
                 break;
             case 'Digit2':
                 this.active = 'far';
                 shadow.visible = true;
+                this.hud.setActiveSide(this.active);
                 this.hud.update(null, this);
                 break;
             case 'Digit3':
                 this.active = 'size';
                 shadow.visible = true;
+                this.hud.setActiveSide(this.active);
                 this.hud.update(null, this);
                 break;
             case 'Digit4':
                 this.active = 'precision';
                 shadow.visible = true;
+                this.hud.setActiveSide(this.active);
                 this.hud.update(null, this);
                 break;
             case 'KeyR':
@@ -139,6 +143,7 @@ export class CreatorController extends EventManager {
                     this.active = 'far';
                 }
                 shadow.visible = this.active !== 'pointer';
+                this.hud.setActiveSide(this.active);
                 this.hud.update(null, this);
                 break;
             case 'KeyV':
