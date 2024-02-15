@@ -15,6 +15,7 @@ export class ServerManager extends EventManager {
     private readonly scene: Scene;
     private readonly scores: PlayerScores;
     private readonly name: string;
+    private active: boolean;
     private playerIndex: number | undefined;
     private hud: HUDController;
 
@@ -31,6 +32,7 @@ export class ServerManager extends EventManager {
         this.players = {} as PlayerList;
         this.scores = {} as PlayerScores;
         this.hud = hud;
+        this.active = false;
     }
 
     async get(uri: string): Promise<object | null> {
@@ -47,6 +49,7 @@ export class ServerManager extends EventManager {
         if (this.socket) {
             this.disconnect();
         }
+        this.active = false;
     }
     connect() {
         this.disconnect();
@@ -57,7 +60,10 @@ export class ServerManager extends EventManager {
         this.socket.on('object', (msg: ObjectPositionMessage)=> {
             this.emit('object', msg);
         });
-        this.socket.on('connect', () => this.emit('connect'));
+        this.socket.on('connect', () => {
+            this.active = true;
+            this.emit('connect');
+        });
     }
 
     private position(msg: PositionMessage) {
@@ -156,6 +162,6 @@ export class ServerManager extends EventManager {
     }
 
     isActive() {
-        return !!this.socket;
+        return !!this.socket && this.active;
     }
 }

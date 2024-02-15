@@ -102,6 +102,9 @@ export class CreatorController extends EventManager {
         this.shadowInstances = [];
     }
     onKeyUp (event: KeyboardEvent) {
+        if (this.hud.isChatActive()) {
+            return; // Disable all functionality while we're chatting
+        }
         const shadow = this.getShadowObject() || {} as Object3D;
         switch (event.code) {
             case 'Digit1':

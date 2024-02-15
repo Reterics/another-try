@@ -307,3 +307,7 @@ tr:nth-child(even) {
     display: flex;
     flex-direction: column;
 }
+
+.unsent {
+    color: #6c727f;
+}
