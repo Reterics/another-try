@@ -75,7 +75,7 @@ async function init() {
          isChatActive = hudController.isChatActive();
          if(isChatActive) {
             if(event.key == "Enter") {
-                const text = hudController.getMessage();
+                const text = hudController.getMessage(true);
                 if (text) {
                     serverManager.send("data", {type: "msg", msg: text})
                 }
@@ -85,6 +85,14 @@ async function init() {
             }
             else if (event.key.length === 1) {
                 hudController.type(event.key);
+            } else if(event.key === 'Backspace') {
+                hudController.backspace()
+            } else if(event.key === 'Delete') {
+                hudController.delete()
+            } else if (event.key === 'ArrowLeft') {
+                hudController.updateCursor(-1);
+            } else if (event.key === 'ArrowRight') {
+                hudController.updateCursor(1);
             }
         } else if(event.code == "KeyT") {
             hudController.toggleChat();

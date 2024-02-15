@@ -18,6 +18,7 @@ export class HUDController extends EventManager{
     private scores: HTMLElement|null;
     private messageInput: HTMLElement|null;
     private messageList: HTMLElement|null;
+    private cursor: number;
     private footer: HTMLElement|null;
     private maps: ATMap[];
     private dialog: HTMLDivElement|undefined;
@@ -110,6 +111,8 @@ export class HUDController extends EventManager{
                 texture: './assets/scenes/simenai/textures/Simenai_diffuse.jpeg'
             }
         ];
+
+        this.cursor = 0;
     }
 
     _loadHUD() {
@@ -287,25 +290,64 @@ export class HUDController extends EventManager{
         return !!(this.messageInput && this.messageInput.style.display !== 'none');
     }
 
-    getMessage(): string {
+    getMessage(html = false): string {
         if (this.messageInput) {
-            return this.messageInput.innerHTML;
+            if (html) {
+                return this.messageInput.innerHTML;
+            }
+            return this.messageInput.innerText;
         }
-
         return "";
     }
 
     clearMessage() {
         if (this.messageInput) {
             this.messageInput.innerHTML = "";
+            this.cursor = 0;
+
         }
     }
 
     type(key: string) {
         if (this.messageInput) {
+            this.cursor+=key.length;
             return this.messageInput.innerText += key;
         }
     }
+
+    backspace() {
+        if (this.messageInput && this.cursor) {
+            this.cursor--;
+            const message = this.messageInput.innerText;
+            const beforeCursor = message.substring(0, this.cursor - 1);
+            const afterCursor = message.substring(this.cursor);
+            this.messageInput.innerText = beforeCursor + afterCursor;
+        }
+    }
+
+    delete () {
+        if (this.messageInput) {
+            const message = this.messageInput.innerText;
+            const beforeCursor = message.substring(0, this.cursor);
+            const afterCursor = message.substring(this.cursor + 1);
+            this.messageInput.innerText = beforeCursor + afterCursor;
+        }
+    }
+
+    updateCursor(delta: number) {
+        this.cursor += delta;
+        if (this.messageInput) {
+            if (this.cursor >= this.messageInput.innerText.length) {
+                this.cursor--;
+            }
+            if (this.cursor < 0) {
+                this.cursor = 0;
+            }
+        } else {
+            this.cursor = 0;
+        }
+    }
+
 
     setMaps(maps: ATMap[]) {
         this.maps = maps;
