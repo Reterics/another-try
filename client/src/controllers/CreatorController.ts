@@ -337,13 +337,13 @@ export class CreatorController extends EventManager {
         } else {
             this.far += delta * 5;
         }
-        if (this.far < 0.1) {
-            this.far = 0.1;
+        if (this.far < 0.5) {
+            this.far = 0.5;
         }
         const shadowObject = this.getShadowObject();
         const camera = this.controls.object as THREE.PerspectiveCamera;
         if (this.far < 1 && camera.near >= 1) {
-            camera.near = 0.5;
+            camera.near = 0.1;
             camera.updateProjectionMatrix();
         } else if (this.far >= 1 && camera.near < 1) {
             camera.near = 1;

@@ -230,10 +230,16 @@ function animate() {
             controls.maxPolarAngle = Math.PI / 2;
             controls.minDistance = 1;
             controls.maxDistance = 40;
+            if (!heroPlayer.visible) {
+                heroPlayer.visible = true;
+            }
         } else if (creatorController.view === 'fps') {
             controls.maxPolarAngle = Math.PI;
             controls.minDistance = 1e-4;
             controls.maxDistance = 1e-4;
+            if (heroPlayer.visible) {
+                heroPlayer.visible = false;
+            }
         }
 
         const physicsSteps = map.params.physicsSteps || 1;
