@@ -259,7 +259,7 @@ export class CreatorController extends EventManager {
     dropObject (object: Object3D|undefined, event: MouseEventLike) {
         if (object) {
             const camera = this.controls.object;
-            const movementSpeed = this.far < 3 ? this.far : 3; // Adjust the speed as needed
+            const movementSpeed = this.far < 3 ? this.far : 2; // Adjust the speed as needed
             object.position.copy(camera.position)
 
             const mouse = this.view === "tps" ? this.getCursorPosition(event) : this.getCenterPosition();
@@ -279,6 +279,13 @@ export class CreatorController extends EventManager {
 
             if (this.view === "fps") {
                 const directionVector = forward.multiplyScalar(movementSpeed);
+                const obj = (object as Mesh);
+                if (obj.isMesh) {
+                    obj.geometry.computeBoundingBox()
+                }
+                object.updateMatrixWorld();
+                object.position.add(directionVector);
+
                 let i = 0;
                 while (!objectsInPath.find(o=> isCollisionDetected(o, object))) {
                     object.position.add(directionVector);
