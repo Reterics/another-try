@@ -259,7 +259,7 @@ export class CreatorController extends EventManager {
     dropObject (object: Object3D|undefined, event: MouseEventLike) {
         if (object) {
             const camera = this.controls.object;
-            const movementSpeed = 3; // Adjust the speed as needed
+            const movementSpeed = this.far < 3 ? this.far : 3; // Adjust the speed as needed
             object.position.copy(camera.position)
 
             const mouse = this.view === "tps" ? this.getCursorPosition(event) : this.getCenterPosition();
@@ -330,11 +330,25 @@ export class CreatorController extends EventManager {
     }
 
     protected _changeFar(delta: number, event?: MouseEventLike) {
-        this.far += delta * 5;
-        if (this.far < 10) {
-            this.far = 10;
+        if (this.far <= 1) {
+            this.far += delta * 0.1;
+        } else if (this.far < 10) {
+            this.far += delta;
+        } else {
+            this.far += delta * 5;
+        }
+        if (this.far < 0.1) {
+            this.far = 0.1;
         }
         const shadowObject = this.getShadowObject();
+        const camera = this.controls.object as THREE.PerspectiveCamera;
+        if (this.far < 1 && camera.near >= 1) {
+            camera.near = 0.5;
+            camera.updateProjectionMatrix();
+        } else if (this.far >= 1 && camera.near < 1) {
+            camera.near = 1;
+            camera.updateProjectionMatrix();
+        }
         this.dropObject(shadowObject, event || this._lastMouse);
     }
 
