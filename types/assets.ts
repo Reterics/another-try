@@ -1,4 +1,4 @@
-export type AssetType = 'cursor'|'point'|'circle'|'rect'|'line'|'model';
+export type AssetType = 'cursor'|'point'|'circle'|'rect'|'line'|'model'|'plane';
 
 export interface Asset {
     id?: string,
@@ -47,10 +47,16 @@ export interface Line extends Asset {
     y2: number
 }
 
-export type AssetObject = Asset|Rectangle|Circle|Line|Point;
+export type AssetObject = Asset|Rectangle|Circle|Line|Point|PlaneConfig;
 
 export interface ObjectDimensions {
     width: number,
     height: number,
     depth: number
+}
+
+export interface PlaneConfig extends Asset {
+    heightmap?: string
+    w: number
+    h: number
 }

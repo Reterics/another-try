@@ -24,9 +24,9 @@ import {Loader} from "three/src/Three";
 import {ColladaLoader} from "three/examples/jsm/loaders/ColladaLoader";
 import {STLLoader} from "three/examples/jsm/loaders/STLLoader";
 import {Object3D} from "three/src/core/Object3D";
-import {AssetObject, Circle, Line, Rectangle} from "../../../types/assets.ts";
+import {AssetObject, Circle, Line, PlaneConfig, Rectangle} from "../../../types/assets.ts";
 import {ShadowType} from "../types/controller.ts";
-import {MeshOrGroup} from "../types/three.ts";
+import {MeshOrGroup, RenderedPlane} from "../types/three.ts";
 
 const genericLoader = (file: File|string, modelLoader: Loader) => {
     return new Promise(resolve => {
@@ -107,6 +107,86 @@ export const lookAtObject = (models: Object3D, camera: PerspectiveCamera): void 
     camera.lookAt(boundingBoxCenter);
 }
 
+export const loadTexture = (url: string): Promise<THREE.Texture> => {
+    return new Promise(resolve => {
+        const loader = new THREE.TextureLoader();
+        loader.load(url,
+            function (texture) {
+                resolve(texture);
+            });
+    });
+}
+
+export const getGroundPlane = async (width: number, height: number, textureSrc?:string, heightMap?:string): Promise<RenderedPlane> => {
+    const texture = await loadTexture(textureSrc || '/assets/textures/green-grass-textures.jpg');
+    const heightMapTexture = heightMap ? await loadTexture(heightMap) : null;
+    const heightImg = heightMapTexture ? heightMapTexture.image : null;
+
+    const geometry = heightImg ?
+        new THREE.PlaneGeometry(width, height, width - 1, height - 1) :
+        new THREE.PlaneGeometry(width, height);
+    const material = new THREE.MeshStandardMaterial({ color: 0xffff00, side: THREE.DoubleSide });
+
+
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.offset.set(0, 0);
+    texture.repeat.set(2, 2);
+    material.map = texture;
+    material.needsUpdate = true;
+    if (!heightImg) {
+        const plane = new THREE.Mesh(geometry, material) as RenderedPlane;
+        plane.position.setY(0);
+        plane.receiveShadow = true;
+        plane.rotation.set(Math.PI / 2, 0, 0);
+        plane.position.set(width / 2, 0, height / 2);
+
+        //plane.rotation.set(-Math.PI/2, Math.PI/2000, Math.PI);
+        plane.name = "plane";
+        return plane;
+    }
+
+
+
+    const maxHeight = 100;
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d') as CanvasRenderingContext2D;
+
+    canvas.width = width;
+    canvas.height = height;
+
+    // Draw the image onto the canvas
+    context.drawImage(heightImg, 0, 0, width, height);
+    const imageData = context.getImageData(0, 0, width, height).data;
+
+    // @ts-ignore
+    const vertices: TypedArray = geometry.vertices || geometry.attributes.position.array;
+
+    // Adjust each vertex in the geometry
+    for (let j = 0; j < height; j++) {
+        for (let i = 0; i < width; i++) {
+            const n = (j * width + i) * 4;
+            const grayScale = imageData[n]; // Assuming the image is grayscale, we can just take the red channel
+            // Scale the height based on your needs
+            // Set the z position of the vertex
+
+            const posIndex = (j * width + i) * 3;
+            vertices[posIndex + 2] = (grayScale / 255) * maxHeight;
+        }
+    }
+    // geometry.attributes.position.needsUpdate = true;
+
+    geometry.computeVertexNormals(); // Optional: Compute normals for better lighting
+    const plane = new THREE.Mesh(geometry, material) as RenderedPlane;
+    plane.position.setY(0);
+    plane.position.set(width / 2, 0, height / 2);
+    plane.receiveShadow = true;
+    plane.rotation.set(Math.PI / 2, 0, 0);
+    plane.name = "plane";
+    plane.isHeightMap = true;
+    return plane;
+}
+
+
 export const getMeshForItem = async (item: AssetObject): Promise<Mesh|Group|null> => {
     let model;
 
@@ -172,6 +252,9 @@ export const getMeshForItem = async (item: AssetObject): Promise<Mesh|Group|null
                 return await loadModel.stl(item.path);
             }
             return null;
+        case "plane":
+            const plane = item as PlaneConfig;
+            return await getGroundPlane(plane.w, plane.h, plane.texture, plane.heightmap);
     }
     model = new Mesh(geometry, material);
     model.castShadow = true; //default is false
@@ -216,30 +299,6 @@ export const getArrowHelper = (): Group => {
     arrowGroup.add(zAxisArrow);
 
     return arrowGroup;
-}
-
-export const getGroundPlane = (width: number, height: number, texture?:string): Promise<Mesh<THREE.PlaneGeometry, MeshStandardMaterial, Object3DEventMap>> => {
-    return new Promise(resolve => {
-        const geometry = new THREE.PlaneGeometry(width, height);
-        const material = new THREE.MeshStandardMaterial({ color: 0xffff00, side: THREE.DoubleSide });
-        const loader = new THREE.TextureLoader();
-        loader.load(texture || '/assets/textures/green-grass-textures.jpg',
-            function (texture) {
-                texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-                texture.offset.set(0, 0);
-                texture.repeat.set(2, 2);
-                material.map = texture;
-                material.needsUpdate = true;
-                const plane = new THREE.Mesh(geometry, material);
-                plane.position.setY(0);
-                plane.receiveShadow = true;
-                plane.rotation.set(Math.PI / 2, 0, 0);
-
-                //plane.rotation.set(-Math.PI/2, Math.PI/2000, Math.PI);
-                plane.name = "plane";
-                resolve(plane);
-            });
-    });
 }
 
 
