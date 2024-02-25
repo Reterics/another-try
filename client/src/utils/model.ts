@@ -15,7 +15,7 @@ import {
     PerspectiveCamera,
     Quaternion,
     SphereGeometry,
-    TextureLoader,
+    TextureLoader, TypedArray,
     Vector3
 } from "three";
 import {FBXLoader} from "three/examples/jsm/loaders/FBXLoader";
@@ -24,9 +24,10 @@ import {Loader} from "three/src/Three";
 import {ColladaLoader} from "three/examples/jsm/loaders/ColladaLoader";
 import {STLLoader} from "three/examples/jsm/loaders/STLLoader";
 import {Object3D} from "three/src/core/Object3D";
-import {AssetObject, Circle, Line, PlaneConfig, Rectangle} from "../../../types/assets.ts";
+import {AssetObject, Circle, Line, PlaneConfig, Rectangle, WaterConfig} from "../../../types/assets.ts";
 import {ShadowType} from "../types/controller.ts";
-import {MeshOrGroup, RenderedPlane} from "../types/three.ts";
+import {MeshOrGroup, RenderedPlane, RenderedWater} from "../types/three.ts";
+import {Water} from "three/examples/jsm/objects/Water2";
 
 const genericLoader = (file: File|string, modelLoader: Loader) => {
     return new Promise(resolve => {
@@ -117,14 +118,16 @@ export const loadTexture = (url: string): Promise<THREE.Texture> => {
     });
 }
 
-export const getGroundPlane = async (width: number, height: number, textureSrc?:string, heightMap?:string): Promise<RenderedPlane> => {
+export const getGroundPlane = async (size: number, textureSrc?:string, heightMap?:string): Promise<RenderedPlane> => {
     const texture = await loadTexture(textureSrc || '/assets/textures/green-grass-textures.jpg');
     const heightMapTexture = heightMap ? await loadTexture(heightMap) : null;
     const heightImg = heightMapTexture ? heightMapTexture.image : null;
 
+    const segments = Math.min(99, size - 1),
+        cSize = segments + 1;
     const geometry = heightImg ?
-        new THREE.PlaneGeometry(width, height, width - 1, height - 1) :
-        new THREE.PlaneGeometry(width, height);
+        new THREE.PlaneGeometry(size, size, segments, segments) :
+        new THREE.PlaneGeometry(size, size);
     const material = new THREE.MeshStandardMaterial({ color: 0xffff00, side: THREE.DoubleSide });
 
 
@@ -138,54 +141,71 @@ export const getGroundPlane = async (width: number, height: number, textureSrc?:
         plane.position.setY(0);
         plane.receiveShadow = true;
         plane.rotation.set(Math.PI / 2, 0, 0);
-        plane.position.set(width / 2, 0, height / 2);
+        plane.position.set(size / 2, 0, size / 2);
 
         //plane.rotation.set(-Math.PI/2, Math.PI/2000, Math.PI);
         plane.name = "plane";
         return plane;
     }
 
-
-
     const maxHeight = 100;
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d') as CanvasRenderingContext2D;
 
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = cSize;
+    canvas.height = cSize;
 
     // Draw the image onto the canvas
-    context.drawImage(heightImg, 0, 0, width, height);
-    const imageData = context.getImageData(0, 0, width, height).data;
+    context.drawImage(heightImg, 0, 0, cSize, cSize);
+    const imageData = context.getImageData(0, 0, cSize, cSize).data;
 
-    // @ts-ignore
-    const vertices: TypedArray = geometry.vertices || geometry.attributes.position.array;
+    const vertices: TypedArray = geometry.attributes.position.array;
 
     // Adjust each vertex in the geometry
-    for (let j = 0; j < height; j++) {
-        for (let i = 0; i < width; i++) {
-            const n = (j * width + i) * 4;
+    for (let j = 0; j < cSize; j++) {
+        for (let i = 0; i < cSize; i++) {
+            const n = (j * cSize + i) * 4;
             const grayScale = imageData[n]; // Assuming the image is grayscale, we can just take the red channel
             // Scale the height based on your needs
             // Set the z position of the vertex
 
-            const posIndex = (j * width + i) * 3;
+            const posIndex = (j * cSize + i) * 3;
             vertices[posIndex + 2] = (grayScale / 255) * maxHeight;
         }
     }
     // geometry.attributes.position.needsUpdate = true;
 
     geometry.computeVertexNormals(); // Optional: Compute normals for better lighting
+    geometry.computeBoundingBox();
     const plane = new THREE.Mesh(geometry, material) as RenderedPlane;
-    plane.position.setY(0);
-    plane.position.set(width / 2, 0, height / 2);
+    plane.position.set(size / 2, -35, size / 2);
     plane.receiveShadow = true;
-    plane.rotation.set(Math.PI / 2, 0, 0);
+    plane.rotation.set(-Math.PI / 2, 0, 0);
     plane.name = "plane";
-    plane.isHeightMap = true;
+    plane.heightMap = heightMap;
     return plane;
 }
 
+export const getWater = async (waterConfig: WaterConfig, planeSize = 100) => {
+    const flowMap = await loadTexture(waterConfig.flowMap || '/assets/water/height.png');
+    const normal0 = await loadTexture(waterConfig.normalMap0 || '/assets/water/normal0.jpg');
+    const normal1 = await loadTexture(waterConfig.normalMap1 || '/assets/water/normal1.jpg');
+    const waterGeometry = new THREE.PlaneGeometry(1000, 1000);
+
+    const water = new Water(waterGeometry, {
+        scale: 1,
+        textureWidth: 1024,
+        textureHeight: 1024,
+        flowMap: flowMap,
+        normalMap0: normal0,
+        normalMap1: normal1
+    });
+
+    water.name = "water";
+    water.position.set(planeSize / 2, -1, planeSize / 2);
+    water.rotation.x = -Math.PI / 2;
+    return water;
+}
 
 export const getMeshForItem = async (item: AssetObject): Promise<Mesh|Group|null> => {
     let model;
@@ -254,7 +274,9 @@ export const getMeshForItem = async (item: AssetObject): Promise<Mesh|Group|null
             return null;
         case "plane":
             const plane = item as PlaneConfig;
-            return await getGroundPlane(plane.w, plane.h, plane.texture, plane.heightmap);
+            return await getGroundPlane(plane.size, plane.texture, plane.heightMap) as RenderedPlane;
+        case "water":
+            return await getWater(item as WaterConfig, 1000) as RenderedWater;
     }
     model = new Mesh(geometry, material);
     model.castShadow = true; //default is false

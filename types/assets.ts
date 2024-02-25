@@ -1,4 +1,4 @@
-export type AssetType = 'cursor'|'point'|'circle'|'rect'|'line'|'model'|'plane';
+export type AssetType = 'cursor'|'point'|'circle'|'rect'|'line'|'model'|'plane'|'water';
 
 export interface Asset {
     id?: string,
@@ -56,7 +56,15 @@ export interface ObjectDimensions {
 }
 
 export interface PlaneConfig extends Asset {
-    heightmap?: string
-    w: number
-    h: number
+    type: 'plane'
+    heightMap?: string
+    size: number,
+    texture:string
+}
+
+export interface WaterConfig extends Asset {
+    type: 'water'
+    flowMap?: string,
+    normalMap0?: string,
+    normalMap1?: string
 }
