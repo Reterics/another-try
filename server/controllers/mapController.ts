@@ -3,6 +3,10 @@ import MapService from "../services/mapService";
 
 
 class MapController {
+    async getAll(req: express.Request, res: express.Response) {
+        res.status(200).send(await MapService.getAll());
+    }
+
     async get(req: express.Request, res: express.Response) {
         let id;
         if (req.params && req.params.id) {

@@ -4,7 +4,6 @@ import AssetService from "../services/assetService";
 
 class AssetController {
     async getAll(req: express.Request, res: express.Response) {
-
         res.status(200).send(await AssetService.getAll());
     }
 

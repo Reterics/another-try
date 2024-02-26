@@ -125,9 +125,9 @@ async function init() {
 
     serverManager.connect();
     serverManager.on('connect', async () => {
-        const map = await serverManager.get('map');
-        if (map) {
-            hudController.setMaps([map as ATMap]);
+        const maps = await serverManager.get('maps');
+        if (maps && Array.isArray(maps)) {
+            hudController.setMaps(maps as ATMap[]);
             hudController.renderMaps();
         }
         const assets = await serverManager.get('assets');

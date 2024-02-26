@@ -21,6 +21,8 @@ app.route('/assets')
     .get(AssetController.getAll)
 app.route('/asset')
     .get(AssetController.get)
+app.route('/maps')
+    .get(MapController.getAll)
 app.route('/map')
     .get(MapController.get)
 
