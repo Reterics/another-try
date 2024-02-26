@@ -66,7 +66,7 @@ export class GltfScene {
             gravity: - 30,
             playerSpeed: 10,
             physicsSteps: 5,  //5
-            spawnCoordinates: [12, -7, 120] // X Y Z
+            spawnCoordinates: [12, 36, 120] // X Y Z
         };
         return this;
     }
@@ -115,7 +115,7 @@ export class GltfScene {
                 } );
             } else {
                 const material:MeshStandardMaterial = item.material as MeshStandardMaterial;
-                let hex = material.color.getHex() || 0;
+                let hex = material.color ? material.color.getHex() || 0 : 0;
                 if (material.map) {
                     hex = Number(hex.toString() + '999');
                     toMergeTexture[hex] = material;
@@ -136,7 +136,7 @@ export class GltfScene {
                 if (element) {
                     const mesh = element as Mesh;
                     const material = mesh.material as MeshStandardMaterial;
-                    if ( material.emissive.r !== 0 ) {
+                    if ( material.emissive &&  material.emissive.r !== 0 ) {
                         this.environment.attach( mesh );
                     } else if(material.map) {
                         const geom = mesh.geometry.clone();

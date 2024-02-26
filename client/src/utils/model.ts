@@ -274,7 +274,7 @@ export const getMeshForItem = async (item: AssetObject): Promise<Mesh|Group|null
             return null;
         case "plane":
             const plane = item as PlaneConfig;
-            return await getGroundPlane(plane.size, plane.texture, plane.heightMap) as RenderedPlane;
+            return await getGroundPlane(plane.size || 1000, plane.texture, plane.heightMap) as RenderedPlane;
         case "water":
             return await getWater(item as WaterConfig, 1000) as RenderedWater;
     }
