@@ -1,7 +1,18 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {ExtendedTriangle, MeshBVH, MeshBVHHelper, StaticGeometryGenerator} from 'three-mesh-bvh';
-import {Box3, BufferGeometry, Camera, Group, Light, Mesh, MeshStandardMaterial, Object3D, Scene} from "three";
+import {
+    Box3,
+    BufferGeometry,
+    Camera,
+    Group,
+    Light,
+    Mesh,
+    MeshStandardMaterial,
+    Object3D,
+    Scene,
+    ShaderMaterial
+} from "three";
 import {Water} from "three/examples/jsm/objects/Water2";
 import {CapsuleInfo, SceneParams} from "../types/main.ts";
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
@@ -48,6 +59,7 @@ export class GltfScene {
     fwdPressed = false; bkdPressed = false; lftPressed = false; rgtPressed = false;
     private readonly energyNode: HTMLProgressElement | null;
     private map: ATMap;
+    private shaderObjects: Mesh[];
 
     constructor(model: ATMap, scene: Scene, controls:OrbitControls, callback: Function) {
         this.scene = scene;
@@ -68,6 +80,7 @@ export class GltfScene {
             physicsSteps: 5,  //5
             spawnCoordinates: [12, 36, 120] // X Y Z
         };
+        this.shaderObjects = [];
         return this;
     }
 
@@ -84,47 +97,46 @@ export class GltfScene {
         // visual geometry setup
         const toMerge:toMergeType = {};
         const toMergeTexture:toMergeTextureType = {};
+        this.shaderObjects = [];
         this.environment = new THREE.Group();
 
         const items = await loadModel.items(this.map.items);
+
+        const processObject = (c: Object3D<Object3DEventMap>|Mesh|Light|Camera) => {
+            if (c instanceof Mesh && c.isMesh) {
+                if (c.material instanceof ShaderMaterial) {
+                    this.shaderObjects.push(c);
+                } else if (c.material instanceof MeshStandardMaterial) {
+                    const material = c.material;
+                    let hex = material.color ? material.color.getHex() || 0 : 0;
+                    if (material.map) {
+                        hex = Number(hex.toString() + '999');
+                        toMergeTexture[hex] = material;
+                    }
+
+                    if (!Array.isArray(toMerge[ hex ])) {
+                        toMerge[ hex ] =  [];
+                    }
+                    toMerge[ hex ].push( c );
+                } else {
+                    console.warn('Unsupported material: ', c.material);
+                }
+            } else if (c instanceof Light && c.isLight) {
+                // We always need to clone the light, otherwise it fails
+                this.scene.add( c.clone(true) as Object3D);
+            } else if(c instanceof Camera && c.isCamera) {
+                this.setSpawnCoordinates(c.position.x, c.position.y, c.position.z);
+            }
+        };
 
         for (let i = 0; i < items.length; i++){
             const item = items[i];
             item.updateMatrixWorld( true );
 
             if (item instanceof THREE.Group) {
-                item.traverse( (c: Object3D<Object3DEventMap>|Mesh|Light|Camera) => {
-                    if (c instanceof Mesh && c.isMesh) {
-                        const material:MeshStandardMaterial = c.material as MeshStandardMaterial;
-                        let hex = material.color.getHex() || 0;
-                        if (material.map) {
-                            hex = Number(hex.toString() + '999');
-                            toMergeTexture[hex] = material;
-                        }
-
-                        if (!Array.isArray(toMerge[ hex ])) {
-                            toMerge[ hex ] =  [];
-                        }
-                        toMerge[ hex ].push( c );
-                    } else if (c instanceof Light && c.isLight) {
-                        // We always need to clone the light, otherwise it fails
-                        this.scene.add( c.clone(true) as Object3D);
-                    } else if(c instanceof Camera && c.isCamera) {
-                        this.setSpawnCoordinates(c.position.x, c.position.y, c.position.z);
-                    }
-                } );
+                item.traverse(processObject);
             } else {
-                const material:MeshStandardMaterial = item.material as MeshStandardMaterial;
-                let hex = material.color ? material.color.getHex() || 0 : 0;
-                if (material.map) {
-                    hex = Number(hex.toString() + '999');
-                    toMergeTexture[hex] = material;
-                }
-
-                if (!Array.isArray(toMerge[ hex ])) {
-                    toMerge[ hex ] =  [];
-                }
-                toMerge[ hex ].push( item );
+                processObject(item);
             }
         }
 
@@ -267,21 +279,15 @@ export class GltfScene {
         });
     }
 
-    addToScene() {
-        if (this.loaded) {
-            if (this.visualizer && !this.scene.children.find(c=>c===this.visualizer)) {
-                this.scene.add( this.visualizer );
-                this.scene.add( this.collider );
-                this.scene.add( this.environment );
-            }
-        } else {
-            return this.initMethod.then(()=>{
-                if (this.visualizer && !this.scene.children.find(c=>c===this.visualizer)) {
-                    this.scene.add( this.visualizer );
-                    this.scene.add( this.collider );
-                    this.scene.add( this.environment );
-                }
-            });
+    async addToScene() {
+        if (!this.loaded) {
+            await this.initMethod;
+        }
+        if (this.visualizer && !this.scene.children.find(c=>c===this.visualizer)) {
+            this.scene.add( this.visualizer );
+            this.scene.add( this.collider );
+            this.scene.add( this.environment );
+            this.shaderObjects.forEach(mesh => this.scene.add(mesh));
         }
     }
 
