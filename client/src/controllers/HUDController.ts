@@ -1,10 +1,11 @@
 import menuTemplate from '../pages/menu.html?raw'
 import pauseMenuTemplate from '../pages/pause.html?raw'
 import inGameTemplate from '../pages/ingame.html?raw'
-import {CreatorController} from "./CreatorController.ts";
-import {PlayerNames, PlayerScores} from "../types/main.ts";
-import {EventManager} from "../lib/EventManager.ts";
-import {ATMap} from "../../../types/map.ts";
+import { CreatorController } from "./CreatorController.ts";
+import { PlayerNames, PlayerScores } from "../types/main.ts";
+import { EventManager } from "../lib/EventManager.ts";
+import { ATMap } from "../../../types/map.ts";
+import { demoMap } from "../terrain/demoMap.ts";
 
 export class HUDController extends EventManager{
     private readonly inGame: HTMLDivElement;
@@ -100,19 +101,7 @@ export class HUDController extends EventManager{
         };
 
         this.maps = [
-            {
-                // For development purposes
-                id: 'fallback',
-                name: 'Scene on Siménai by hillforts.eu',
-                items: [
-                    {
-                        type: "model",
-                        path: 'assets/scenes/simenai/simenai.glb',
-                        name: 'simenai'
-                    }
-                ],
-                texture: './assets/scenes/simenai/textures/Simenai_diffuse.jpeg'
-            }
+            demoMap
         ];
 
         this.cursor = 0;

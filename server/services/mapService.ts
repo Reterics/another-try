@@ -9,7 +9,7 @@ class MapService {
         for (let i = 0; i < maps.length; i++) {
             maps[i].selected = undefined;
         }
-        return maps;
+        return maps.filter(map => map.name && map.name.match(/(\d{4}-\d{4})/g));
     }
 
     async get(id: string) {
