@@ -1,4 +1,5 @@
 import {Point, Rectangle} from "../../../types/assets.ts";
+import {Coord, Position} from "../types/math.ts";
 
 export const degToRad = (degrees: number) => (Math.PI / 180) * degrees;
 
@@ -38,3 +39,57 @@ export const roundToPrecision = (value: number, precision: number) => {
     const multiplier = Math.pow(10, precision || 0);
     return Math.round(value * multiplier) / multiplier;
 }
+
+export const stringToCoord = (name: string): Coord => {
+    const parts = name.split('-');
+    const x = Number(parts.shift() || 0);
+    const y = Number(parts.shift() || 0);
+    return [
+        Number.isNaN(x) ? 0 : x,
+        Number.isNaN(y) ? 0 : y
+    ];
+};
+
+export const getCoordNeighbours = (position: Position, limit = 100) => {
+    const xMin = 1000 * Math.floor(position[0] / 1000) + limit,
+        xMax = 1000 * Math.ceil(position[0] / 1000) - limit,
+        yMin = 1000 * Math.floor(position[1] / 1000) + limit,
+        yMax = 1000 * Math.ceil(position[1] / 1000) - limit;
+
+    const output = [];
+
+    // West
+    if (position[0] < xMin) {
+        output.push([Math.floor(position[0] / 1000) - 1, Math.floor(position[1] / 1000)]);
+    }
+    // East
+    if (position[0] > xMax) {
+        output.push([Math.ceil(position[0] / 1000), Math.floor(position[1] / 1000)]);
+    }
+    // North
+    if (position[1] < yMin) {
+        output.push([Math.floor(position[0] / 1000), Math.floor(position[1] / 1000) - 1]);
+    }
+    // South
+    if (position[1] > yMax) {
+        output.push([Math.floor(position[0] / 1000), Math.ceil(position[1] / 1000)]);
+    }
+    // Southwest
+    if (position[0] < xMin && position[1] > yMax) {
+        output.push([Math.floor(position[0] / 1000) - 1, Math.ceil(position[1] / 1000)]);
+    }
+    // Northwest
+    if (position[0] < xMin && position[1] < yMin) {
+        output.push([Math.floor(position[0] / 1000) - 1, Math.floor(position[1] / 1000) - 1]);
+    }
+    // Southeast
+    if (position[0] > xMax && position[1] > yMax) {
+        output.push([Math.ceil(position[0] / 1000), Math.ceil(position[1] / 1000)]);
+    }
+    // Northeast
+    if (position[0] > xMax && position[1] < yMin) {
+        output.push([Math.ceil(position[0] / 1000), Math.floor(position[1] / 1000) - 1]);
+    }
+
+    return output;
+};

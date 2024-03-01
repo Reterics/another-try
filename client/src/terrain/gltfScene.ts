@@ -20,6 +20,7 @@ import {Hero} from "../models/hero.ts";
 import {Object3DEventMap} from "three/src/core/Object3D";
 import {loadModel} from "../utils/model.ts";
 import {ATMap} from "../../../types/map.ts";
+// import {getCoordNeighbours} from "../utils/math.ts";
 
 let tempVector = new THREE.Vector3();
 let tempVector2 = new THREE.Vector3();
@@ -356,6 +357,7 @@ export class GltfScene {
                 player.lookAt(player.position.clone().add(tempVector));
                 hero.changeAnimation('Walk');
                 moving = true;
+                // console.log(getCoordNeighbours([player.position.x, player.position.z, player.position.y], 100));
             } else {
                 hero.changeAnimation(this.playerIsOnGround ? 'Idle' : 'Jump');
             }
