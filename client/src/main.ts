@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import {Object3D, PerspectiveCamera, Scene, Vector3, WebGLRenderer} from 'three'
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
 import {initSky} from "./initMethods";
-import {GltfScene} from "./terrain/gltfScene";
+import {TerrainManager} from "./lib/terrainManager.ts";
 import {Hero} from "./models/hero";
 import {HUDController} from "./controllers/HUDController.ts";
 import {acceleratedRaycast, computeBoundsTree, disposeBoundsTree} from "three-mesh-bvh";
@@ -23,7 +23,7 @@ let prevTime = performance.now();
 let isTabActive: boolean = true;
 const direction = new THREE.Vector3();
 let heroPlayer: Object3D;
-let map: GltfScene;
+let map: TerrainManager;
 let animationRunning = false;
 
 const hudController = new HUDController();
@@ -153,7 +153,7 @@ async function init() {
     hudController.on('map:select', async (selected: ATMap)=> {
         hudController.openDialog('Loading', 'Create Map...');
         if (!map) {
-            map = await GltfScene.CreateMap(selected, scene, controls);
+            map = await TerrainManager.CreateMap(selected, scene, controls);
             map.initPlayerEvents();
         } else {
             await map.updateScene(selected);

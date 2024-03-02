@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import {ExtendedTriangle, MeshBVH, MeshBVHHelper, StaticGeometryGenerator} from 'three-mesh-bvh';
+import {ExtendedTriangle, MeshBVH, StaticGeometryGenerator} from 'three-mesh-bvh';
 import {
     Box3,
     BufferGeometry,
@@ -13,7 +13,6 @@ import {
     Scene,
     ShaderMaterial
 } from "three";
-import {Water} from "three/examples/jsm/objects/Water2";
 import {CapsuleInfo, SceneParams} from "../types/main.ts";
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
 import {Hero} from "../models/hero.ts";
@@ -44,13 +43,12 @@ interface toMergeTextureType {
 /*function getAzimuthalAngle(controls) {
     return Math.atan2(controls.camera.rotation.x, controls.camera.rotation.z);
 }*/
-export class GltfScene {
-    protected visualizer: MeshBVHHelper | undefined;
+export class TerrainManager {
     protected collider: Mesh;
     protected environment: Group;
     params: SceneParams;
     protected scene: Scene;
-    private initMethod: Promise<GltfScene>;
+    initMethod: Promise<TerrainManager>;
     private loaded = false;
     private controls: OrbitControls;
     playerIsOnGround = false;
@@ -74,7 +72,6 @@ export class GltfScene {
 
         this.params = {
             displayCollider: false,
-            displayBVH: false,
             visualizeDepth: 10,
             gravity: - 30,
             playerSpeed: 10,
@@ -85,16 +82,16 @@ export class GltfScene {
         return this;
     }
 
-    static CreateMap(map: ATMap, scene: Scene, controls:OrbitControls): Promise<GltfScene> {
+    static CreateMap(map: ATMap, scene: Scene, controls:OrbitControls): Promise<TerrainManager> {
         return new Promise(resolve => {
-            new GltfScene(map, scene, controls, resolve);
+            new TerrainManager(map, scene, controls, resolve);
         })
     }
     setSpawnCoordinates (x: number, y: number, z: number) {
         this.params.spawnCoordinates = [x, y, z];
     }
 
-    async _loadMapItems(callback: Function|undefined): Promise<GltfScene> {
+    async _loadMapItems(callback: Function|undefined): Promise<TerrainManager> {
         // visual geometry setup
         const toMerge:toMergeType = {};
         const toMergeTexture:toMergeTextureType = {};
@@ -210,8 +207,6 @@ export class GltfScene {
         colliderMaterial.opacity = 0.5;
         colliderMaterial.transparent = true;
 
-        this.visualizer = new MeshBVHHelper( this.collider, this.params.visualizeDepth );
-
         this.loaded = true;
         if (typeof callback === 'function') {
             callback(this);
@@ -284,8 +279,7 @@ export class GltfScene {
         if (!this.loaded) {
             await this.initMethod;
         }
-        if (this.visualizer && !this.scene.children.find(c=>c===this.visualizer)) {
-            this.scene.add( this.visualizer );
+        if (this.collider && !this.scene.children.find(c=>c===this.collider)) {
             this.scene.add( this.collider );
             this.scene.add( this.environment );
             this.shaderObjects.forEach(mesh => this.scene.add(mesh));
@@ -295,9 +289,8 @@ export class GltfScene {
     updatePlayer(delta:number, camera: THREE.PerspectiveCamera, hero: Hero) {
         const player = hero ? hero.getObject() : null;
         let moving = false;
-        if (this.collider && camera && player && this.visualizer) {
-            this.collider.visible = this.params.displayCollider;
-            this.visualizer.visible = this.params.displayBVH;
+        if (this.collider && camera && player) {
+            this.collider.visible = this.params.displayCollider || false;
 
             if(this.sprinting) {
                 if(this.energy > 0) {
@@ -450,12 +443,10 @@ export class GltfScene {
         }
     }
 
-    async updateScene (selectedMap: ATMap): Promise<GltfScene> {
-        if (this.map.id !== selectedMap.id && this.visualizer) {
-            this.visualizer.clear();
+    async updateScene (selectedMap: ATMap): Promise<TerrainManager> {
+        if (this.map.id !== selectedMap.id && this.collider) {
             this.collider.clear();
             this.environment.clear();
-            this.scene.remove(this.visualizer);
             this.scene.remove(this.collider);
             this.scene.remove(this.environment);
 
@@ -463,23 +454,6 @@ export class GltfScene {
             return this._loadMapItems(undefined);
         }
         return this;
-    }
-
-    addWater (y = -10, flowMapURL = 'textures/water/flowmap_water.png') {
-        const textureLoader = new THREE.TextureLoader();
-        const waterGeometry = new THREE.PlaneGeometry( 4000, 4000 );
-        const flowMap = textureLoader.load(flowMapURL);
-
-        const water = new Water( waterGeometry, {
-            scale: 2,
-            textureWidth: 1024,
-            textureHeight: 1024,
-            flowMap: flowMap
-        } );
-
-        water.position.y = y;
-        water.rotation.x = Math.PI * - 0.5;
-        this.scene.add( water );
     }
 
     getBoundingBox() {

@@ -31,8 +31,7 @@ export interface CapsuleInfo {
 }
 
 export interface SceneParams {
-    displayCollider: boolean,
-    displayBVH: boolean,
+    displayCollider?: boolean,
     visualizeDepth: number,
     gravity: number,
     playerSpeed: number,

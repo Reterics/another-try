@@ -5,7 +5,7 @@ import { CreatorController } from "./CreatorController.ts";
 import { PlayerNames, PlayerScores } from "../types/main.ts";
 import { EventManager } from "../lib/EventManager.ts";
 import { ATMap } from "../../../types/map.ts";
-import { demoMap } from "../terrain/demoMap.ts";
+import { demoMap } from "../models/demoMap.ts";
 
 export class HUDController extends EventManager{
     private readonly inGame: HTMLDivElement;
