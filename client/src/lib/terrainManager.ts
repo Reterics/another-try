@@ -19,6 +19,7 @@ import {Hero} from "../models/hero.ts";
 import {Object3DEventMap} from "three/src/core/Object3D";
 import {loadModel} from "../utils/model.ts";
 import {ATMap} from "../../../types/map.ts";
+import {TerrainEnvironment} from "../types/three.ts";
 // import {getCoordNeighbours} from "../utils/math.ts";
 
 let tempVector = new THREE.Vector3();
@@ -46,6 +47,8 @@ interface toMergeTextureType {
 export class TerrainManager {
     protected collider: Mesh;
     protected environment: Group;
+    protected environments: TerrainEnvironment[];
+
     params: SceneParams;
     protected scene: Scene;
     initMethod: Promise<TerrainManager>;
@@ -58,12 +61,12 @@ export class TerrainManager {
     fwdPressed = false; bkdPressed = false; lftPressed = false; rgtPressed = false;
     private readonly energyNode: HTMLProgressElement | null;
     private map: ATMap;
-    private shaderObjects: Mesh[];
 
     constructor(model: ATMap, scene: Scene, controls:OrbitControls, callback: Function) {
         this.scene = scene;
         this.controls = controls;
         this.environment = new THREE.Group();
+        this.environments = [];
         this.collider = new THREE.Mesh();
         this.map = model;
         this.initMethod = this._loadMapItems(callback);
@@ -78,7 +81,6 @@ export class TerrainManager {
             physicsSteps: 5,  //5
             spawnCoordinates: [12, 36, 120] // X Y Z
         };
-        this.shaderObjects = [];
         return this;
     }
 
@@ -91,19 +93,27 @@ export class TerrainManager {
         this.params.spawnCoordinates = [x, y, z];
     }
 
-    async _loadMapItems(callback: Function|undefined): Promise<TerrainManager> {
+    async importEnvironment(map: ATMap): Promise<TerrainEnvironment> {
+        const loadedTerrain = map.name ? this.environments.find(e => e.name === map.name) : undefined;
+        if (map.name && loadedTerrain) {
+            return loadedTerrain;
+        }
+        const terrainEnv: TerrainEnvironment = {
+            name: map.name || 'unknown-position',
+            environment: new THREE.Group(),
+            shaders: []
+        };
+
         // visual geometry setup
         const toMerge:toMergeType = {};
         const toMergeTexture:toMergeTextureType = {};
-        this.shaderObjects = [];
-        this.environment = new THREE.Group();
 
-        const items = await loadModel.items(this.map.items);
+        const items = await loadModel.items(map.items);
 
         const processObject = (c: Object3D<Object3DEventMap>|Mesh|Light|Camera) => {
             if (c instanceof Mesh && c.isMesh) {
                 if (c.material instanceof ShaderMaterial) {
-                    this.shaderObjects.push(c);
+                    terrainEnv.shaders.push(c);
                 } else if (c.material instanceof MeshStandardMaterial) {
                     const material = c.material;
                     let hex = material.color ? material.color.getHex() || 0 : 0;
@@ -121,7 +131,7 @@ export class TerrainManager {
                 }
             } else if (c instanceof Light && c.isLight) {
                 // We always need to clone the light, otherwise it fails
-                this.scene.add( c.clone(true) as Object3D);
+                terrainEnv.shaders.push( c.clone(true) as Object3D);
             } else if(c instanceof Camera && c.isCamera) {
                 this.setSpawnCoordinates(c.position.x, c.position.y, c.position.z);
             }
@@ -147,7 +157,7 @@ export class TerrainManager {
                     const mesh = element as Mesh;
                     const material = mesh.material as MeshStandardMaterial;
                     if ( material.emissive &&  material.emissive.r !== 0 ) {
-                        this.environment.attach( mesh );
+                        terrainEnv.environment.attach( mesh );
                     } else if(material.map) {
                         const geom = mesh.geometry.clone();
                         geom.applyMatrix4( mesh.matrixWorld );
@@ -156,7 +166,7 @@ export class TerrainManager {
                         newMesh.receiveShadow = true;
                         newMesh.material.shadowSide = 2;
                         newMesh.material.side = THREE.DoubleSide;
-                        this.environment.add( newMesh );
+                        terrainEnv.environment.add( newMesh );
 
                     } else {
                         const geom = mesh.geometry.clone();
@@ -169,7 +179,7 @@ export class TerrainManager {
 
             if ( visualGeometries.length ) {
                 const newGeom = BufferGeometryUtils.mergeGeometries(visualGeometries);
-                    // BufferGeometryUtils.mergeBufferGeometries( visualGeometries ) ;
+                // BufferGeometryUtils.mergeBufferGeometries( visualGeometries ) ;
                 if (newGeom) {
                     let material;
                     if (toMergeTexture[hex]) {
@@ -185,7 +195,7 @@ export class TerrainManager {
                     newMesh.material.shadowSide = 2;
                     newMesh.material.side = THREE.DoubleSide;
 
-                    this.environment.add( newMesh );
+                    terrainEnv.environment.add( newMesh );
                 } else {
                     console.error('Merging visual geometries failed');
                 }
@@ -193,6 +203,18 @@ export class TerrainManager {
                 console.error('No visual geometries found')
             }
         }
+        return terrainEnv;
+    }
+
+    refreshCollider() {
+        this.environment.clear();
+
+        // Merge environment children
+        this.environments.forEach(e => {
+            e.environment.children.forEach(object=> {
+                this.environment.children.push(object);
+            });
+        });
 
         const staticGenerator = new StaticGeometryGenerator( this.environment );
         staticGenerator.attributes = [ 'position' ];
@@ -200,12 +222,21 @@ export class TerrainManager {
         const mergedGeometry = staticGenerator.generate();
         mergedGeometry.boundsTree = new MeshBVH( mergedGeometry );
 
-        this.collider = new THREE.Mesh( mergedGeometry );
+        this.collider.clear();
+        this.collider =  new THREE.Mesh( mergedGeometry );
         this.collider.name = 'collider';
         const colliderMaterial: MeshStandardMaterial = this.collider.material as MeshStandardMaterial;
         colliderMaterial.wireframe = true;
         colliderMaterial.opacity = 0.5;
         colliderMaterial.transparent = true;
+        return this.collider;
+    }
+
+    async _loadMapItems(callback: Function|undefined): Promise<TerrainManager> {
+        const terrain = await this.importEnvironment(this.map);
+        this.environments.push(terrain);
+
+        this.refreshCollider();
 
         this.loaded = true;
         if (typeof callback === 'function') {
@@ -282,7 +313,9 @@ export class TerrainManager {
         if (this.collider && !this.scene.children.find(c=>c===this.collider)) {
             this.scene.add( this.collider );
             this.scene.add( this.environment );
-            this.shaderObjects.forEach(mesh => this.scene.add(mesh));
+            this.environments
+                .flatMap((terrain)=>terrain.shaders)
+                .forEach(mesh => this.scene.add(mesh));
         }
     }
 
@@ -443,12 +476,20 @@ export class TerrainManager {
         }
     }
 
+    dispose() {
+        this.environments
+            .flatMap((terrain)=>terrain.shaders)
+            .forEach(mesh => this.scene.remove(mesh));
+        this.collider.clear();
+        this.environment.clear();
+        this.scene.remove(this.collider);
+        this.scene.remove(this.environment);
+        this.environments.length = 0;
+    }
+
     async updateScene (selectedMap: ATMap): Promise<TerrainManager> {
         if (this.map.id !== selectedMap.id && this.collider) {
-            this.collider.clear();
-            this.environment.clear();
-            this.scene.remove(this.collider);
-            this.scene.remove(this.environment);
+            this.dispose();
 
             this.map = selectedMap;
             return this._loadMapItems(undefined);
