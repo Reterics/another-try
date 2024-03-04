@@ -19,7 +19,7 @@ import {Hero} from "../models/hero.ts";
 import {Object3DEventMap} from "three/src/core/Object3D";
 import {loadModel} from "../utils/model.ts";
 import {ATMap} from "../../../types/map.ts";
-import {TerrainEnvironment} from "../types/three.ts";
+import {RenderedPlane, TerrainEnvironment} from "../types/three.ts";
 // import {getCoordNeighbours} from "../utils/math.ts";
 
 let tempVector = new THREE.Vector3();
@@ -93,6 +93,61 @@ export class TerrainManager {
         this.params.spawnCoordinates = [x, y, z];
     }
 
+    updateMapTexture(map: TerrainEnvironment) {console.log(map);
+        if (map.texture) {
+            return map.texture;
+        }
+
+        const plane = map.environment.children
+            .find(o => o.name === 'plane') as RenderedPlane | undefined;
+        if (!plane) {
+            return undefined;
+        }
+        const vertices = plane.geometry.attributes.position.array;
+        if (!vertices) {
+            return undefined;
+        }
+        plane.geometry.computeVertexNormals(); // Optional: Compute normals for better lighting
+        plane.geometry.computeBoundingBox();
+        const size = 100,
+            maxHeight = 100;
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d') as CanvasRenderingContext2D;
+
+        canvas.width = size;
+        canvas.height = size;
+
+        for (let j = 0; j < size; j++) {
+            for (let i = 0; i < size; i++) {
+                const n = (j * size + i) * 3; // Adjusted index calculation for row-major order
+
+                const raw =  vertices[n + 1];
+
+                // This had a value between 0-255 where 0-90 is blue, and between 91-200 green, above 200 should be brown
+                const hexValue = raw / maxHeight * 255;
+
+                // Determine color based on hexValue
+                let color;
+                if (hexValue <= 20) {
+                    // Blue for low elevations
+                    color = `rgb(0, 0, ${255 - hexValue})`; // Darker blue for deeper
+                } else if (hexValue <= 200) {
+                    // Green for mid elevations
+                    color = `rgb(0, ${255 - hexValue}, 0)`; // Darker green for higher
+                } else {
+                    // Brown for high elevations
+                    color = `rgb(${hexValue}, ${42}, 0)`;
+                }
+
+                // Set color and draw pixel
+                context.fillStyle = color;
+                context.fillRect(i, j, 1, 1); // Draw a 1x1 rectangle at the (i, j) location
+            }
+        }
+        map.texture = canvas.toDataURL();
+        return map.texture;
+    }
+
     async importEnvironment(map: ATMap): Promise<TerrainEnvironment> {
         const loadedTerrain = map.name ? this.environments.find(e => e.name === map.name) : undefined;
         if (map.name && loadedTerrain) {
@@ -101,7 +156,8 @@ export class TerrainManager {
         const terrainEnv: TerrainEnvironment = {
             name: map.name || 'unknown-position',
             environment: new THREE.Group(),
-            shaders: []
+            shaders: [],
+            texture: map.texture
         };
 
         // visual geometry setup
@@ -166,6 +222,7 @@ export class TerrainManager {
                         newMesh.receiveShadow = true;
                         newMesh.material.shadowSide = 2;
                         newMesh.material.side = THREE.DoubleSide;
+                        newMesh.name = mesh.name;
                         terrainEnv.environment.add( newMesh );
 
                     } else {
@@ -203,6 +260,8 @@ export class TerrainManager {
                 console.error('No visual geometries found')
             }
         }
+
+        this.updateMapTexture(terrainEnv);
         return terrainEnv;
     }
 
@@ -234,6 +293,9 @@ export class TerrainManager {
 
     async _loadMapItems(callback: Function|undefined): Promise<TerrainManager> {
         const terrain = await this.importEnvironment(this.map);
+        if (terrain.texture && terrain.texture !== this.map.texture) {
+            this.map.texture = terrain.texture;
+        }
         this.environments.push(terrain);
 
         this.refreshCollider();

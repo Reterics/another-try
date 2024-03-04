@@ -17,7 +17,8 @@ export interface RenderedWater extends Water {
 }
 
 export interface TerrainEnvironment {
-    name: string,
-    environment: Group,
+    name: string
+    environment: Group
     shaders: Object3D[]
+    texture?: string
 }
