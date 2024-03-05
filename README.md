@@ -1,18 +1,34 @@
-![Another Try](./client/public/menu2.jpg)
+<p align="center">
+  <img src="./client/public/assets/images/png/logo-no-background.png" alt="Another Try Logo" height="85"/>
+</p>
 
-# Another Try
-
-Another Try is a cutting-edge multiplayer FPS game, developed with the powerful THREE.js library in Typescript.
+Another Try is a multiplayer RPG game, based on the powerful THREE.js library.
 
 Dive deep into a world where the objective is simple: Keep it alive at all costs.
 
-## Key Features
- - **Mysterious Entity**: As players, you are tasked with a unique mission; to guard an entity. But what is it? And why is it so crucial? Unravel the story as you play.
- - **Intense Multiplayer Action**: Team up with others or compete against them, but you never know that someone is your friend or your enemy. **Friendly fire is on.**
- - **Simple Graphics**: Using low polygon count and minimalist environment, you can be sure, that even your phone can power up the game.
- - **Offline/Online Game Modes**: You can run the game without internet access to practice or explore
+## Roadmap
+ - **Pre-Alpha**:
+   - Initial planed rendered (procedural terrain generation)
+   - Building environment with base blocks
+   - Multiplayer experience
+   - Chat system
+ - **Alpha**:
+   - NPC Characters: People, animals
+   - Extended building System
+   - Improved shaders on grasses and terrain
+ - **Early Access**:
+   - Account registration
+   - Character customization
+   - Day and night cycle
+   - Weather system
+   - Improved Chat system
+ - **Open Beta**:
+   - Hunting
+   - Items
+   - Quests
+   - Vendors
 
-![Another Try In Game](./client/public/ingame3.jpg)
+![Another Try In Game](./client/public/ingame4.png)
 
 ## Requirements
 
