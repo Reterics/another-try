@@ -103,16 +103,21 @@ export class TerrainManager {
         if (!plane) {
             return undefined;
         }
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d') as CanvasRenderingContext2D;
+        const size = 100,
+            maxHeight = 100;
+
+        if (plane.heightMap) {
+            map.texture = plane.heightMap;
+            return map.texture;
+        }
+
         const vertices = plane.geometry.attributes.position.array;
         if (!vertices) {
             return undefined;
         }
-        plane.geometry.computeVertexNormals(); // Optional: Compute normals for better lighting
-        plane.geometry.computeBoundingBox();
-        const size = 100,
-            maxHeight = 100;
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d') as CanvasRenderingContext2D;
+
 
         canvas.width = size;
         canvas.height = size;
@@ -223,6 +228,9 @@ export class TerrainManager {
                         newMesh.material.shadowSide = 2;
                         newMesh.material.side = THREE.DoubleSide;
                         newMesh.name = mesh.name;
+                        if (newMesh.name === "plane") {
+                            (newMesh as RenderedPlane).heightMap = (mesh as RenderedPlane).heightMap;
+                        }
                         terrainEnv.environment.add( newMesh );
 
                     } else {
