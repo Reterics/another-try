@@ -44,7 +44,7 @@ export class MinimapController extends EventManager{
             1, // near
             2000 // far
         );
-        this.camera.zoom = 8;
+        this.camera.zoom = 1;
 
         this.renderer = new THREE.WebGLRenderer({ canvas: minimapCanvas });
         //this.renderer.setSize(this.dimensions.width, this.dimensions.height);
@@ -65,8 +65,19 @@ export class MinimapController extends EventManager{
     }
 
     zoom (delta: number) {
-        this.camera.zoom += delta;
-        console.log('this camera zoom: ', this.camera.zoom);
+        if (delta < 0) {
+            if (0.11 < this.camera.zoom && this.camera.zoom <= 1) {
+                this.camera.zoom -= 0.1;
+            } else if (this.camera.zoom > 1){
+                this.camera.zoom += delta;
+            }
+        } else {
+            if (0.1 <= this.camera.zoom && this.camera.zoom < 1) {
+                this.camera.zoom += 0.1;
+            } else {
+                this.camera.zoom += delta;
+            }
+        }
         this.camera.updateProjectionMatrix();
     }
 
