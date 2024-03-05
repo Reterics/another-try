@@ -10,6 +10,7 @@ export class MinimapController extends EventManager{
     private renderer: WebGLRenderer;
     private dimensions: MinimapDimensions;
     private outer: HTMLDivElement;
+
     constructor({boundingBox, texture, target}: MinimapInputArguments) {
         super();
 
@@ -36,16 +37,13 @@ export class MinimapController extends EventManager{
         };
 
         this.camera = new THREE.OrthographicCamera(
-            this.dimensions.left, // left
-            this.dimensions.right, // right
+            -this.dimensions.right, // left
+            -this.dimensions.left, // right
             this.dimensions.top, // top
             this.dimensions.bottom, // bottom
             1, // near
             2000 // far
         );
-        this.camera.up.set(0,1,0);
-        this.camera.position.set(0, 10, 0); // Set camera position
-        this.camera.lookAt(0, 0, 0); // Look at the center
         this.camera.zoom = 8;
 
         this.renderer = new THREE.WebGLRenderer({ canvas: minimapCanvas });
@@ -56,8 +54,8 @@ export class MinimapController extends EventManager{
     update(position?: Vector3, rotation?: Euler) {
         if (position) {
             //const vector2D = position.clone().project(this.camera); // Assuming `camera` is your orthographic camera
-            this.camera.position.set(position.x, 15, position.z);
-            this.camera.lookAt(position.x, 0, position.z);
+            this.camera.position.set(position.x, -position.z, -150);
+            this.camera.lookAt(position.x, -position.z, 0);
         }
         if (rotation) {
 
@@ -68,6 +66,7 @@ export class MinimapController extends EventManager{
 
     zoom (delta: number) {
         this.camera.zoom += delta;
+        console.log('this camera zoom: ', this.camera.zoom);
         this.camera.updateProjectionMatrix();
     }
 
