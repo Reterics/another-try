@@ -9,7 +9,7 @@ import {
     MeshStandardMaterial,
     Object3D,
     Scene,
-    ShaderMaterial
+    ShaderMaterial, Vector3
 } from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {ExtendedTriangle, MeshBVH, StaticGeometryGenerator} from 'three-mesh-bvh';
@@ -20,8 +20,15 @@ import {Object3DEventMap} from "three/src/core/Object3D";
 import {loadModel} from "../utils/model.ts";
 import {ATMap, ATMapsObject} from "../../../types/map.ts";
 import {RenderedPlane, TerrainEnvironment} from "../types/three.ts";
-import {coordToString, getCoordNeighbours} from "../utils/math.ts";
+import {
+    coordToCoordDiff,
+    coordToString,
+    getCoordNeighbours,
+    vector3ToCoord
+} from "../utils/math.ts";
 import {ServerManager} from "./ServerManager.ts";
+import {PlaneConfig} from "../../../types/assets.ts";
+import {Coord} from "../types/math.ts";
 // import {getCoordNeighbours} from "../utils/math.ts";
 
 let tempVector = new THREE.Vector3();
@@ -161,7 +168,7 @@ export class TerrainManager {
         return map.texture;
     }
 
-    async importEnvironment(map: ATMap): Promise<TerrainEnvironment> {
+    async importEnvironment(map: ATMap, position?: Vector3): Promise<TerrainEnvironment> {
         const loadedTerrain = map.name ? this.environments.find(e => e.name === map.name) : undefined;
         if (map.name && loadedTerrain) {
             return loadedTerrain;
@@ -172,6 +179,15 @@ export class TerrainManager {
             shaders: [],
             texture: map.texture
         };
+
+        // We should have a plane by default
+        if (!map.items.find(m=>m.type === "plane")) {
+            map.items.unshift({
+                "type": "plane",
+                "texture": "/assets/textures/green-grass-textures.jpg",
+                "size": 1000
+            } as PlaneConfig)
+        }
 
         // visual geometry setup
         const toMerge:toMergeType = {};
@@ -225,6 +241,9 @@ export class TerrainManager {
                 if (element) {
                     const mesh = element as Mesh;
                     const material = mesh.material as MeshStandardMaterial;
+                    if (position) {
+                        mesh.position.add(position);
+                    }
                     if ( material.emissive &&  material.emissive.r !== 0 ) {
                         terrainEnv.environment.attach( mesh );
                     } else if(material.map) {
@@ -238,6 +257,9 @@ export class TerrainManager {
                         newMesh.name = mesh.name;
                         if (newMesh.name === "plane") {
                             (newMesh as RenderedPlane).heightMap = (mesh as RenderedPlane).heightMap;
+                        }
+                        if (position) {
+                            newMesh.position.add(position);
                         }
                         terrainEnv.environment.add( newMesh );
 
@@ -267,7 +289,9 @@ export class TerrainManager {
                     newMesh.receiveShadow = true;
                     newMesh.material.shadowSide = 2;
                     newMesh.material.side = THREE.DoubleSide;
-
+                    if (position) {
+                        newMesh.position.add(position);
+                    }
                     terrainEnv.environment.add( newMesh );
                 } else {
                     console.error('Merging visual geometries failed');
@@ -287,6 +311,7 @@ export class TerrainManager {
         // Merge environment children
         this.environments.forEach(e => {
             e.environment.children.forEach(object=> {
+                console.log(object.position);
                 this.environment.children.push(object);
             });
         });
@@ -593,8 +618,10 @@ export class TerrainManager {
         const loadedMaps = this.environments.map(m=>m.name);
         const availableMaps =
             getCoordNeighbours([player.position.x, player.position.z, player.position.y], 100)
-                .map(m=> coordToString(m))
-                .filter(m=>!loadedMaps.includes(m))
+                .map(m=> [m, coordToString(m)] as [Coord, string])
+                .filter((m) => {
+                    return !loadedMaps.includes(m[1]);
+                });
 
         const nextMap = availableMaps.shift();
 
@@ -602,8 +629,38 @@ export class TerrainManager {
             return;
         }
         console.log('Next map to load:', nextMap);
-        if (this.maps[nextMap] !== undefined) {
-            this.maps[nextMap] = await serverManager.get('map?id=' + nextMap) as ATMap | null;
+        if (this.maps[nextMap[1]] === undefined) {
+            const map = await serverManager.get('map?id=' + nextMap[1]);
+            if (map) {
+                this.maps[nextMap[1]] = map as ATMap;
+            } else {
+                this.maps[nextMap[1]] = {
+                    items: [
+                        {
+                            "type": "plane",
+                            "texture": "/assets/textures/green-grass-textures.jpg",
+                            "size": 1000
+                        }
+                    ],
+                    id: nextMap[1],
+                    name: nextMap[1],
+                    author: ""
+                } as ATMap
+            }
+            if (this.maps[nextMap[1]]) {
+                const movePosition = coordToCoordDiff(nextMap[0], vector3ToCoord(player.position));
+                console.log(movePosition);
+                const terrain = await this.importEnvironment(this.maps[nextMap[1]] as ATMap,movePosition);
+                if (terrain.texture && terrain.texture !== this.map.texture) {
+                    this.map.texture = terrain.texture;
+                }
+                this.environments.push(terrain);
+
+                this.refreshCollider();
+                console.log('Map loaded');
+            }
+        } else {
+            console.log('Map is already loaded');
         }
     }
 

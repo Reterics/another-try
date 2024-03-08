@@ -9,5 +9,5 @@ export interface ATMap {
 }
 
 export interface ATMapsObject {
-    [key: string]: ATMap|null|undefined
+    [key: string]: ATMap|undefined
 }

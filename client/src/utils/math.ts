@@ -1,5 +1,6 @@
 import {Point, Rectangle} from "../../../types/assets.ts";
 import {Coord, Position} from "../types/math.ts";
+import {Vector3} from "three";
 
 export const degToRad = (degrees: number) => (Math.PI / 180) * degrees;
 
@@ -51,13 +52,22 @@ export const stringToCoord = (name: string): Coord => {
 };
 
 export const coordToString = (coord: Coord): string => {
-    if (coord[0] < 0) {
-        coord[0] = 1000 + coord[0];
-    }
-    if (coord[1] < 0) {
-        coord[1] = 1000 + coord[1];
-    }
-    return coord[0].toString().padStart(4, '0') + '-' + coord[1].toString().padStart(4, '0')
+    const x = coord[0] < 0 ? 1000 + coord[0] : coord[0];
+    const y = coord[1] < 0 ? 1000 + coord[1] : coord[1];
+
+    return x.toString().padStart(4, '0') + '-' + y.toString().padStart(4, '0')
+}
+
+export const vector3ToCoord = (position: Vector3): Coord => {
+    let x = Math.floor(position.x / 1000),
+        y = Math.floor(position.z / 1000);
+    return [x, y]
+}
+
+export const coordToCoordDiff = (target: Coord, source: Coord): Vector3 => {
+    const xDiff = source[0] + target[0];
+    const yDiff = source[1] + target[1];
+    return new Vector3(xDiff*1000, 0, yDiff*1000);
 }
 
 export const getCoordNeighbours = (position: Position, limit = 100) => {
