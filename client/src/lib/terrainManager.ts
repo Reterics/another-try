@@ -315,6 +315,7 @@ export class TerrainManager {
                 this.environment.children.push(object);
             });
         });
+        this.environment.updateMatrixWorld( true );
 
         const staticGenerator = new StaticGeometryGenerator( this.environment );
         staticGenerator.attributes = [ 'position' ];
