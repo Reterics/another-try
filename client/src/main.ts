@@ -171,6 +171,7 @@ async function init() {
             texture: selected.texture || ''
         });
 
+        map.startJobs(serverManager);
         hudController.closeDialog();
     });
 

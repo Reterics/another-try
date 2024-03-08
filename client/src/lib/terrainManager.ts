@@ -1,6 +1,4 @@
 import * as THREE from 'three';
-import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import {ExtendedTriangle, MeshBVH, StaticGeometryGenerator} from 'three-mesh-bvh';
 import {
     Box3,
     BufferGeometry,
@@ -12,14 +10,18 @@ import {
     Object3D,
     Scene,
     ShaderMaterial
-} from "three";
+} from 'three';
+import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import {ExtendedTriangle, MeshBVH, StaticGeometryGenerator} from 'three-mesh-bvh';
 import {CapsuleInfo, SceneParams} from "../types/main.ts";
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
 import {Hero} from "../models/hero.ts";
 import {Object3DEventMap} from "three/src/core/Object3D";
 import {loadModel} from "../utils/model.ts";
-import {ATMap} from "../../../types/map.ts";
+import {ATMap, ATMapsObject} from "../../../types/map.ts";
 import {RenderedPlane, TerrainEnvironment} from "../types/three.ts";
+import {coordToString, getCoordNeighbours} from "../utils/math.ts";
+import {ServerManager} from "./ServerManager.ts";
 // import {getCoordNeighbours} from "../utils/math.ts";
 
 let tempVector = new THREE.Vector3();
@@ -61,6 +63,11 @@ export class TerrainManager {
     fwdPressed = false; bkdPressed = false; lftPressed = false; rgtPressed = false;
     private readonly energyNode: HTMLProgressElement | null;
     private map: ATMap;
+    private maps: ATMapsObject;
+
+    private _interval: NodeJS.Timeout | number | undefined;
+    frequency = 5000;
+    private player?: Mesh | Object3D;
 
     constructor(model: ATMap, scene: Scene, controls:OrbitControls, callback: Function) {
         this.scene = scene;
@@ -81,6 +88,7 @@ export class TerrainManager {
             physicsSteps: 5,  //5
             spawnCoordinates: [12, 36, 120] // X Y Z
         };
+        this.maps = {};
         return this;
     }
 
@@ -316,6 +324,7 @@ export class TerrainManager {
     }
 
     respawn(player: Mesh|Object3D) {
+        this.player = player;
         player.position.set(
             this.params.spawnCoordinates[0],
             this.params.spawnCoordinates[1],
@@ -573,5 +582,40 @@ export class TerrainManager {
 
     getMap() {
         return this.map;
+    }
+
+
+    async checkMaps (serverManager: ServerManager) {
+        if(!this.player) {
+            return;
+        }
+        const player = this.player;
+        const loadedMaps = this.environments.map(m=>m.name);
+        const availableMaps =
+            getCoordNeighbours([player.position.x, player.position.z, player.position.y], 100)
+                .map(m=> coordToString(m))
+                .filter(m=>!loadedMaps.includes(m))
+
+        const nextMap = availableMaps.shift();
+
+        if (!nextMap) {
+            return;
+        }
+        console.log('Next map to load:', nextMap);
+        if (this.maps[nextMap] !== undefined) {
+            this.maps[nextMap] = await serverManager.get('map?id=' + nextMap) as ATMap | null;
+        }
+    }
+
+
+    startJobs (serverManager: ServerManager) {
+        if (this._interval) {
+            clearTimeout(this._interval);
+        }
+
+        this._interval = setTimeout(async () => {
+            await this.checkMaps.call(this, serverManager);
+            this.startJobs.call(this, serverManager);
+        }, this.frequency);
     }
 }

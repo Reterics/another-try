@@ -50,13 +50,23 @@ export const stringToCoord = (name: string): Coord => {
     ];
 };
 
+export const coordToString = (coord: Coord): string => {
+    if (coord[0] < 0) {
+        coord[0] = 1000 + coord[0];
+    }
+    if (coord[1] < 0) {
+        coord[1] = 1000 + coord[1];
+    }
+    return coord[0].toString().padStart(4, '0') + '-' + coord[1].toString().padStart(4, '0')
+}
+
 export const getCoordNeighbours = (position: Position, limit = 100) => {
     const xMin = 1000 * Math.floor(position[0] / 1000) + limit,
         xMax = 1000 * Math.ceil(position[0] / 1000) - limit,
         yMin = 1000 * Math.floor(position[1] / 1000) + limit,
         yMax = 1000 * Math.ceil(position[1] / 1000) - limit;
 
-    const output = [];
+    const output: Coord[] = [];
 
     // West
     if (position[0] < xMin) {

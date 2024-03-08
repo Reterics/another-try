@@ -7,3 +7,7 @@ export interface ATMap {
     items: AssetObject[],
     texture?: string
 }
+
+export interface ATMapsObject {
+    [key: string]: ATMap|null|undefined
+}
