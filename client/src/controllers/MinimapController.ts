@@ -54,8 +54,8 @@ export class MinimapController extends EventManager{
     update(position?: Vector3, rotation?: Euler) {
         if (position) {
             //const vector2D = position.clone().project(this.camera); // Assuming `camera` is your orthographic camera
-            this.camera.position.set(position.x, -position.z, -150);
-            this.camera.lookAt(position.x, -position.z, 0);
+            this.camera.position.set(-position.x, -position.z, -150);
+            this.camera.lookAt(-position.x, -position.z, 0);
         }
         if (rotation) {
 
