@@ -84,5 +84,5 @@ export const demoMap: ATMap = {
             "y": 285.35920265684547,
             "h": 5,
         }
-    ], "id": "fallback", "author": "", "name": "0000-0000 (Offline)"
+    ], "id": "fallback", "author": "", "name": "Single Player"
 };

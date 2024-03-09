@@ -130,7 +130,14 @@ async function init() {
     serverManager.on('connect', async () => {
         const maps = await serverManager.get('maps');
         if (maps && Array.isArray(maps)) {
-            hudController.setMaps(maps as ATMap[]);
+            const filteredMaps = hudController.getMaps().filter(map=>map.id === 'fallback');
+            maps.forEach(map => {
+                if(map.id !== 'fallback'){
+                    filteredMaps.push(map)
+                }
+            });
+
+            hudController.setMaps(filteredMaps);
             hudController.renderMaps();
         }
         const assets = await serverManager.get('assets');

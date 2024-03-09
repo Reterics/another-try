@@ -19,15 +19,7 @@ class MapService {
     fallback() : ATMap {
         return {
             id: 'fallback',
-            name: 'Scene on Siménai by hillforts.eu',
-            items: [
-                {
-                    type: "model",
-                    path: 'assets/scenes/simenai/simenai.glb',
-                    name: 'simenai'
-                }
-            ],
-            texture: './assets/scenes/simenai/textures/Simenai_diffuse.jpeg'
+            items: []
         }
     }
 }

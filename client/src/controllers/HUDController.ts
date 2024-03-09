@@ -60,9 +60,6 @@ export class HUDController extends EventManager{
         this.messageList = document.querySelector('#messageList') as HTMLElement;
         this.footer = document.querySelector('#HUD-footer') as HTMLElement;
         this.side = document.querySelector('.side-buttons') as HTMLDivElement;
-        if(!this.element) {
-            this._loadHUD();
-        }
 
 
         this.mainMenu.onclick = (event: MouseEvent) => {
@@ -108,22 +105,6 @@ export class HUDController extends EventManager{
         this.messageBuffer = [];
     }
 
-    _loadHUD() {
-        const el = document.querySelector('#HUD-information');
-        if (!el) {
-            return setTimeout(()=>{
-                this._loadHUD.bind(this);
-            }, 200);
-        }
-        this.element = el as HTMLElement;
-        this.stats = document.querySelector('#HUD-stats') as HTMLElement;
-        this.scores = document.querySelector('#HUD-information') as HTMLElement;
-        this.messageInput = document.querySelector('#messageInput') as HTMLElement;
-        this.messageList = document.querySelector('#messageList') as HTMLElement;
-        this.footer = document.querySelector('#HUD-footer') as HTMLElement;
-        this.side = document.querySelector('.side-buttons') as HTMLDivElement;
-    }
-
     renderMenu() {
         this.inGame.style.display = 'none';
         this.pauseMenu.style.display = 'none';
@@ -146,20 +127,6 @@ export class HUDController extends EventManager{
         }
     }
 
-    getOptionsFromNode(node: HTMLElement|null|undefined) {
-        const options = {};
-
-        if (node) {
-            ['x', 'y', 'z'].forEach(key=>{
-                const value = node.getAttribute('data-' + key);
-                if (value) {
-                    // @ts-ignore
-                    options[key] = value;
-                }
-            });
-        }
-        return options;
-    }
 
     renderGame (id: string|null) {
         console.log('Render map: ', id);
@@ -362,6 +329,10 @@ export class HUDController extends EventManager{
         }
     }
 
+
+    getMaps() {
+        return this.maps;
+    }
 
     setMaps(maps: ATMap[]) {
         this.maps = maps;
