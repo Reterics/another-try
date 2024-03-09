@@ -28,7 +28,6 @@ export class HUDController extends EventManager{
 
     constructor() {
         super();
-        // We use createElement because it is DOM level 1 feature, faster than innerHTML
         const inGame = document.createElement('div');
         inGame.id = 'inGame';
         inGame.innerHTML = inGameTemplate;
@@ -47,7 +46,6 @@ export class HUDController extends EventManager{
         document.body.appendChild(this.inGame);
         document.body.appendChild(this.mainMenu);
         document.body.appendChild(this.pauseMenu);
-
 
         this._updatePeriod = 1;
         this._elapsed = 0;

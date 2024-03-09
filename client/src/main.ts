@@ -1,7 +1,6 @@
 import * as THREE from 'three'
 import {Object3D, PerspectiveCamera, Scene, Vector3, WebGLRenderer} from 'three'
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
-import {initSky} from "./initMethods";
 import {TerrainManager} from "./lib/terrainManager.ts";
 import {Hero} from "./models/hero";
 import {HUDController} from "./controllers/HUDController.ts";
@@ -12,6 +11,8 @@ import {ObjectPositionMessage} from "../../types/messages.ts";
 import {ATMap} from "../../types/map.ts";
 import {MinimapController} from "./controllers/MinimapController.ts";
 import Clouds from "./models/cloud";
+import ATSky from "./models/sky.ts";
+import SerenityGrass from "./models/grass";
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
@@ -32,6 +33,7 @@ let camera: PerspectiveCamera;
 let renderer: WebGLRenderer;
 let scene: Scene;
 let hero: Hero;
+let grass: SerenityGrass;
 let controls: OrbitControls;
 let creatorController: CreatorController;
 let serverManager: ServerManager;
@@ -107,7 +109,8 @@ async function init() {
     document.addEventListener( 'keydown', onKeyDown, false );
     window.addEventListener( 'resize', onWindowResize, false );
 
-    initSky(scene);
+    const sky = new ATSky(scene);
+    sky.addToScene();
     const cloud = new Clouds(scene);
     cloud.addToScene();
     creatorController = new CreatorController(scene, hudController, hero, controls);
@@ -170,6 +173,12 @@ async function init() {
         }
         hudController.openDialog('Loading', 'Add to scene');
         await map.addToScene();
+        grass = new SerenityGrass(scene, {
+            size: 1000,
+            enabled: false,
+            instances: 1000000
+        });
+        grass.addToScene();
 
         // renderer.render( scene, camera );
         if (!animationRunning) {
@@ -270,6 +279,7 @@ function animate() {
 
         hero.update(delta);
         serverManager.update(delta);
+        grass.refresh();
     }
 
     prevTime = time;

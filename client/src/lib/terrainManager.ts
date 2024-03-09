@@ -80,6 +80,7 @@ export class TerrainManager {
         this.scene = scene;
         this.controls = controls;
         this.environment = new THREE.Group();
+        this.environment.name = "environment";
         this.environments = [];
         this.collider = new THREE.Mesh();
         this.map = model;
@@ -108,7 +109,7 @@ export class TerrainManager {
         this.params.spawnCoordinates = [x, y, z];
     }
 
-    updateMapTexture(map: TerrainEnvironment) {console.log(map);
+    updateMapTexture(map: TerrainEnvironment) {
         if (map.texture) {
             return map.texture;
         }
@@ -311,7 +312,6 @@ export class TerrainManager {
         // Merge environment children
         this.environments.forEach(e => {
             e.environment.children.forEach(object=> {
-                console.log(object.position);
                 this.environment.children.push(object);
             });
         });
@@ -650,7 +650,6 @@ export class TerrainManager {
             }
             if (this.maps[nextMap[1]]) {
                 const movePosition = coordToCoordDiff(nextMap[0], vector3ToCoord(player.position));
-                console.log(movePosition);
                 const terrain = await this.importEnvironment(this.maps[nextMap[1]] as ATMap,movePosition);
                 if (terrain.texture && terrain.texture !== this.map.texture) {
                     this.map.texture = terrain.texture;
