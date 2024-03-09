@@ -133,7 +133,9 @@ export const getGroundPlane = async (size: number, textureSrc?:string, heightMap
 
     texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
     texture.offset.set(0, 0);
-    texture.repeat.set(2, 2);
+    const ratio = [Math.ceil(size / (texture.image.width || size)), Math.ceil(size / (texture.image.height || size))];
+    console.log(ratio);
+    texture.repeat.set(ratio[0] * 10, ratio[1] * 10);
     material.map = texture;
     material.needsUpdate = true;
     if (!heightImg) {
