@@ -11,6 +11,7 @@ import {ServerManager} from "./lib/ServerManager.ts";
 import {ObjectPositionMessage} from "../../types/messages.ts";
 import {ATMap} from "../../types/map.ts";
 import {MinimapController} from "./controllers/MinimapController.ts";
+import Clouds from "./models/cloud";
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
@@ -107,6 +108,8 @@ async function init() {
     window.addEventListener( 'resize', onWindowResize, false );
 
     initSky(scene);
+    const cloud = new Clouds(scene);
+    cloud.addToScene();
     creatorController = new CreatorController(scene, hudController, hero, controls);
     await creatorController.updateShadowObject();
     creatorController.on('click', () => {

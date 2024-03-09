@@ -18,5 +18,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
+
+    "types": ["./src/types/imports.d.ts"]
   }
 }
