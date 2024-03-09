@@ -65,7 +65,6 @@ void main() {
     vec3 tile;
 
     globalPos.x = offset.x-posX*delta;
-    globalPos.y = offset.y-posY*delta;
     globalPos.z = offset.z-posZ*delta;
 
     tile.x = floor((globalPos.x + 0.5 * width) / width);
@@ -74,7 +73,7 @@ void main() {
     pos.x = globalPos.x - tile.x * width;
     pos.z = globalPos.z - tile.z * width;
 
-    pos.y = globalPos.y;
+    pos.y = offset.y;
     // pos.y = max(0.0, globalPos.y);
     // pos.y += getYPosition(vec2(pos.x+delta*posX, pos.z+delta*posZ));
 

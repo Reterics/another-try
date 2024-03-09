@@ -105,6 +105,7 @@ export class Hero {
             player.receiveShadow = false;
 
             player.children[0].position.set(0,-1.5,0);
+            player.children[0].scale.set(0.05,0.05,0.05);
         }
         return new Hero(scene, player);
     }

@@ -175,7 +175,7 @@ async function init() {
         await map.addToScene();
         grass = new SerenityGrass(scene, {
             size: 1000,
-            enabled: false,
+            enabled: true,
             instances: 1000000
         });
         grass.addToScene();

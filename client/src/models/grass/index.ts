@@ -37,8 +37,8 @@ export default class SerenityGrass implements Grass {
 
 
         const joints = 4;
-        const bladeWidth = 0.04;
-        const bladeHeight = 0.3;
+        const bladeWidth = 0.12;
+        const bladeHeight = 1;
         const pos = new Vector3(0.01, 0.01, 0.01);
         const elevation = 0.2;
         const azimuth = 0.4;
@@ -228,9 +228,9 @@ export default class SerenityGrass implements Grass {
 
             //Define variety in height
             if (i % 3 != 0){
-                scales.push(0.3+Math.random() * 1.25);
+                scales.push(2.0+Math.random() * 1.25);
             } else {
-                scales.push(0.3+Math.random());
+                scales.push(2.0+Math.random());
             }
         }
 
@@ -244,15 +244,24 @@ export default class SerenityGrass implements Grass {
         this.geometry.setAttribute('halfRootAngle', halfRootAngleAttribute);
         this.geometry.setAttribute('index', indexAttribute);
         this.geometry.computeBoundingBox();
+        // We increase boundingBox and Sphere, because they are not increased with the Instance
         let customBoundingBox = new Box3();
 
         customBoundingBox.min.set(Infinity, Infinity, Infinity);
         customBoundingBox.max.set(-Infinity, -Infinity, -Infinity);
 
+        // Potential issue: I commented out the code that expandByPoint the box (now it renders everything always)
+        /*// Assume `instancePositions` is an array of Vector3 representing the positions of each instance
+        for (let position of instancePositions) {
+            // Expand the bounding box to include this position
+            customBoundingBox.expandByPoint(position);
+        }*/
+
         this.geometry.boundingBox = customBoundingBox;
         this.geometry.boundingSphere = new Sphere();
         customBoundingBox.getBoundingSphere(this.geometry.boundingSphere);
 
+        this.geometry.boundingSphere.set(new Vector3(0,0,0), 1000);
     }
 
     addToScene() {
@@ -265,6 +274,7 @@ export default class SerenityGrass implements Grass {
         this.mesh.castShadow = true;
         this.mesh.name = "grass";
         this.mesh.position.set(this.size / 2, 0, this.size / 2);
+        this.mesh.matrixWorldNeedsUpdate = true;
         this.scene.add(this.mesh);
     }
 
