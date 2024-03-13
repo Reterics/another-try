@@ -1,6 +1,6 @@
 import express from 'express';
 import AssetService from "../services/assetService";
-
+import CacheService from "../services/cacheService";
 
 class AssetController {
     async getAll(req: express.Request, res: express.Response) {
@@ -19,7 +19,13 @@ class AssetController {
         if (!id) {
             return res.sendStatus(400);
         }
-        const asset = await AssetService.get(id);
+        let asset = CacheService.get(id);
+        if (!asset) {
+            asset = await AssetService.get(id);
+            if (asset) {
+                CacheService.set(asset);
+            }
+        }
         if (asset) {
             return res.status(200).send(asset);
         }
