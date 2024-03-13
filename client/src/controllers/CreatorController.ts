@@ -9,7 +9,7 @@ import {HUDController} from "./HUDController.ts";
 import {Hero} from "../models/hero.ts";
 import {AssetObject} from "../../../types/assets";
 import {EventManager} from "../lib/EventManager.ts";
-import {MouseEventLike} from "../types/controller.ts";
+import {MouseEventLike, ShadowType} from "../types/controller.ts";
 
 let prevTime = performance.now();
 
@@ -29,7 +29,7 @@ export class CreatorController extends EventManager {
     shadowTypes: AssetObject[];
     shadowTypeIndex: number;
     shadowInstances: Object3D[];
-    private _shadowLoad:  Promise<Object3D>|undefined;
+    private _shadowLoad?: Promise<ShadowType | null>;
     private _lastMouse: MouseEventLike;
 
     constructor(scene: Scene, hudController: HUDController, hero: Hero, controls: OrbitControls) {
@@ -161,8 +161,8 @@ export class CreatorController extends EventManager {
                 if (this.shadowObject) {
                     this.scene.remove(this.shadowObject);
                     this.shadowObject = undefined;
-                    void this.updateShadowObject();
                 }
+                void this.updateShadowObject();
                 break;
             case 'KeyQ':
                 if (this.shadowTypeIndex === 0) {
@@ -173,8 +173,9 @@ export class CreatorController extends EventManager {
                 if (this.shadowObject) {
                     this.scene.remove(this.shadowObject);
                     this.shadowObject = undefined;
-                    void this.updateShadowObject();
                 }
+                void this.updateShadowObject();
+
                 break;
             case 'Escape':
                 this.hud.switchPauseMenu();
@@ -238,13 +239,19 @@ export class CreatorController extends EventManager {
             if (this.shadowInstances[this.shadowTypeIndex]) {
                 shadowObject = this.shadowInstances[this.shadowTypeIndex].clone();
             } else {
-                this._shadowLoad = createShadowObject(this.shadowTypes[this.shadowTypeIndex]);
-                shadowObject = await this._shadowLoad;
-                this.shadowInstances[this.shadowTypeIndex] = shadowObject;
+                const loadType = createShadowObject(this.shadowTypes[this.shadowTypeIndex])
+                this._shadowLoad = loadType;
+                shadowObject = await loadType;
+                if (shadowObject) {
+                    this.shadowInstances[this.shadowTypeIndex] = shadowObject;
+                }
             }
 
-            this.scene.add(shadowObject);
-            this.shadowObject = shadowObject;
+            if (shadowObject) {
+                this.scene.add(shadowObject);
+                this.shadowObject = shadowObject;
+            }
+
             if (this.shadowObject) {
                 this.shadowObject.visible = this.active !== 'pointer';
             }
@@ -333,7 +340,10 @@ export class CreatorController extends EventManager {
 
     getScale() {
         const shadowObject: Mesh = this.getShadowObject() as Mesh;
-        return shadowObject.scale.x.toFixed(4);
+        if (shadowObject && shadowObject.scale) {
+            return shadowObject.scale.x.toFixed(4);
+        }
+        return "1.0000";
     }
 
     protected _changeFar(delta: number, event?: MouseEventLike) {

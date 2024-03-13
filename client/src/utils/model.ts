@@ -33,9 +33,14 @@ const genericLoader = (file: File|string, modelLoader: Loader) => {
     return new Promise(resolve => {
         if (file) {
             modelLoader.crossOrigin = '';
-            console.log(modelLoader.requestHeader);
-            return modelLoader.load(typeof file === "string" ?
-                file : URL.createObjectURL(file), resolve);
+            return modelLoader.load(
+                typeof file === "string" ? file : URL.createObjectURL(file),
+                resolve,
+                undefined,
+                () => {
+                    console.error('Failed to load file ', typeof file === "string" ? file.substring(0, 20) : '');
+                    resolve(null);
+                });
         }
         return resolve(null);
     });
@@ -326,7 +331,7 @@ export const getArrowHelper = (): Group => {
 }
 
 
-export const createShadowObject = async (reference: AssetObject): Promise<ShadowType> => {
+export const createShadowObject = async (reference: AssetObject): Promise<ShadowType|null> => {
     const config = {
         ...reference,
         color: "#3cffee",
@@ -341,14 +346,17 @@ export const createShadowObject = async (reference: AssetObject): Promise<Shadow
             break;
     }
     const shadowObject = await getMeshForItem(config) as ShadowType;
-    shadowObject.refType = reference.type;
-    shadowObject.name = "shadowObject";
-    if (shadowObject.material) {
-        (shadowObject.material as THREE.MeshBasicMaterial).opacity = 0.5;
-        (shadowObject.material as THREE.MeshBasicMaterial).needsUpdate = true;
+    if (shadowObject) {
+        shadowObject.refType = reference.type;
+        shadowObject.name = "shadowObject";
+        if (shadowObject.material) {
+            (shadowObject.material as THREE.MeshBasicMaterial).opacity = 0.5;
+            (shadowObject.material as THREE.MeshBasicMaterial).needsUpdate = true;
+        }
+        shadowObject.position.y = -100;
+        return shadowObject;
     }
-    shadowObject.position.y = -100;
-    return shadowObject;
+    return null;
 }
 
 export const isCollisionDetected = (object1: THREE.Object3D, object2: THREE.Object3D) => {
