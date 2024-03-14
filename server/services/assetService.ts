@@ -2,6 +2,8 @@ import {getFileURL} from "../firebase/storage";
 import {AssetObject} from "../../types/assets";
 import {firebaseCollections, getById, getCollection} from "../firebase/config";
 import {downloadURL} from "../lib/commons";
+import {ParametricGeometries} from "three/examples/jsm/geometries/ParametricGeometries";
+import plane = ParametricGeometries.plane;
 
 
 class AssetService {
@@ -25,7 +27,7 @@ class AssetService {
     async get(id: string) {
         const asset = await getById(id, firebaseCollections.assets) as AssetObject|null;
         if (!asset) {
-            return asset;
+            return null;
         }
 
         if (!asset.image && asset.name) {
@@ -37,6 +39,9 @@ class AssetService {
                     asset.image = imageBuffer.body.toString('base64');
                 }
             }
+        }
+        if (asset.path && asset.path.startsWith('files')) {
+            asset.path = await getFileURL(asset.path);
         }
         return asset;
     }

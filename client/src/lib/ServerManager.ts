@@ -6,8 +6,8 @@ import {ObjectPositionMessage, PositionMessage} from "../../../types/messages.ts
 import {HUDController} from "../controllers/HUDController.ts";
 import {Sphere} from "../models/sphere.ts";
 import {EventManager} from "./EventManager.ts";
+import {serverURL} from "../utils/model.ts";
 
-const serverURL = '//localhost:3000/';
 export class ServerManager extends EventManager {
     private socket: Socket|undefined;
     private readonly players: PlayerList;

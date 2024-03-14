@@ -29,16 +29,48 @@ import {ShadowType} from "../types/controller.ts";
 import {MeshOrGroup, RenderedPlane, RenderedWater} from "../types/three.ts";
 import {Water} from "three/examples/jsm/objects/Water2";
 
-const genericLoader = (file: File|string, modelLoader: Loader) => {
-    return new Promise(resolve => {
+export const serverURL = '//localhost:3000/'
+
+const isLocalFileExists = async (url: string) => {
+    const response = await fetch(url, { method: 'HEAD' })
+        .catch(error => {
+            console.error('Error fetching the URL:', error);
+        });
+
+    return response && response.ok && response.headers.get('Content-Type') === "application/json";
+};
+
+const genericLoader = (file: File|string|Blob, modelLoader: Loader, assetId?:string) => {
+    return new Promise(async resolve => {
         if (file) {
             modelLoader.crossOrigin = '';
+            const exists = typeof file === "string" ? await isLocalFileExists(file) : true;
+            if (!exists && assetId) {
+                const response = await fetch(serverURL + 'asset?id=' + assetId,
+                    {
+                        method: 'GET'
+                    }).catch((e) => {
+                    console.error('Server couldn\'t fetch the asset: ', e);
+                });
+                if (response && response.ok) {
+                    const asset: AssetObject|undefined = await response.json().catch(e => {
+                        console.error('Failed to parse asset ', e);
+                    });
+                    if (asset && asset.path) {
+                        file = asset.path
+                    } else {
+                        return resolve(null);
+                    }
+                } else {
+                    return resolve(null);
+                }
+            }
             return modelLoader.load(
                 typeof file === "string" ? file : URL.createObjectURL(file),
                 resolve,
                 undefined,
                 () => {
-                    console.error('Failed to load file ', typeof file === "string" ? file.substring(0, 20) : '');
+                    console.error('Failed to load file ', typeof file === "string" ? file.substring(0, 20) : file);
                     resolve(null);
                 });
         }
@@ -47,37 +79,37 @@ const genericLoader = (file: File|string, modelLoader: Loader) => {
 };
 
 export const loadModel = {
-    gltf: async (file: File|string): Promise<GLTF | null> => {
-        const object = await genericLoader(file, new GLTFLoader());
+    gltf: async (file: File|string, assetId?:string): Promise<GLTF | null> => {
+        const object = await genericLoader(file, new GLTFLoader(), assetId);
         if (object) {
             return object as GLTF;
         }
         return null;
     },
-    fbx: async (file: File|string): Promise<Group<Object3DEventMap>|null> => {
-        const object = await genericLoader(file, new FBXLoader());
+    fbx: async (file: File|string, assetId?:string): Promise<Group<Object3DEventMap>|null> => {
+        const object = await genericLoader(file, new FBXLoader(), assetId);
         if (object) {
             return object as Group<Object3DEventMap>;
         }
         return null;
     },
-    obj: async (file: File|string): Promise<Group<Object3DEventMap>|null> => {
-        const object = await genericLoader(file, new OBJLoader());
+    obj: async (file: File|string, assetId?:string): Promise<Group<Object3DEventMap>|null> => {
+        const object = await genericLoader(file, new OBJLoader(), assetId);
         if (object) {
             return object as Group<Object3DEventMap>;
         }
         return null;
     },
-    collada: async (file: File|string): Promise<Group<Object3DEventMap>|null> => {
-        const object = await genericLoader(file, new ColladaLoader());
+    collada: async (file: File|string, assetId?:string): Promise<Group<Object3DEventMap>|null> => {
+        const object = await genericLoader(file, new ColladaLoader(), assetId);
         if (object) {
             return object as Group<Object3DEventMap>;
         }
         return null;
     },
-    stl: async (file: File|string): Promise<Mesh<BufferGeometry<NormalBufferAttributes>, MeshPhongMaterial, Object3DEventMap>|
+    stl: async (file: File|string, assetId?:string): Promise<Mesh<BufferGeometry<NormalBufferAttributes>, MeshPhongMaterial, Object3DEventMap>|
         null> => {
-        const geometry = await genericLoader(file, new STLLoader());
+        const geometry = await genericLoader(file, new STLLoader(), assetId);
         if (geometry) {
             const material = new MeshPhongMaterial({ color: 0xff9c7c, specular: 0x494949, shininess: 200 });
             return new Mesh(geometry as BufferGeometry, material);
@@ -255,7 +287,7 @@ export const getMeshForItem = async (item: AssetObject): Promise<Mesh|Group|null
                 return null;
             }
             if (item.path.endsWith(".gltf") || item.path.endsWith(".glb")) {
-                const group = await loadModel.gltf(item.path);
+                const group = await loadModel.gltf(item.path, item.id);
                 if (group) {
                     const model = group.scene;
                     const rect = item as Rectangle;
@@ -270,13 +302,13 @@ export const getMeshForItem = async (item: AssetObject): Promise<Mesh|Group|null
                 }
                 return null;
             } else if (item.path.endsWith('.fbx')) {
-                return await loadModel.fbx(item.path);
+                return await loadModel.fbx(item.path, item.id);
             } else if (item.path.endsWith('.obj')) {
-                return await loadModel.obj(item.path);
+                return await loadModel.obj(item.path, item.id);
             } else if (item.path.endsWith('.collada')) {
-                return await loadModel.collada(item.path);
+                return await loadModel.collada(item.path, item.id);
             } else if (item.path.endsWith('.stl')) {
-                return await loadModel.stl(item.path);
+                return await loadModel.stl(item.path, item.id);
             }
             return null;
         case "plane":
