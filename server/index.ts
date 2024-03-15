@@ -13,6 +13,7 @@ const port = process.env.PORT || 3000;
 
 import AssetController from "./controllers/assetController";
 import MapController from "./controllers/mapController";
+import ProxyController from "./controllers/proxyController";
 
 app.use(cors())
 
@@ -25,6 +26,8 @@ app.route('/maps')
     .get(MapController.getAll)
 app.route('/map')
     .get(MapController.get)
+app.route('/proxy')
+    .get(ProxyController.get)
 
 app.get('/', (req: Request, res: Response) => {
     res.send('Another Try Server');
