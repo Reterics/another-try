@@ -28,6 +28,7 @@ import {AssetObject, Circle, Line, PlaneConfig, Rectangle, WaterConfig} from "..
 import {ShadowType} from "../types/controller.ts";
 import {MeshOrGroup, RenderedPlane, RenderedWater} from "../types/three.ts";
 import {Water} from "three/examples/jsm/objects/Water2";
+import {WATER_LEVEL, WORLD_MAX_HEIGHT, WORLD_MIN_HEIGHT} from "./terrain.ts";
 
 export const serverURL = '//localhost:3000/'
 
@@ -182,12 +183,12 @@ export const getGroundPlane = async (size: number, textureSrc?:string, heightMap
         plane.receiveShadow = true;
         // Keep a consistent orientation with heightmap branch (flat horizontal plane)
         plane.rotation.set(-Math.PI / 2, 0, 0);
-        plane.position.set(size / 2, -35, size / 2);
+        plane.position.set(size / 2, WORLD_MIN_HEIGHT, size / 2);
         plane.name = "plane";
         return plane;
     }
 
-    const maxHeight = 100;
+    const maxHeight = WORLD_MAX_HEIGHT - WORLD_MIN_HEIGHT;
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d') as CanvasRenderingContext2D;
 
@@ -205,11 +206,9 @@ export const getGroundPlane = async (size: number, textureSrc?:string, heightMap
         for (let i = 0; i < cSize; i++) {
             const n = (j * cSize + i) * 4;
             const grayScale = imageData[n]; // Assuming the image is grayscale, we can just take the red channel
-            // Scale the height based on your needs
-            // Set the z position of the vertex
-
+            const normalized = grayScale / 255;
             const posIndex = (j * cSize + i) * 3;
-            vertices[posIndex + 2] = (grayScale / 255) * maxHeight;
+            vertices[posIndex + 2] = normalized * maxHeight;
         }
     }
     // geometry.attributes.position.needsUpdate = true;
@@ -217,7 +216,7 @@ export const getGroundPlane = async (size: number, textureSrc?:string, heightMap
     geometry.computeVertexNormals(); // Optional: Compute normals for better lighting
     geometry.computeBoundingBox();
     const plane = new THREE.Mesh(geometry, material) as RenderedPlane;
-    plane.position.set(size / 2, -35, size / 2);
+    plane.position.set(size / 2, WORLD_MIN_HEIGHT, size / 2);
     plane.receiveShadow = true;
     plane.rotation.set(-Math.PI / 2, 0, 0);
     plane.name = "plane";
@@ -241,7 +240,7 @@ export const getWater = async (waterConfig: WaterConfig, planeSize = 100) => {
     });
 
     water.name = "water";
-    water.position.set(planeSize / 2, -1, planeSize / 2);
+    water.position.set(planeSize / 2, WATER_LEVEL, planeSize / 2);
     water.rotation.x = -Math.PI / 2;
     return water;
 }

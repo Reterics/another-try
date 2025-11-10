@@ -184,7 +184,7 @@ export default class SerenityGrass implements Grass {
         const plane = this.getPlane();
         let vertices: TypedArray;
         if (!plane || plane.geometry.attributes.position.array.length < 10000) {
-            vertices = new Uint8Array().fill(35,0, 30000);
+            vertices = new Uint8Array().fill(0,0, 30000);
         } else {
             vertices = plane.geometry.attributes.position.array;
         }
@@ -214,7 +214,7 @@ export default class SerenityGrass implements Grass {
 
             n = (Math.round(z_g) * cSize + Math.round(x_g)) * 3;
 
-            h = vertices[n + 1] + 0.2; // -35?
+            h = vertices[n + 1] + 0.2;
 
             x = x_g / ratio - hW;
             y = h || 0.2;

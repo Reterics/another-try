@@ -1,6 +1,10 @@
-import {BufferGeometry} from 'three';
-import {Perlin2D, fbm2D, ridged2D} from './noise';
-import {Vector3} from 'three';
+import {BufferGeometry, Vector3} from 'three';
+import {fbm2D, Perlin2D, ridged2D} from './noise';
+
+export const WORLD_MIN_HEIGHT = -35;
+export const WORLD_MAX_HEIGHT = 220;
+export const WATER_LEVEL = -1;
+const WORLD_HEIGHT_RANGE = WORLD_MAX_HEIGHT - WORLD_MIN_HEIGHT;
 
 export interface EarthParams {
   seed: number;
@@ -16,7 +20,7 @@ export interface EarthParams {
 
 export const defaultEarthParams: EarthParams = {
   seed: 12345,
-  elevationScale: 300,        // ~300 units max elevation (tune to your scene)
+  elevationScale: WORLD_HEIGHT_RANGE,
   continentScale: 3000,       // big shapes across multiple tiles
   mountainScale: 600,         // finer features
   mountainWeight: 0.6,
@@ -56,13 +60,13 @@ export class EarthTerrain {
     const carved = Math.max(0, elev - band * p.riverDepth * (0.5 + 0.5 * base));
 
     // Re-apply sea level clamp and slight beach smoothing
-    const h = Math.max(0, carved);
-    return h;
+      return Math.max(0, Math.min(1, carved));
   }
 
   sampleHeight(x: number, z: number): number {
     const h01 = this.sample01(x, z);
-    return h01 * this.params.elevationScale;
+    const scale = this.params.elevationScale ?? WORLD_HEIGHT_RANGE;
+    return WORLD_MIN_HEIGHT + h01 * scale;
   }
 }
 

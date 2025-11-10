@@ -17,10 +17,12 @@ import {CapsuleInfo, SceneParams} from "../types/main.ts";
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
 import {Hero} from "../models/hero.ts";
 import {Object3DEventMap} from "three/src/core/Object3D";
-import {loadModel} from "../utils/model.ts";
+import {loadModel, getWater} from "../utils/model.ts";
 import {ATMap, ATMapsObject} from "../../../types/map.ts";
 import {RenderedPlane, TerrainEnvironment} from "../types/three.ts";
-import {EarthTerrain, applyProceduralHeightsWorld, blendHeightmapToProceduralWorld, defaultBlendParams} from "../utils/terrain.ts";
+import {
+    EarthTerrain, applyProceduralHeightsWorld, blendHeightmapToProceduralWorld, defaultBlendParams, WATER_LEVEL,
+} from "../utils/terrain.ts";
 import {
     coordToCoordDiff,
     coordToString,
@@ -74,8 +76,6 @@ export class TerrainManager {
     private map: ATMap;
     private maps: ATMapsObject;
 
-    // Global vertical offset for procedural terrain (keeps existing meshes/water unchanged)
-    private proceduralBaseY: number = -50;
 
     private _interval: NodeJS.Timeout | number | undefined;
     frequency = 5000;
@@ -205,6 +205,12 @@ export class TerrainManager {
         const processObject = (c: Object3D<Object3DEventMap>|Mesh|Light|Camera) => {
             if (c instanceof Mesh && c.isMesh) {
                 if (c.material instanceof ShaderMaterial) {
+                    if (position) {
+                        c.position.add(position);
+                    }
+                    if (c.name === "water") {
+                        c.position.y = WATER_LEVEL;
+                    }
                     terrainEnv.shaders.push(c);
                 } else if (c.material instanceof MeshStandardMaterial) {
                     const material = c.material;
@@ -263,8 +269,7 @@ export class TerrainManager {
                             const sampler = (x: number, z: number) => {
                                 const ox = position ? position.x : 0;
                                 const oz = position ? position.z : 0;
-                                // Apply global vertical offset so procedural terrain is generated lower by default
-                                return this.earthTerrain.sampleHeight(x + ox, z + oz) + (this.proceduralBaseY ?? 0);
+                                return this.earthTerrain.sampleHeight(x + ox, z + oz);
                             };
 
                             if (!srcPlane.heightMap) {
@@ -327,6 +332,23 @@ export class TerrainManager {
             }
         }
 
+        // Ensure water extends across procedural terrain tiles
+        try {
+            const hasExplicitWater = map.items.some(i => i.type === 'water');
+            if (!hasExplicitWater) {
+                const water = await getWater({ type: 'water' } as any, 1000);
+                if (position) {
+                    water.position.x += position.x;
+                    water.position.z += position.z;
+                    water.position.y = WATER_LEVEL;
+                }
+                // Do not override Y: respect original getWater Y
+                terrainEnv.environment.add(water);
+            }
+        } catch (e) {
+            console.warn('Water extension failed:', e);
+        }
+        
         this.updateMapTexture(terrainEnv);
         return terrainEnv;
     }
@@ -378,7 +400,7 @@ export class TerrainManager {
         this.player = player;
         player.position.set(
             this.params.spawnCoordinates[0],
-            this.params.spawnCoordinates[1] + 35,
+            this.params.spawnCoordinates[1],
             this.params.spawnCoordinates[2]);
 
         this.controls.object
