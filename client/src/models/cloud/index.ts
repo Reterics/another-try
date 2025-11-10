@@ -1,79 +1,79 @@
 import {
-    BufferGeometry, IUniform,
+    BoxGeometry,
+    Color,
+    DoubleSide,
+    IUniform,
+    Matrix4,
     Mesh,
-    NormalBufferAttributes,
     Object3DEventMap,
     Scene,
     ShaderMaterial,
-    SRGBColorSpace, Vector3
+    Vector3
 } from "three";
-import * as THREE from "three";
-import {mergeGeometries} from "three/examples/jsm/utils/BufferGeometryUtils";
 import vertexShader from "./cloud.vert?raw";
 import fragmentShader from "./cloud.frag?raw";
-import {randInt} from "three/src/math/MathUtils";
+
+type CloudUniforms = Record<string, IUniform>;
 
 export default class Clouds {
-    scene: Scene;
+    private readonly scene: Scene;
     readonly material: ShaderMaterial;
-    mesh: Mesh<BufferGeometry<NormalBufferAttributes>, ShaderMaterial, Object3DEventMap>;
+    readonly mesh: Mesh<BoxGeometry, ShaderMaterial, Object3DEventMap>;
+    private readonly uniforms: CloudUniforms;
+    private readonly baseAltitude: number;
+    private readonly volumeHeight: number;
+    private elapsed = 0;
+
     constructor(scene: Scene) {
         this.scene = scene;
-        const cloudTexture = '/assets/textures/cloud-texture.png';
-        const texture =  (new THREE.TextureLoader()).load(cloudTexture, t=> {
-            t.colorSpace = SRGBColorSpace;
+        const width = 10000;
+        const depth = 10000;
+        const height = 3800;
+        const baseAltitude = 300;
+        this.baseAltitude = baseAltitude;
+        this.volumeHeight = height;
+
+        const geometry = new BoxGeometry(width, height, depth, 1, 1, 1);
+        const boundsMin = new Vector3(-width / 2, -height / 2, -depth / 2);
+        const boundsMax = new Vector3(width / 2, height / 2, depth / 2);
+
+        this.uniforms = {
+            uTime: {value: 0},
+            uSunDirection: {value: new Vector3(-0.2, 0.95, 0.35).normalize()},
+            uSkyBottomColor: {value: new Color(0x90c3ff)},
+            uSkyTopColor: {value: new Color(0xe4f3ff)},
+            uCloudBaseColor: {value: new Color(0xcfd8e3)},
+            uCloudHighlightColor: {value: new Color(0xffffff)},
+            uBoundsMin: {value: boundsMin.clone()},
+            uBoundsMax: {value: boundsMax.clone()},
+            uWindDirection: {value: new Vector3(0.55, 0.0, 0.35).normalize()},
+            uWindSpeed: {value: 18},
+            uCoverage: {value: 0.65},
+            uDensity: {value: 0.95},
+            uNoiseScale: {value: 0.00025},
+            uDetailScale: {value: 2.2},
+            uDetailStrength: {value: 0.6},
+            uPrimarySteps: {value: 40},
+            uShadowSteps: {value: 8},
+            uLightAbsorption: {value: 1.1},
+            uAnvilBias: {value: 0.35},
+            uEdgeFade: {value: 6000},
+            uInverseModelMatrix: {value: new Matrix4()},
+        } as CloudUniforms;
+
+        this.material = new ShaderMaterial({
+            uniforms: this.uniforms,
+            vertexShader,
+            fragmentShader,
+            transparent: true,
+            depthWrite: false,
+            side: DoubleSide
         });
 
-        texture.magFilter = 1006;
-        texture.minFilter = 1006;
-
-        const fog = new THREE.Fog( 0x4584b4, 0, 3000 );
-        //scene.fog = fog
-        this.material = new THREE.ShaderMaterial( {
-
-            uniforms: {
-
-                "map": { type: "t", value: texture } as IUniform,
-                "fogColor" : { type: "c", value: fog.color } as IUniform,
-                "fogNear" : { type: "f", value: fog.near } as IUniform,
-                "fogFar" : { type: "f", value: fog.far } as IUniform,
-
-            },
-            vertexShader: vertexShader,
-            fragmentShader: fragmentShader,
-            depthWrite: false,
-            //depthTest: false,
-            transparent: true,
-        } );
-
-        const planeGeo = new THREE.PlaneGeometry( 64, 64 )
-        const planeObj = new THREE.Object3D()
-        const center = new Vector3(0,0,0);
-        const geometries = []
-
-        for ( let i = 0; i < 4000; i++ ) {
-
-            planeObj.position.x = randInt(-2000, 3000);
-            planeObj.position.y = randInt(100, 200);
-            planeObj.position.z = randInt(-2000, 3000);
-            planeObj.rotation.y = Math.random() * Math.PI;
-            planeObj.lookAt(center)
-            planeObj.scale.x = planeObj.scale.y = Math.random() * Math.random() * 1.5 + 0.5;
-            planeObj.updateMatrix()
-
-            const clonedPlaneGeo = planeGeo.clone();
-            clonedPlaneGeo.applyMatrix4(planeObj.matrix);
-
-            geometries.push(clonedPlaneGeo)
-
-        }
-        const planeGeos = mergeGeometries(geometries)
-
-        const planesMesh = new THREE.Mesh(planeGeos, this.material)
-        //planesMesh.renderOrder = 2
-        planesMesh.position.y = 300;
-
-        this.mesh = planesMesh;
+        this.mesh = new Mesh(geometry, this.material);
+        this.mesh.name = 'cloud';
+        this.mesh.position.set(0, this.baseAltitude + this.volumeHeight * 0.5, 0);
+        this.mesh.frustumCulled = false;
     }
 
     getFromScene() {
@@ -87,6 +87,21 @@ export default class Clouds {
         }
 
         this.scene.add(this.mesh);
+    }
+
+    update(delta: number, followPosition?: Vector3) {
+        if (!this.mesh) {
+            return;
+        }
+        this.elapsed += delta;
+        this.uniforms.uTime.value = this.elapsed;
+        if (followPosition) {
+            this.mesh.position.x = followPosition.x;
+            this.mesh.position.z = followPosition.z;
+            this.mesh.position.y = this.baseAltitude + this.volumeHeight * 0.5;
+        }
+        this.mesh.updateMatrixWorld(true);
+        (this.uniforms.uInverseModelMatrix.value as Matrix4).copy(this.mesh.matrixWorld).invert();
     }
 
     destroy() {

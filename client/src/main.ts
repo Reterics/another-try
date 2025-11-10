@@ -37,6 +37,7 @@ let grass: SerenityGrass;
 let controls: OrbitControls;
 let creatorController: CreatorController;
 let serverManager: ServerManager;
+let clouds: Clouds;
 
 let minimap: MinimapController;
 
@@ -54,7 +55,7 @@ async function init() {
     //heroPlayer.position.copy(camera.position);
     hero.addToScene();
 
-    renderer = new THREE.WebGLRenderer( { antialias: true } );
+    renderer = new THREE.WebGLRenderer( { antialias: true, powerPreference: "high-performance" } );
     renderer.setPixelRatio( window.devicePixelRatio );
     renderer.setSize( window.innerWidth, window.innerHeight );
     document.body.appendChild( renderer.domElement );
@@ -111,8 +112,8 @@ async function init() {
 
     const sky = new ATSky(scene);
     sky.addToScene();
-    const cloud = new Clouds(scene);
-    cloud.addToScene();
+    clouds = new Clouds(scene);
+    clouds.addToScene();
     creatorController = new CreatorController(scene, hudController, hero, controls);
     await creatorController.updateShadowObject();
     creatorController.on('click', () => {
@@ -220,8 +221,9 @@ function animate() {
         return;
     }
     const time = performance.now();
-
-    if (prevTime === 0) { // We came from hidden
+    const cameFromHidden = prevTime === 0;
+    const delta = cameFromHidden ? 0 : ( time - prevTime ) / 1000;
+    if (cameFromHidden) {
         prevTime = time;
     }
 
@@ -244,7 +246,6 @@ function animate() {
         }
 
 
-        const delta = ( time - prevTime ) / 1000;
         //heroPlayer.position.copy(camera.position);
         if (creatorController.view === 'tps') {
             controls.maxPolarAngle = Math.PI / 2;
@@ -280,6 +281,10 @@ function animate() {
         hero.update(delta);
         serverManager.update(delta);
         grass.refresh();
+    }
+
+    if (clouds) {
+        clouds.update(delta, camera.position);
     }
 
     prevTime = time;
