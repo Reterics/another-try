@@ -176,13 +176,13 @@ export const getGroundPlane = async (size: number, textureSrc?:string, heightMap
     material.map = texture;
     material.needsUpdate = true;
     if (!heightImg) {
-        const plane = new THREE.Mesh(geometry, material) as RenderedPlane;
-        plane.position.setY(0);
+        // Ensure we have enough segments to procedurally displace later
+        const segGeometry = new THREE.PlaneGeometry(size, size, segments, segments);
+        const plane = new THREE.Mesh(segGeometry, material) as RenderedPlane;
         plane.receiveShadow = true;
-        plane.rotation.set(Math.PI / 2, 0, 0);
-        plane.position.set(size / 2, 0, size / 2);
-
-        //plane.rotation.set(-Math.PI/2, Math.PI/2000, Math.PI);
+        // Keep a consistent orientation with heightmap branch (flat horizontal plane)
+        plane.rotation.set(-Math.PI / 2, 0, 0);
+        plane.position.set(size / 2, -35, size / 2);
         plane.name = "plane";
         return plane;
     }

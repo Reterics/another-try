@@ -20,6 +20,7 @@ import {Object3DEventMap} from "three/src/core/Object3D";
 import {loadModel} from "../utils/model.ts";
 import {ATMap, ATMapsObject} from "../../../types/map.ts";
 import {RenderedPlane, TerrainEnvironment} from "../types/three.ts";
+import {EarthTerrain, applyProceduralHeightsWorld, blendHeightmapToProceduralWorld, defaultBlendParams} from "../utils/terrain.ts";
 import {
     coordToCoordDiff,
     coordToString,
@@ -58,6 +59,7 @@ export class TerrainManager {
     protected environment: Group;
     protected environments: TerrainEnvironment[];
 
+    private earthTerrain: EarthTerrain;
     params: SceneParams;
     protected scene: Scene;
     initMethod: Promise<TerrainManager>;
@@ -72,6 +74,9 @@ export class TerrainManager {
     private map: ATMap;
     private maps: ATMapsObject;
 
+    // Global vertical offset for procedural terrain (keeps existing meshes/water unchanged)
+    private proceduralBaseY: number = -50;
+
     private _interval: NodeJS.Timeout | number | undefined;
     frequency = 5000;
     private player?: Mesh | Object3D;
@@ -84,6 +89,7 @@ export class TerrainManager {
         this.environments = [];
         this.collider = new THREE.Mesh();
         this.map = model;
+        this.earthTerrain = new EarthTerrain();
         this.initMethod = this._loadMapItems(callback);
 
         this.energyNode = document.getElementById("HUD-energy") as HTMLProgressElement;
@@ -250,6 +256,25 @@ export class TerrainManager {
                     } else if(material.map) {
                         const geom = mesh.geometry.clone();
                         geom.applyMatrix4( mesh.matrixWorld );
+                        // Procedural earth-like terrain if no heightMap was provided
+                        if (mesh.name === "plane") {
+                            const srcPlane = mesh as RenderedPlane;
+                            // If an environment offset is provided later, include it in sampling to ensure seamless tiling
+                            const sampler = (x: number, z: number) => {
+                                const ox = position ? position.x : 0;
+                                const oz = position ? position.z : 0;
+                                // Apply global vertical offset so procedural terrain is generated lower by default
+                                return this.earthTerrain.sampleHeight(x + ox, z + oz) + (this.proceduralBaseY ?? 0);
+                            };
+
+                            if (!srcPlane.heightMap) {
+                                // Fully procedural plane
+                                applyProceduralHeightsWorld(geom, sampler);
+                            } else {
+                                // Heightmap exists: blend its world-space displaced heights to procedural near edges
+                                blendHeightmapToProceduralWorld(geom, sampler, defaultBlendParams, position);
+                            }
+                        }
                         const newMesh = new THREE.Mesh( geom, material );
                         newMesh.castShadow = true;
                         newMesh.receiveShadow = true;
@@ -353,7 +378,7 @@ export class TerrainManager {
         this.player = player;
         player.position.set(
             this.params.spawnCoordinates[0],
-            this.params.spawnCoordinates[1],
+            this.params.spawnCoordinates[1] + 35,
             this.params.spawnCoordinates[2]);
 
         this.controls.object
