@@ -4,12 +4,11 @@ import {
     InstancedBufferGeometry,
     IUniform, Mesh, MeshNormalMaterial, PlaneGeometry, Quaternion,
     RawShaderMaterial,
-    Scene, Sphere, TextureLoader, TypedArray, Vector3,
+    Scene, Sphere, TextureLoader, TypedArray, Vector3, MathUtils,
 } from "three";
 import vertexShader from "./grass.vert?raw";
 import fragmentShader from "./grass.frag?raw";
 import {Grass, GrassOptions} from "../../types/grass.ts";
-import {randFloat} from "three/src/math/MathUtils";
 import {RenderedPlane} from "../../types/three.ts";
 
 export default class SerenityGrass implements Grass {
@@ -209,8 +208,8 @@ export default class SerenityGrass implements Grass {
             /*x = Math.random() * this.size - this.size/2;
             z = Math.random() * this.size - this.size/2;
             y = 100;*/
-            x_g = randFloat(0, cSize - 1);
-            z_g = randFloat(0, cSize - 1);
+            x_g = MathUtils.randFloat(0, cSize - 1);
+            z_g = MathUtils.randFloat(0, cSize - 1);
 
             n = (Math.round(z_g) * cSize + Math.round(x_g)) * 3;
 

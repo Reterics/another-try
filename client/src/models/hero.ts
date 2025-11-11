@@ -1,9 +1,8 @@
 import {RoundedBoxGeometry} from "three/examples/jsm/geometries/RoundedBoxGeometry";
 import * as THREE from "three";
-import {AnimationAction, AnimationMixer, Scene} from "three";
+import {AnimationAction, AnimationMixer, Scene, Object3D} from "three";
 import { CapsuleInfo } from "../types/main";
 import {loadModel} from "../utils/model.ts";
-import {Object3D} from "three/src/core/Object3D";
 import {ObjectDimensions} from "../../../types/assets.ts";
 
 
@@ -17,7 +16,7 @@ export class Hero {
         depth: 0.2
     };
     public currentAnimation: string;
-    private action: AnimationAction;
+    private action: AnimationAction | undefined;
     private _timeout: number | NodeJS.Timeout | undefined;
 
     constructor(scene: Scene, object: Object3D|undefined|null) {
@@ -27,10 +26,11 @@ export class Hero {
         // Play a specific animation
         this.currentAnimation = 'Idle';
         const clip = THREE.AnimationClip.findByName( root.animations, 'Idle' );
-        this.action = this.mixer.clipAction( clip );
-
-        if (this.action) {
-            this.action.play();
+        if (clip) {
+            this.action = this.mixer.clipAction( clip );
+            if (this.action) {
+                this.action.play();
+            }
         }
 
         this.scene = scene;

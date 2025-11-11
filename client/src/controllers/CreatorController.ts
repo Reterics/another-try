@@ -1,7 +1,6 @@
-import {Mesh, Scene} from "three";
-import { Object3D } from "three/src/core/Object3D";
+import {Mesh, Scene, Object3D, Camera} from "three";
 import * as THREE from "three";
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import {createShadowObject, isCollisionDetected} from "../utils/model";
 import {Active3DMode, ControllerView} from "../types/three";
 import { roundToPrecision } from "../utils/math";
@@ -265,7 +264,7 @@ export class CreatorController extends EventManager {
 
     dropObject (object: Object3D|undefined, event: MouseEventLike) {
         if (object) {
-            const camera = this.controls.object;
+            const camera = this.controls.object as Camera;
             const movementSpeed = this.far < 3 ? this.far : 2; // Adjust the speed as needed
             object.position.copy(camera.position)
 

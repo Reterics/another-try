@@ -1,8 +1,6 @@
 import {Sky} from "three/examples/jsm/objects/Sky";
 import * as THREE from "three";
-import {Mesh} from "three/src/Three";
-import {Light} from "three/src/lights/Light";
-import {Scene} from "three";
+import { Mesh, Light, Scene } from "three";
 
 
 export default class ATSky {

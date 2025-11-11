@@ -1,5 +1,4 @@
-import { BufferGeometry, Clock, Mesh, RawShaderMaterial, Scene } from "three";
-import { Object3D } from "three/src/core/Object3D";
+import { BufferGeometry, Clock, Mesh, RawShaderMaterial, Scene, Object3D } from "three";
 
 export interface Grass {
     clock: Clock;

@@ -11,12 +11,12 @@ import {
     Scene,
     ShaderMaterial, Vector3
 } from 'three';
-import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils';
 import {ExtendedTriangle, MeshBVH, StaticGeometryGenerator} from 'three-mesh-bvh';
 import {CapsuleInfo, SceneParams} from "../types/main.ts";
-import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
+import {OrbitControls} from "three/examples/jsm/controls/OrbitControls";
 import {Hero} from "../models/hero.ts";
-import {Object3DEventMap} from "three/src/core/Object3D";
+import {Object3DEventMap} from "three";
 import {loadModel, getWater} from "../utils/model.ts";
 import {ATMap, ATMapsObject} from "../../../types/map.ts";
 import {RenderedPlane, TerrainEnvironment} from "../types/three.ts";
