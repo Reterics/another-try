@@ -1,6 +1,5 @@
-import { Group, Mesh } from "three";
+import { Group, Mesh, Object3D } from "three";
 import { Water } from "three/examples/jsm/objects/Water2";
-import {Object3D} from "three/src/core/Object3D";
 
 export type Active3DMode = 'far'|'size'|'precision'|'pointer';
 

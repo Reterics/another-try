@@ -2,8 +2,6 @@ import {getFileURL} from "../firebase/storage";
 import {AssetObject} from "../../types/assets";
 import {firebaseCollections, getById, getCollection} from "../firebase/config";
 import {downloadURL} from "../lib/commons";
-import {ParametricGeometries} from "three/examples/jsm/geometries/ParametricGeometries";
-import plane = ParametricGeometries.plane;
 
 
 class AssetService {

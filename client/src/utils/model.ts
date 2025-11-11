@@ -16,14 +16,14 @@ import {
     Quaternion,
     SphereGeometry,
     TextureLoader, TypedArray,
-    Vector3
+    Vector3,
+    Loader,
+    Object3D
 } from "three";
 import {FBXLoader} from "three/examples/jsm/loaders/FBXLoader";
 import {OBJLoader} from "three/examples/jsm/loaders/OBJLoader";
-import {Loader} from "three/src/Three";
 import {ColladaLoader} from "three/examples/jsm/loaders/ColladaLoader";
 import {STLLoader} from "three/examples/jsm/loaders/STLLoader";
-import {Object3D} from "three/src/core/Object3D";
 import {AssetObject, Circle, Line, PlaneConfig, Rectangle, WaterConfig} from "../../../types/assets.ts";
 import {ShadowType} from "../types/controller.ts";
 import {MeshOrGroup, RenderedPlane, RenderedWater} from "../types/three.ts";
@@ -159,7 +159,7 @@ export const loadTexture = (url: string): Promise<THREE.Texture> => {
 export const getGroundPlane = async (size: number, textureSrc?:string, heightMap?:string): Promise<RenderedPlane> => {
     const texture = await loadTexture(textureSrc || '/assets/textures/green-grass-textures.jpg');
     const heightMapTexture = heightMap ? await loadTexture(heightMap) : null;
-    const heightImg = heightMapTexture ? heightMapTexture.image : null;
+    const heightImg = (heightMapTexture && heightMapTexture.image ? heightMapTexture.image : null) as CanvasImageSource | null;
 
     const segments = Math.min(99, size - 1),
         cSize = segments + 1;
@@ -171,7 +171,11 @@ export const getGroundPlane = async (size: number, textureSrc?:string, heightMap
 
     texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
     texture.offset.set(0, 0);
-    const ratio = [Math.ceil(size / (texture.image.width || size)), Math.ceil(size / (texture.image.height || size))];
+    const imgSize = texture.image as { width?: number; height?: number };
+    const ratio = [
+        Math.ceil(size / ((imgSize && imgSize.width) ? imgSize.width : size)),
+        Math.ceil(size / ((imgSize && imgSize.height) ? imgSize.height : size))
+    ];
     console.log(ratio);
     texture.repeat.set(ratio[0] * 10, ratio[1] * 10);
     material.map = texture;
