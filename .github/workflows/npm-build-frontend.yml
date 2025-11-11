@@ -1,0 +1,36 @@
+# This workflow will run tests using node
+# For more information see: https://docs.github.com/en/actions/publishing-packages/publishing-nodejs-packages
+
+name: frontend
+
+on:
+  push:
+    paths:
+      - 'types/**'
+      - 'client/**'
+      - '.github/workflows/npm-build-frontend.yml'
+  pull_request:
+    paths:
+      - 'types/**'
+      - 'client/**'
+      - '.github/workflows/npm-build-frontend.yml'
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  client:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: ./client/package-lock.json
+      - name: Install Node Dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
