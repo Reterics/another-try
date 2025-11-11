@@ -2,6 +2,8 @@
   <img src="./client/public/assets/images/png/logo-no-background.png" alt="Another Try Logo" height="85"/>
 </p>
 
+[![build](https://github.com/Reterics/another-try/actions/workflows/npm-build-test.yml/badge.svg)](https://github.com/Reterics/another-try/actions/workflows/npm-build-test.yml) [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://opensource.org/license/gpl-3-0)
+
 Another Try is a multiplayer RPG game, based on the powerful THREE.js library.
 
 Dive deep into a world where the objective is simple: Keep it alive at all costs.
