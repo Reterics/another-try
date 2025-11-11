@@ -1,20 +1,25 @@
 # This workflow will run tests using node
 # For more information see: https://docs.github.com/en/actions/publishing-packages/publishing-nodejs-packages
 
-name: build
+name: backend
 
 on:
   push:
-    branches: ["main"]
-  # Runs on any open or reopened pull request
+    paths:
+      - 'types/**'
+      - 'server/**'
+      - '.github/workflows/npm-build-backend.yml'
   pull_request:
-    types: [opened, reopened]
+    paths:
+      - 'types/**'
+      - 'server/**'
+      - '.github/workflows/npm-build-backend.yml'
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 jobs:
-  build:
+  server:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -24,7 +29,7 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-          cache-dependency-path: ./package-lock.json
+          cache-dependency-path: ./server/package-lock.json
       - name: Install Node Dependencies
         run: npm ci
       - name: Build
