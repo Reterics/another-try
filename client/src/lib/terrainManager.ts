@@ -17,7 +17,7 @@ import {CapsuleInfo, SceneParams} from "../types/main.ts";
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls";
 import {Hero} from "../models/hero.ts";
 import {Object3DEventMap} from "three";
-import {loadModel, getWater} from "../utils/model.ts";
+import {loadModel} from "../utils/model.ts";
 import {ATMap, ATMapsObject} from "../../../types/map.ts";
 import {RenderedPlane, TerrainEnvironment} from "../types/three.ts";
 import {
@@ -332,23 +332,6 @@ export class TerrainManager {
             }
         }
 
-        // Ensure water extends across procedural terrain tiles
-        try {
-            const hasExplicitWater = map.items.some(i => i.type === 'water');
-            if (!hasExplicitWater) {
-                const water = await getWater({ type: 'water' } as any, 1000);
-                if (position) {
-                    water.position.x += position.x;
-                    water.position.z += position.z;
-                    water.position.y = WATER_LEVEL;
-                }
-                // Do not override Y: respect original getWater Y
-                terrainEnv.environment.add(water);
-            }
-        } catch (e) {
-            console.warn('Water extension failed:', e);
-        }
-        
         this.updateMapTexture(terrainEnv);
         return terrainEnv;
     }

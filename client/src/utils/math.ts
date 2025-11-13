@@ -65,9 +65,12 @@ export const vector3ToCoord = (position: Vector3): Coord => {
 }
 
 export const coordToCoordDiff = (target: Coord, source: Coord): Vector3 => {
-    const xDiff = source[0] + target[0];
-    const yDiff = source[1] + target[1];
-    return new Vector3(xDiff*1000, 0, yDiff*1000);
+    // Compute world-space delta vector between tile coordinates.
+    // Each tile is 1000 units wide, and our world axes use X (east-west) and Z (north-south).
+    // Delta should be target - source, not a sum.
+    const xDiff = (target[0] - source[0]);
+    const yDiff = (target[1] - source[1]);
+    return new Vector3(xDiff * 1000, 0, yDiff * 1000);
 }
 
 export const getCoordNeighbours = (position: Position, limit = 100) => {
