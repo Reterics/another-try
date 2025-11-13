@@ -231,16 +231,25 @@ export const getGroundPlane = async (size: number, textureSrc?:string, heightMap
 export const getWater = async (waterConfig: WaterConfig, planeSize = 100) => {
     const flowMap = await loadTexture(waterConfig.flowMap || '/assets/water/height.png');
     const normal0 = await loadTexture(waterConfig.normalMap0 || '/assets/water/normal0.jpg');
-    const normal1 = await loadTexture(waterConfig.normalMap1 || '/assets/water/normal1.jpg');
-    const waterGeometry = new THREE.PlaneGeometry(1000, 1000);
+    const normal1Tex = await loadTexture(waterConfig.normalMap1 || '/assets/water/normal1.jpg');
+
+    // Determine quality for water render targets
+    const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(ua);
+    const rtSize = isMobile || dpr > 1.5 ? 512 : 1024; // try 512/1024 tiers
+
+    // Use planeSize for geometry to limit overdraw
+    const waterGeometry = new THREE.PlaneGeometry(planeSize, planeSize);
 
     const water = new Water(waterGeometry, {
         scale: 1,
-        textureWidth: 1024,
-        textureHeight: 1024,
+        textureWidth: rtSize,
+        textureHeight: rtSize,
         flowMap: flowMap,
         normalMap0: normal0,
-        normalMap1: normal1
+        // On low tier devices, reuse normal0 to save sampling cost
+        normalMap1: isMobile ? normal0 : normal1Tex
     });
 
     water.name = "water";
