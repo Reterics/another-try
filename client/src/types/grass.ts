@@ -1,4 +1,4 @@
-import { BufferGeometry, Clock, Mesh, RawShaderMaterial, Scene, Object3D } from "three";
+import { BufferGeometry, Clock, Mesh, RawShaderMaterial, Scene, Object3D, Vector3 } from "three";
 
 export interface Grass {
     clock: Clock;
@@ -18,10 +18,14 @@ export interface Grass {
     destroy: ()=>void
     isEnabled: (bool: boolean)=>Boolean
     setSize: (size: number)=>void
+    setAnchor: (anchor: Vector3)=>void
+    setSampler: (sampler: (x: number, z: number)=>number)=>void
 }
 
 export interface GrassOptions {
     instances?: number
     size?: number
     enabled?: boolean
+    sampler?: (x: number, z: number)=>number
+    anchor?: Vector3
 }

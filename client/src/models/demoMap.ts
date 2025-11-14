@@ -1,5 +1,5 @@
 import { ATMap } from "../../../types/map.ts";
-import { PlaneConfig, WaterConfig } from "../../../types/assets.ts";
+import { WaterConfig } from "../../../types/assets.ts";
 
 export const demoMap: ATMap = {
     "items": [
@@ -8,13 +8,7 @@ export const demoMap: ATMap = {
             "type": "water",
             "normalMap1": "/assets/water/normal1.jpg",
             "flowMap": "/textures/water/flowmap_water.png"
-        } as WaterConfig
-        , {
-            "type": "plane",
-            "texture": "/assets/textures/green-grass-textures.jpg",
-            "size": 1000,
-            "heightMap": "/textures/water/heightmap_v2.png"
-        } as PlaneConfig, {
+        } as WaterConfig, {
 
             "w": 5,
             "z": 12.314450267020987,

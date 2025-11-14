@@ -33,11 +33,12 @@ let camera: PerspectiveCamera;
 let renderer: WebGLRenderer;
 let scene: Scene;
 let hero: Hero;
-let grass: SerenityGrass;
+let grass: SerenityGrass | null = null;
 let controls: OrbitControls;
 let creatorController: CreatorController;
 let serverManager: ServerManager;
 let clouds: Clouds;
+const GRASS_PATCH_SIZE = 320;
 
 let minimap: MinimapController;
 
@@ -174,14 +175,16 @@ async function init() {
         }
         hudController.openDialog('Loading', 'Add to scene');
         await map.addToScene();
-        grass = new SerenityGrass(scene, {
-            size: 1000,
-            enabled: true,
-            instances: 1000000
-        });
-        grass.addToScene();
-
-        // renderer.render( scene, camera );
+        if (!grass) {
+            grass = new SerenityGrass(scene, {
+                size: GRASS_PATCH_SIZE,
+                enabled: true,
+                instances: 300000,
+                sampler: map.getHeightSampler(),
+                anchor: map.getSpawnPoint()
+            });
+            grass.addToScene();
+        }
         if (!animationRunning) {
             animate();
         }
@@ -191,7 +194,6 @@ async function init() {
             texture: selected.texture || ''
         });
 
-        map.startJobs(serverManager);
         hudController.closeDialog();
     });
 
@@ -280,7 +282,7 @@ function animate() {
 
         hero.update(delta);
         serverManager.update(delta);
-        grass.refresh();
+        grass?.refresh();
     }
 
     if (clouds) {

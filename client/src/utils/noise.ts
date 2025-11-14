@@ -92,3 +92,44 @@ export const ridged2D = (
   }
   return sum / (norm || 1); // [0,1]
 };
+
+export interface RidgedFbmOptions {
+  octaves?: number;
+  lacunarity?: number;
+  gain?: number;
+  steepness?: number;
+}
+
+export const smoothRidgedFbm2D = (
+  perlin: Perlin2D,
+  x: number,
+  y: number,
+  options: RidgedFbmOptions = {}
+) => {
+  const octaves = options.octaves ?? 5;
+  const lacunarity = options.lacunarity ?? 2.0;
+  const gain = options.gain ?? 0.45;
+  const steepness = Math.max(0, options.steepness ?? 0.33);
+
+  let sum = 0;
+  let freq = 1;
+  let amp = 0.5;
+  let weight = 1;
+  let norm = 0;
+
+  for (let i = 0; i < octaves; i++) {
+    const n = perlin.noise(x * freq, y * freq);
+    let ridge = 1 - Math.abs(n);
+    ridge = Math.max(0, Math.pow(ridge, 1 + steepness * 2));
+
+    const contribution = ridge * amp * weight;
+    sum += contribution;
+    norm += amp * weight;
+    weight = Math.max(0.2, ridge);
+
+    freq *= lacunarity;
+    amp *= gain;
+  }
+
+  return sum / (norm || 1); // 0..1
+};

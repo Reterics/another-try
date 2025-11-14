@@ -15,7 +15,7 @@ import {
     PerspectiveCamera,
     Quaternion,
     SphereGeometry,
-    TextureLoader, TypedArray,
+    TextureLoader,
     Vector3,
     Loader,
     Object3D
@@ -28,7 +28,7 @@ import {AssetObject, Circle, Line, PlaneConfig, Rectangle, WaterConfig} from "..
 import {ShadowType} from "../types/controller.ts";
 import {MeshOrGroup, RenderedPlane, RenderedWater} from "../types/three.ts";
 import {Water} from "three/examples/jsm/objects/Water2";
-import {WATER_LEVEL, WORLD_MAX_HEIGHT, WORLD_MIN_HEIGHT} from "./terrain.ts";
+import {WATER_LEVEL, WORLD_MIN_HEIGHT} from "./terrain.ts";
 
 export const serverURL = '//localhost:3000/'
 
@@ -156,18 +156,11 @@ export const loadTexture = (url: string): Promise<THREE.Texture> => {
     });
 }
 
-export const getGroundPlane = async (size: number, textureSrc?:string, heightMap?:string): Promise<RenderedPlane> => {
+export const getGroundPlane = async (size: number, textureSrc?:string): Promise<RenderedPlane> => {
     const texture = await loadTexture(textureSrc || '/assets/textures/green-grass-textures.jpg');
-    const heightMapTexture = heightMap ? await loadTexture(heightMap) : null;
-    const heightImg = (heightMapTexture && heightMapTexture.image ? heightMapTexture.image : null) as CanvasImageSource | null;
-
-    const segments = Math.min(99, size - 1),
-        cSize = segments + 1;
-    const geometry = heightImg ?
-        new THREE.PlaneGeometry(size, size, segments, segments) :
-        new THREE.PlaneGeometry(size, size);
+    const segments = Math.max(1, Math.min(199, Math.round(size / 10)));
+    const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
     const material = new THREE.MeshStandardMaterial({ color: 0xffff00, side: THREE.DoubleSide });
-
 
     texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
     texture.offset.set(0, 0);
@@ -176,55 +169,15 @@ export const getGroundPlane = async (size: number, textureSrc?:string, heightMap
         Math.ceil(size / ((imgSize && imgSize.width) ? imgSize.width : size)),
         Math.ceil(size / ((imgSize && imgSize.height) ? imgSize.height : size))
     ];
-    console.log(ratio);
     texture.repeat.set(ratio[0] * 10, ratio[1] * 10);
     material.map = texture;
     material.needsUpdate = true;
-    if (!heightImg) {
-        // Ensure we have enough segments to procedurally displace later
-        const segGeometry = new THREE.PlaneGeometry(size, size, segments, segments);
-        const plane = new THREE.Mesh(segGeometry, material) as RenderedPlane;
-        plane.receiveShadow = true;
-        // Keep a consistent orientation with heightmap branch (flat horizontal plane)
-        plane.rotation.set(-Math.PI / 2, 0, 0);
-        plane.position.set(size / 2, WORLD_MIN_HEIGHT, size / 2);
-        plane.name = "plane";
-        return plane;
-    }
 
-    const maxHeight = WORLD_MAX_HEIGHT - WORLD_MIN_HEIGHT;
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d') as CanvasRenderingContext2D;
-
-    canvas.width = cSize;
-    canvas.height = cSize;
-
-    // Draw the image onto the canvas
-    context.drawImage(heightImg, 0, 0, cSize, cSize);
-    const imageData = context.getImageData(0, 0, cSize, cSize).data;
-
-    const vertices: TypedArray = geometry.attributes.position.array;
-
-    // Adjust each vertex in the geometry
-    for (let j = 0; j < cSize; j++) {
-        for (let i = 0; i < cSize; i++) {
-            const n = (j * cSize + i) * 4;
-            const grayScale = imageData[n]; // Assuming the image is grayscale, we can just take the red channel
-            const normalized = grayScale / 255;
-            const posIndex = (j * cSize + i) * 3;
-            vertices[posIndex + 2] = normalized * maxHeight;
-        }
-    }
-    // geometry.attributes.position.needsUpdate = true;
-
-    geometry.computeVertexNormals(); // Optional: Compute normals for better lighting
-    geometry.computeBoundingBox();
     const plane = new THREE.Mesh(geometry, material) as RenderedPlane;
-    plane.position.set(size / 2, WORLD_MIN_HEIGHT, size / 2);
     plane.receiveShadow = true;
     plane.rotation.set(-Math.PI / 2, 0, 0);
+    plane.position.set(size / 2, WORLD_MIN_HEIGHT, size / 2);
     plane.name = "plane";
-    plane.heightMap = heightMap;
     return plane;
 }
 
@@ -325,7 +278,7 @@ export const getMeshForItem = async (item: AssetObject): Promise<Mesh|Group|null
             return null;
         case "plane":
             const plane = item as PlaneConfig;
-            return await getGroundPlane(plane.size || 1000, plane.texture, plane.heightMap) as RenderedPlane;
+            return await getGroundPlane(plane.size || 1000, plane.texture) as RenderedPlane;
         case "water":
             return await getWater(item as WaterConfig, 1000) as RenderedWater;
     }
