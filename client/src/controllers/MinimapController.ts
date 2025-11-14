@@ -20,7 +20,9 @@ export class MinimapController extends EventManager{
             throw Error('Target Element must have a canvas to render');
         }
 
-        const mapTexture = new THREE.TextureLoader().load(texture);
+        const mapTexture = texture
+            ? new THREE.TextureLoader().load(texture)
+            : this.buildFallbackTexture();
         const material = new THREE.SpriteMaterial({ map: mapTexture, color: 0xffffff });
         const sprite = new THREE.Sprite(material);
         sprite.position.set(0,0,0);
@@ -79,6 +81,36 @@ export class MinimapController extends EventManager{
             }
         }
         this.camera.updateProjectionMatrix();
+    }
+
+    private buildFallbackTexture(size = 256) {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            ctx.fillStyle = '#0b2139';
+            ctx.fillRect(0, 0, size, size);
+            ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+            ctx.lineWidth = 1;
+            const step = size / 16;
+            for (let i = 0; i <= size; i += step) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, size);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(0, i);
+                ctx.lineTo(size, i);
+                ctx.stroke();
+            }
+        }
+        const texture = new THREE.CanvasTexture(canvas);
+        if ('colorSpace' in texture) {
+            // @ts-ignore
+            texture.colorSpace = THREE.SRGBColorSpace;
+        }
+        return texture;
     }
 
     protected renderHTML() {

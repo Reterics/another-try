@@ -57,7 +57,6 @@ export interface ObjectDimensions {
 
 export interface PlaneConfig extends Asset {
     type: 'plane'
-    heightMap?: string
     size: number,
     texture:string
 }

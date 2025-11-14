@@ -8,7 +8,6 @@ export type ControllerView = 'tps'|'fps';
 export type MeshOrGroup = Mesh | Group;
 
 export interface RenderedPlane extends Mesh {
-    heightMap?: string
 }
 
 export interface RenderedWater extends Water {

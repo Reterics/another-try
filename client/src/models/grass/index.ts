@@ -10,6 +10,7 @@ import vertexShader from "./grass.vert?raw";
 import fragmentShader from "./grass.frag?raw";
 import {Grass, GrassOptions} from "../../types/grass.ts";
 import {RenderedPlane} from "../../types/three.ts";
+import {sampleDefaultSplat} from "../../utils/terrain.ts";
 
 export default class SerenityGrass implements Grass {
     clock: Clock;
@@ -20,6 +21,8 @@ export default class SerenityGrass implements Grass {
     mesh?: Mesh<InstancedBufferGeometry, RawShaderMaterial>;
     enabled: Boolean;
     geometry: InstancedBufferGeometry;
+    private heightSampler?: (x: number, z: number) => number;
+    private anchor: Vector3;
 
     constructor (scene: Scene, options?: GrassOptions) {
         const opt: GrassOptions = options || {};
@@ -28,6 +31,8 @@ export default class SerenityGrass implements Grass {
         this.instances = opt.instances || 1000;
         this.size = opt.size || 10000;
         this.enabled = opt.enabled || false;
+        this.anchor = opt.anchor ? opt.anchor.clone() : new Vector3(this.size / 2, 0, this.size / 2);
+        this.heightSampler = opt.sampler;
         const loader = new TextureLoader();
         loader.crossOrigin = '';
         const grassTexture = loader.load('/assets/grass/blade_diffuse.jpg');
@@ -181,55 +186,71 @@ export default class SerenityGrass implements Grass {
         }
 
         const plane = this.getPlane();
-        let vertices: TypedArray;
-        if (!plane || plane.geometry.attributes.position.array.length < 10000) {
-            vertices = new Uint8Array().fill(0,0, 30000);
-        } else {
-            vertices = plane.geometry.attributes.position.array;
-        }
-        const segments = Math.min(99, this.size - 1),
-            cSize = segments + 1,
-            ratio = cSize / this.size,
-            hW = this.size / 2;
+        const vertices: TypedArray | undefined =
+            plane && plane.geometry.attributes.position.array.length >= 10000
+                ? plane.geometry.attributes.position.array
+                : undefined;
+        const segments = Math.min(99, this.size - 1);
+        const cSize = segments + 1;
+        const ratio = cSize / this.size;
+        const halfWidth = this.size / 2;
 
-        // Each instance has its own data for position, orientation and scale
-        const indices = [];
-        const offsets = [];
-        const scales = [];
-        const halfRootAngles = [];
-        let x,y,z,x_g, z_g, n, h;
+        const indices: number[] = [];
+        const offsets: number[] = [];
+        const scales: number[] = [];
+        const halfRootAngles: number[] = [];
+        const targetBlades = Math.max(1, this.instances);
 
-        //For each instance of the grass blade
-        for (let i = 0; i < this.instances; i++){
-
-            indices.push(i/this.instances);
-
-            //Offset of the roots
-            /*x = Math.random() * this.size - this.size/2;
-            z = Math.random() * this.size - this.size/2;
-            y = 100;*/
-            x_g = MathUtils.randFloat(0, cSize - 1);
-            z_g = MathUtils.randFloat(0, cSize - 1);
-
-            n = (Math.round(z_g) * cSize + Math.round(x_g)) * 3;
-
-            h = vertices[n + 1] + 0.2;
-
-            x = x_g / ratio - hW;
-            y = h || 0.2;
-            z = z_g / ratio - hW;
-
-            offsets.push(x, y, z);
-
-            //Random orientation
+        const placeBlade = (x_g: number, z_g: number, densityBias = 1) => {
+            const x = x_g / ratio - halfWidth;
+            const z = z_g / ratio - halfWidth;
+            const worldX = this.anchor.x + x;
+            const worldZ = this.anchor.z + z;
+            const density = densityBias * this.sampleSurfaceDensity(worldX, worldZ);
+            if (density <= 0 || Math.random() > density) {
+                return false;
+            }
+            const terrainY = this.sampleTerrainHeight(worldX, worldZ, vertices, cSize, x_g, z_g);
+            const localHeight = (terrainY - this.anchor.y) + 0.05;
+            offsets.push(x, localHeight, z);
+            indices.push((offsets.length / 3) / targetBlades);
             let angle = Math.PI - Math.random() * (2 * Math.PI);
-            halfRootAngles.push(Math.sin(0.5*angle), Math.cos(0.5*angle));
-
-            //Define variety in height
-            if (i % 3 != 0){
-                scales.push(2.0+Math.random() * 1.25);
+            halfRootAngles.push(Math.sin(0.5 * angle), Math.cos(0.5 * angle));
+            if ((offsets.length / 3) % 3 !== 0) {
+                scales.push(2.0 + Math.random() * 1.25);
             } else {
-                scales.push(2.0+Math.random());
+                scales.push(2.0 + Math.random());
+            }
+            return true;
+        };
+
+        const maxAttempts = targetBlades * 6;
+        let attempts = 0;
+        while ((offsets.length / 3) < targetBlades && attempts < maxAttempts) {
+            attempts++;
+            const x_g = MathUtils.randFloat(0, cSize - 1);
+            const z_g = MathUtils.randFloat(0, cSize - 1);
+            placeBlade(x_g, z_g);
+        }
+        let fallbackAttempts = 0;
+        while ((offsets.length / 3) < targetBlades && fallbackAttempts < targetBlades) {
+            fallbackAttempts++;
+            const x_g = MathUtils.randFloat(0, cSize - 1);
+            const z_g = MathUtils.randFloat(0, cSize - 1);
+            // Force placement ignoring density to ensure minimum coverage
+            if (!placeBlade(x_g, z_g, 1.0)) {
+                // density rejection; place anyway
+                const x = x_g / ratio - halfWidth;
+                const z = z_g / ratio - halfWidth;
+                const worldX = this.anchor.x + x;
+                const worldZ = this.anchor.z + z;
+                const terrainY = this.sampleTerrainHeight(worldX, worldZ, vertices, cSize, x_g, z_g);
+                const localHeight = (terrainY - this.anchor.y) + 0.05;
+                offsets.push(x, localHeight, z);
+                indices.push((offsets.length / 3) / targetBlades);
+                let angle = Math.PI - Math.random() * (2 * Math.PI);
+                halfRootAngles.push(Math.sin(0.5 * angle), Math.cos(0.5 * angle));
+                scales.push(2.0 + Math.random());
             }
         }
 
@@ -272,7 +293,7 @@ export default class SerenityGrass implements Grass {
         this.mesh = new Mesh(this.geometry, this.grassMaterial)
         this.mesh.castShadow = true;
         this.mesh.name = "grass";
-        this.mesh.position.set(this.size / 2, 0, this.size / 2);
+        this.mesh.position.copy(this.anchor);
         this.mesh.matrixWorldNeedsUpdate = true;
         this.scene.add(this.mesh);
     }
@@ -302,11 +323,65 @@ export default class SerenityGrass implements Grass {
         return this.enabled;
     }
 
+    setAnchor(anchor: Vector3) {
+        if (!anchor) {
+            return;
+        }
+        if (this.anchor.distanceToSquared(anchor) < 1e-4) {
+            return;
+        }
+        this.anchor.copy(anchor);
+        if (this.mesh) {
+            this.mesh.position.copy(this.anchor);
+        }
+        this.regenerateGrassCoordinates();
+    }
+
+    getAnchor() {
+        return this.anchor;
+    }
+
+    setSampler(sampler: (x: number, z: number)=>number) {
+        this.heightSampler = sampler;
+        this.regenerateGrassCoordinates();
+    }
+
+    private sampleTerrainHeight(
+        worldX: number,
+        worldZ: number,
+        vertices?: TypedArray,
+        gridSize?: number,
+        xIdx?: number,
+        zIdx?: number
+    ): number {
+        if (this.heightSampler) {
+            return this.heightSampler(worldX, worldZ);
+        }
+        if (vertices && typeof gridSize === "number" && typeof xIdx === "number" && typeof zIdx === "number") {
+            const n = (Math.round(zIdx) * gridSize + Math.round(xIdx)) * 3;
+            return vertices[n + 1] || 0;
+        }
+        return this.anchor.y;
+    }
+
+    private sampleSurfaceDensity(worldX: number, worldZ: number): number {
+        if (!this.heightSampler) {
+            return 1;
+        }
+        const weights = sampleDefaultSplat(this.heightSampler, worldX, worldZ, undefined, 6);
+        const density = weights.r * 0.25 + weights.g * 1.0 + weights.b * 0.1;
+        return Math.max(0, Math.min(1, density));
+    }
+
     setSize(size: number) {
         if (size && size !== this.size) {
             this.size = size;
             this.regenerateGrassCoordinates();
         }
+    }
+
+    getSize() {
+        return this.size;
     }
 
 }
