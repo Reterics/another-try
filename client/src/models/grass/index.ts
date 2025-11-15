@@ -298,12 +298,20 @@ export default class SerenityGrass implements Grass {
         this.scene.add(this.mesh);
     }
 
-    refresh() {
+    refresh(cameraPosition?: Vector3) {
         if (!this.enabled) {
             return this.destroy();
         }
         if (!this.mesh) {
             this.addToScene();
+        }
+        if (cameraPosition) {
+            const cameraUniform = this.grassMaterial.uniforms.cameraPosition?.value as Vector3 | undefined;
+            if (cameraUniform) {
+                cameraUniform.copy(cameraPosition);
+            } else {
+                this.grassMaterial.uniforms.cameraPosition = { value: cameraPosition.clone() } as IUniform;
+            }
         }
         this.grassMaterial.uniforms.time.value = this.clock.getElapsedTime();
         this.grassMaterial.uniformsNeedUpdate = true;

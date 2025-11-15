@@ -200,6 +200,10 @@ export class EarthTerrain {
     this.perlin = new Perlin2D(params.seed);
   }
 
+  getParams(): EarthParams {
+    return { ...this.params };
+  }
+
   sample01(x: number, z: number): number {
     const p = this.params;
     const ridgedOpts = {
