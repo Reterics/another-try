@@ -14,7 +14,7 @@ export interface Grass {
 
     regenerateGrassCoordinates: ()=>void
     addToScene: ()=>void
-    refresh: ()=>void
+    refresh: (cameraPosition?: Vector3)=>void
     destroy: ()=>void
     isEnabled: (bool: boolean)=>Boolean
     setSize: (size: number)=>void
@@ -28,4 +28,15 @@ export interface GrassOptions {
     enabled?: boolean
     sampler?: (x: number, z: number)=>number
     anchor?: Vector3
+}
+
+export interface GrassManagerOptions {
+    patchRadius?: number
+    instancesPerPatch?: number
+    maxPatches?: number
+    enabled?: boolean
+    lodSteps?: number[]
+    windIntensity?: number
+    impostorRadius?: number
+    impostorDensity?: number
 }

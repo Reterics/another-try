@@ -36,6 +36,7 @@ import {
     splatDebugColor,
     sampleDefaultSplat
 } from "../utils/terrain.ts";
+import { environmentWorkerClient } from "../workers/environmentWorkerClient.ts";
 type TerrainTextureKey = 'grass' | 'dirt' | 'rock' | 'snow';
 
 const TERRAIN_TEXTURE_PATHS: Record<TerrainTextureKey, string> = {
@@ -87,6 +88,7 @@ export class TerrainManager {
     private map: ATMap;
     private chunkEnvironment: TerrainEnvironment;
     private chunkMeshes: Map<string, Mesh>;
+    private chunkRequests: Map<string, Promise<void>>;
     private chunkSize = 320;
     private chunkSegments = 64;
     private chunkRadius = 1;
@@ -108,6 +110,7 @@ export class TerrainManager {
         };
         this.chunkEnvironment.environment.name = 'procedural-world-chunks';
         this.chunkMeshes = new Map();
+        this.chunkRequests = new Map();
         this.environments = [this.chunkEnvironment];
         this.surfaceTextures = this.loadSurfaceTextures();
         this.collider = new THREE.Mesh();
@@ -284,7 +287,51 @@ export class TerrainManager {
         return `${x}:${z}`;
     }
 
-    private buildSplatTexture(cx: number, cz: number) {
+    private queueChunkBuild(cx: number, cz: number) {
+        const key = this.chunkKey(cx, cz);
+        if (this.chunkRequests.has(key)) {
+            return;
+        }
+        const request = this.buildChunkMesh(cx, cz)
+            .then(mesh => {
+                if (!this.isChunkWithinRadius(cx, cz) || this.chunkMeshes.has(key)) {
+                    this.disposeChunkMesh(mesh);
+                    return;
+                }
+                this.chunkEnvironment.environment.add(mesh);
+                this.chunkMeshes.set(key, mesh);
+            })
+            .catch(err => console.error('[TerrainManager] Failed to build chunk', err))
+            .finally(() => {
+                this.chunkRequests.delete(key);
+            });
+        this.chunkRequests.set(key, request);
+    }
+
+    private isChunkWithinRadius(cx: number, cz: number) {
+        if (!this.currentChunk) {
+            return true;
+        }
+        const dx = Math.abs(this.currentChunk.x - cx);
+        const dz = Math.abs(this.currentChunk.z - cz);
+        return dx <= this.chunkRadius && dz <= this.chunkRadius;
+    }
+
+    private disposeChunkMesh(mesh: Mesh) {
+        if (Array.isArray(mesh.material)) {
+            mesh.material.forEach(mat => mat.dispose());
+        } else {
+            mesh.material.dispose();
+        }
+        const splat: DataTexture | undefined = mesh.userData?.splatTexture;
+        splat?.dispose();
+        mesh.geometry.dispose();
+    }
+
+    private buildSplatTexture(cx: number, cz: number, precomputed?: { data: Uint8Array; resolution: number }) {
+        if (precomputed) {
+            return this.createSplatTextureFromData(precomputed.data, precomputed.resolution);
+        }
         const resolution = 48;
         const data = new Uint8Array(resolution * resolution * 4);
         const sampler = this.getHeightSampler();
@@ -303,6 +350,16 @@ export class TerrainManager {
                 data[idx + 3] = Math.min(255, Math.round(weights.a * 255));
             }
         }
+        const texture = new DataTexture(data, resolution, resolution, RGBAFormat);
+        texture.needsUpdate = true;
+        texture.wrapS = ClampToEdgeWrapping;
+        texture.wrapT = ClampToEdgeWrapping;
+        texture.minFilter = LinearFilter;
+        texture.magFilter = LinearFilter;
+        return texture;
+    }
+
+    private createSplatTextureFromData(data: Uint8Array, resolution: number) {
         const texture = new DataTexture(data, resolution, resolution, RGBAFormat);
         texture.needsUpdate = true;
         texture.wrapS = ClampToEdgeWrapping;
@@ -373,16 +430,41 @@ diffuseColor = vec4(blended, 1.0);
         return material;
     }
 
-    private buildChunkMesh(cx: number, cz: number): Mesh {
+    private async buildChunkMesh(cx: number, cz: number): Promise<Mesh> {
         const geometry = new THREE.PlaneGeometry(this.chunkSize, this.chunkSize, this.chunkSegments, this.chunkSegments);
-        const sampler = (x: number, z: number) => this.earthTerrain.sampleHeight(x, z);
         const centerX = cx * this.chunkSize + this.chunkSize / 2;
         const centerZ = cz * this.chunkSize + this.chunkSize / 2;
         geometry.rotateX(-Math.PI / 2);
         geometry.translate(centerX, 0, centerZ);
-        applyProceduralHeightsWorld(geometry, sampler);
 
-        const splatTexture = this.buildSplatTexture(cx, cz);
+        let splatTexture: DataTexture | undefined;
+        try {
+            const positionArray = geometry.attributes.position.array as Float32Array;
+            const positionsCopy = new Float32Array(positionArray);
+            const workerResult = await environmentWorkerClient.computeChunkData({
+                positions: positionsCopy,
+                terrainParams: this.earthTerrain.getParams(),
+                chunkX: cx,
+                chunkZ: cz,
+                chunkSize: this.chunkSize,
+                chunkSegments: this.chunkSegments,
+                splatResolution: 64
+            });
+            const pos = geometry.attributes.position.array as Float32Array;
+            for (let i = 0, v = 0; i < pos.length; i += 3, v++) {
+                pos[i + 1] = workerResult.heights[v];
+            }
+            geometry.attributes.position.needsUpdate = true;
+            geometry.computeVertexNormals();
+            geometry.computeBoundingBox();
+            splatTexture = this.createSplatTextureFromData(workerResult.splat, workerResult.splatResolution);
+        } catch (err) {
+            console.warn('[TerrainManager] Worker chunk build failed, falling back to main thread', err);
+            const sampler = (x: number, z: number) => this.earthTerrain.sampleHeight(x, z);
+            applyProceduralHeightsWorld(geometry, sampler);
+            splatTexture = this.buildSplatTexture(cx, cz);
+        }
+
         const material = this.createChunkMaterial(splatTexture);
         const mesh = new THREE.Mesh(geometry, material);
         mesh.castShadow = true;
@@ -418,9 +500,7 @@ diffuseColor = vec4(blended, 1.0);
                 const key = this.chunkKey(cx, cz);
                 required.add(key);
                 if (!this.chunkMeshes.has(key)) {
-                    const mesh = this.buildChunkMesh(cx, cz);
-                    this.chunkEnvironment.environment.add(mesh);
-                    this.chunkMeshes.set(key, mesh);
+                    this.queueChunkBuild(cx, cz);
                     changed = true;
                 }
             }
@@ -429,14 +509,7 @@ diffuseColor = vec4(blended, 1.0);
         for (const [key, mesh] of this.chunkMeshes) {
             if (!required.has(key)) {
                 this.chunkEnvironment.environment.remove(mesh);
-                if (Array.isArray(mesh.material)) {
-                    mesh.material.forEach(mat => mat.dispose());
-                } else {
-                    mesh.material.dispose();
-                }
-                const splat: DataTexture | undefined = mesh.userData?.splatTexture;
-                splat?.dispose();
-                mesh.geometry.dispose();
+                this.disposeChunkMesh(mesh);
                 this.chunkMeshes.delete(key);
                 changed = true;
             }
@@ -642,7 +715,7 @@ diffuseColor = vec4(blended, 1.0);
         this.collider =  new THREE.Mesh( mergedGeometry );
         this.collider.name = 'collider';
         const colliderMaterial: MeshStandardMaterial = this.collider.material as MeshStandardMaterial;
-        colliderMaterial.wireframe = true;
+        colliderMaterial.wireframe = false;
         colliderMaterial.opacity = 0.5;
         colliderMaterial.transparent = true;
         return this.collider;
@@ -913,8 +986,9 @@ diffuseColor = vec4(blended, 1.0);
         this.scene.remove(this.collider);
         this.scene.remove(this.environment);
         this.chunkEnvironment.environment.clear();
-        this.chunkMeshes.forEach(mesh => mesh.geometry.dispose());
+        this.chunkMeshes.forEach(mesh => this.disposeChunkMesh(mesh));
         this.chunkMeshes.clear();
+        this.chunkRequests.clear();
         this.environments = [this.chunkEnvironment];
     }
 
@@ -944,8 +1018,19 @@ diffuseColor = vec4(blended, 1.0);
         return (x: number, z: number) => this.earthTerrain.sampleHeight(x, z);
     }
 
+    getChunkConfig() {
+        return {
+            size: this.chunkSize,
+            radius: this.chunkRadius,
+        };
+    }
+
     getProceduralPatchSize() {
         return this.chunkSize * (this.chunkRadius * 2 + 1);
+    }
+
+    getTerrainParams() {
+        return this.earthTerrain.getParams();
     }
 
     getSpawnPoint() {

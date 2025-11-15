@@ -12,7 +12,7 @@ import {ATMap} from "../../types/map.ts";
 import {MinimapController} from "./controllers/MinimapController.ts";
 import Clouds from "./models/cloud";
 import ATSky from "./models/sky.ts";
-import SerenityGrass from "./models/grass";
+import {GrassManager} from "./models/grass/grassManager.ts";
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
@@ -33,12 +33,17 @@ let camera: PerspectiveCamera;
 let renderer: WebGLRenderer;
 let scene: Scene;
 let hero: Hero;
-let grass: SerenityGrass | null = null;
+let grassManager: GrassManager | null = null;
 let controls: OrbitControls;
 let creatorController: CreatorController;
 let serverManager: ServerManager;
 let clouds: Clouds;
-const GRASS_PATCH_SIZE = 320;
+const GRASS_PATCH_INSTANCES = 130000;
+const GRASS_PATCH_RADIUS = 0;
+const GRASS_IMPOSTOR_RADIUS = 2;
+const GRASS_IMPOSTOR_DENSITY = 96;
+const GRASS_LOD_STEPS = [1, 0.6];
+const GRASS_WIND_INTENSITY = 0.35;
 
 let minimap: MinimapController;
 
@@ -175,15 +180,17 @@ async function init() {
         }
         hudController.openDialog('Loading', 'Add to scene');
         await map.addToScene();
-        if (!grass) {
-            grass = new SerenityGrass(scene, {
-                size: GRASS_PATCH_SIZE,
-                enabled: true,
-                instances: 300000,
-                sampler: map.getHeightSampler(),
-                anchor: map.getSpawnPoint()
+        if (!grassManager) {
+            grassManager = new GrassManager(scene, map, {
+                patchRadius: GRASS_PATCH_RADIUS,
+                instancesPerPatch: GRASS_PATCH_INSTANCES,
+                lodSteps: GRASS_LOD_STEPS,
+                windIntensity: GRASS_WIND_INTENSITY,
+                impostorRadius: GRASS_IMPOSTOR_RADIUS,
+                impostorDensity: GRASS_IMPOSTOR_DENSITY,
             });
-            grass.addToScene();
+        } else {
+            grassManager.setTerrain(map);
         }
         if (!animationRunning) {
             animate();
@@ -223,6 +230,7 @@ function animate() {
         return;
     }
     const time = performance.now();
+    const elapsedSeconds = time * 0.001;
     const cameFromHidden = prevTime === 0;
     const delta = cameFromHidden ? 0 : ( time - prevTime ) / 1000;
     if (cameFromHidden) {
@@ -282,7 +290,7 @@ function animate() {
 
         hero.update(delta);
         serverManager.update(delta);
-        grass?.refresh();
+        grassManager?.update(heroPlayer.position, camera.position, elapsedSeconds);
     }
 
     if (clouds) {
