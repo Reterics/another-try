@@ -715,6 +715,7 @@ diffuseColor = vec4(blended, 1.0);
         this.collider =  new THREE.Mesh( mergedGeometry );
         this.collider.name = 'collider';
         const colliderMaterial: MeshStandardMaterial = this.collider.material as MeshStandardMaterial;
+        colliderMaterial.visible = false;
         colliderMaterial.wireframe = false;
         colliderMaterial.opacity = 0.5;
         colliderMaterial.transparent = true;
@@ -736,6 +737,20 @@ diffuseColor = vec4(blended, 1.0);
             callback(this);
         }
         return this;
+    }
+
+
+    async preloadAroundSpawn(): Promise<void> {
+        const spawn = this.getSpawnPoint();
+        // Queue required chunks around spawn
+        this.ensureChunksAround(spawn);
+        // Capture the current set of pending chunk builds and wait for them
+        const pending = Array.from(this.chunkRequests.values());
+        if (pending.length > 0) {
+            await Promise.allSettled(pending);
+        }
+        // Rebuild collider with newly available chunk meshes
+        this.refreshCollider();
     }
 
     respawn(player: Mesh|Object3D) {

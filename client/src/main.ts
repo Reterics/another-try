@@ -180,6 +180,9 @@ async function init() {
         }
         hudController.openDialog('Loading', 'Add to scene');
         await map.addToScene();
+        // Ensure terrain chunks and collider are ready before starting the loop
+        await map.preloadAroundSpawn();
+
         if (!grassManager) {
             grassManager = new GrassManager(scene, map, {
                 patchRadius: GRASS_PATCH_RADIUS,
