@@ -119,7 +119,7 @@ export class GrassImpostorField {
                     }
                     const height = this.sampler(worldX, worldZ);
                     this.dummy.position.set(worldX, height, worldZ);
-                    const heightScale = 0.8 + scale * 0.15;
+                    const heightScale = 0.8 + scale * 0.10;
                     const widthScale = 1.5 + scale * 0.6;
                     this.dummy.scale.set(widthScale, heightScale, widthScale);
                     this.dummy.lookAt(cameraPosition.x, height + heightScale * 0.4, cameraPosition.z);
@@ -169,6 +169,7 @@ export class GrassImpostorField {
             transparent: true,
             opacity: 0.92,
             depthWrite: false,
+            alphaTest: 0.5,
         } as MeshBasicMaterialParameters;
         if (textures) {
             materialParams.map = textures.diffuse;
@@ -211,9 +212,9 @@ export class GrassImpostorField {
             diffuseCtx.quadraticCurveTo(cpX - tilt * width * 0.5, (baseY + topY) / 2, x - width * 0.4, baseY);
             diffuseCtx.closePath();
             const gradient = diffuseCtx.createLinearGradient(x, baseY, x, topY);
-            gradient.addColorStop(0, '#1e7a27');
+            gradient.addColorStop(0, '#0A1E01');
             gradient.addColorStop(0.5, color);
-            gradient.addColorStop(1, '#d4f48f');
+            gradient.addColorStop(1, '#1D4D03');
             diffuseCtx.fillStyle = gradient;
             diffuseCtx.fill();
 

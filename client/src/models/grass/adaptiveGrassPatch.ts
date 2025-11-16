@@ -1,7 +1,7 @@
 import {
     Box3,
     Color,
-    DoubleSide,
+    FrontSide,
     InstancedBufferAttribute,
     InstancedBufferGeometry,
     Mesh,
@@ -135,9 +135,11 @@ export class AdaptiveGrassPatch {
                 colorTop: { value: new Color('#a7f06d') },
                 colorBottom: { value: new Color('#2f5f1f') },
             },
-            side: DoubleSide,
-            transparent: true,
-            depthWrite: false
+            side: FrontSide,
+            transparent: false,
+            depthWrite: true,
+            depthTest: true,
+            alphaTest: 0.5
         });
 
         this.mesh = new Mesh(this.geometry, this.material);
