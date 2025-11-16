@@ -46,4 +46,5 @@ export interface GrassManagerOptions {
     lodSteps?: number[]
     windIntensity?: number
     impostorDensity?: number
+    maxPatchCreatesPerFrame?: number
 }

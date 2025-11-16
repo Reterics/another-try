@@ -1,6 +1,6 @@
 import type { EarthParams } from "../utils/terrain.ts";
 
-type WorkerRequestType = 'grass-heights' | 'chunk-data';
+type WorkerRequestType = 'grass-heights' | 'chunk-data' | 'impostor-heights';
 
 interface WorkerRequestPayloads {
     'grass-heights': {
@@ -18,6 +18,10 @@ interface WorkerRequestPayloads {
         chunkSegments: number;
         splatResolution: number;
     };
+    'impostor-heights': {
+        positions: Float32Array;
+        terrainParams: EarthParams;
+    };
 }
 
 type WorkerResponsePayloads = {
@@ -28,6 +32,9 @@ type WorkerResponsePayloads = {
         heights: Float32Array;
         splat: Uint8Array;
         splatResolution: number;
+    };
+    'impostor-heights': {
+        heights: Float32Array;
     };
 }
 
@@ -93,6 +100,14 @@ class EnvironmentWorkerClient {
             transfers.push(params.positions.buffer);
         }
         return this.postMessage('chunk-data', params, transfers);
+    }
+
+    computeImpostorHeights(params: WorkerRequestPayloads['impostor-heights']) {
+        const transfers: Transferable[] = [];
+        if (params.positions?.buffer) {
+            transfers.push(params.positions.buffer);
+        }
+        return this.postMessage('impostor-heights', params, transfers);
     }
 }
 

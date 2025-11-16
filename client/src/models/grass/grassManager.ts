@@ -28,11 +28,14 @@ export class GrassManager {
     private lodRadii!: number[]; // distances in world units
     private windIntensity!: number;
     private enabled!: boolean;
+    // @ts-ignore
     private lastChunk?: { x: number; z: number };
     private terrainParams!: EarthParams;
     private impostorRadius!: number; // world units
     private impostorDensity!: number;
     private impostorField?: GrassImpostorField;
+    private createQueue: Array<{ key: string; cx: number; cz: number; lodIndex: number }>;
+    private maxPatchCreatesPerFrame: number;
 
     constructor(scene: Scene, terrain: TerrainManager, options?: GrassManagerOptions) {
         this.scene = scene;
@@ -40,6 +43,8 @@ export class GrassManager {
         this.overrides = options || {};
         this.patches = new Map();
         this.pool = [];
+        this.createQueue = [];
+        this.maxPatchCreatesPerFrame = Math.max(1, this.overrides.maxPatchCreatesPerFrame ?? 2);
         this.configureFromTerrain();
     }
 
@@ -62,6 +67,7 @@ export class GrassManager {
         this.impostorField?.dispose();
         this.impostorField = undefined;
         this.lastChunk = undefined;
+        this.createQueue.length = 0;
         this.configureFromTerrain();
     }
 
@@ -71,6 +77,7 @@ export class GrassManager {
         this.pool.length = 0;
         this.impostorField?.dispose();
         this.impostorField = undefined;
+        this.createQueue.length = 0;
     }
 
     private ensurePatches(position: Vector3) {
@@ -119,6 +126,17 @@ export class GrassManager {
             toCreate.push({ key, cx: chunkX, cz: chunkZ, lodIndex });
         }
 
+        this.createQueue = this.createQueue.filter(entry => {
+            if (!wanted.has(entry.key)) {
+                return false;
+            }
+            const updated = wanted.get(entry.key);
+            if (typeof updated === 'number') {
+                entry.lodIndex = updated;
+            }
+            return true;
+        });
+
         // Reconcile patches every update based on wanted set (safe, minimal churn)
         for (const [key, record] of this.patches) {
             if (!wanted.has(key)) {
@@ -128,11 +146,9 @@ export class GrassManager {
             }
         }
         for (const entry of toCreate) {
-            const record = this.createPatch(entry.key, entry.cx, entry.cz, entry.lodIndex);
-            if (record) {
-                this.patches.set(entry.key, record);
-            }
+            this.enqueuePatchCreation(entry);
         }
+        this.processPatchQueue();
 
         // Track last chunk for potential optimization elsewhere
         this.lastChunk = { x: chunkX, z: chunkZ };
@@ -229,17 +245,20 @@ export class GrassManager {
         this.heightSampler = this.terrain.getHeightSampler();
         this.terrainParams = this.terrain.getTerrainParams();
         this.impostorDensity = Math.max(1, this.overrides.impostorDensity ?? 4);
+        const impostorChunkSize = this.chunkSize * 2;
         if (this.impostorField) {
             this.impostorField.setSampler(this.heightSampler);
-            this.impostorField.setConfig(this.patchRadius, this.impostorRadius, this.chunkSize);
+            this.impostorField.setTerrainParams(this.terrainParams);
+            this.impostorField.setConfig(this.patchRadius, this.impostorRadius, impostorChunkSize);
             this.impostorField.setDensity(this.impostorDensity);
         } else {
             this.impostorField = new GrassImpostorField({
                 scene: this.scene,
                 sampler: this.heightSampler,
-                chunkSize: this.chunkSize * 2,
+                chunkSize: impostorChunkSize,
                 patchRadius: this.patchRadius,
                 impostorRadius: this.impostorRadius,
+                terrainParams: this.terrainParams,
                 densityPerCell: this.impostorDensity
             });
         }
@@ -250,12 +269,14 @@ export class GrassManager {
             record.patch.dispose();
         });
         this.patches.clear();
+        this.createQueue.length = 0;
     }
 
     private chunkKey(x: number, z: number) {
         return `${x}:${z}`;
     }
 
+    // @ts-ignore
     private lodFactor(ring: number) {
         const index = Math.min(ring, this.lodSteps.length - 1);
         return this.lodSteps[index];
@@ -271,5 +292,35 @@ export class GrassManager {
     private lodFactorByIndex(index: number) {
         const clamped = Math.max(0, Math.min(index, this.lodSteps.length - 1));
         return this.lodSteps[clamped];
+    }
+
+    private enqueuePatchCreation(entry: { key: string; cx: number; cz: number; lodIndex: number }) {
+        if (this.patches.has(entry.key)) {
+            return;
+        }
+        const existing = this.createQueue.find(item => item.key === entry.key);
+        if (existing) {
+            existing.lodIndex = entry.lodIndex;
+            return;
+        }
+        this.createQueue.push(entry);
+    }
+
+    private processPatchQueue(limit = this.maxPatchCreatesPerFrame) {
+        let created = 0;
+        while (created < limit && this.createQueue.length > 0) {
+            const entry = this.createQueue.shift();
+            if (!entry) {
+                break;
+            }
+            if (this.patches.has(entry.key)) {
+                continue;
+            }
+            const record = this.createPatch(entry.key, entry.cx, entry.cz, entry.lodIndex);
+            if (record) {
+                this.patches.set(entry.key, record);
+                created++;
+            }
+        }
     }
 }

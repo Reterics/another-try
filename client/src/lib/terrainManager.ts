@@ -97,6 +97,7 @@ export class TerrainManager {
     private surfaceTextures: Record<TerrainTextureKey, Texture>;
     private textureRepeatMeters = 18;
     private chunkVersion = 0;
+    private pendingColliderRefresh = false;
 
     constructor(model: ATMap, scene: Scene, controls:OrbitControls, callback: Function) {
         this.scene = scene;
@@ -116,8 +117,8 @@ export class TerrainManager {
         this.collider = new THREE.Mesh();
         this.map = model;
         this.earthTerrain = new EarthTerrain();
-        const spawnX = 0;
-        const spawnZ = 0;
+        const spawnX = 413;
+        const spawnZ = 296;
         const spawnY = this.earthTerrain.sampleHeight(spawnX, spawnZ) + 10;
 
         this.energyNode = document.getElementById("HUD-energy") as HTMLProgressElement;
@@ -140,10 +141,14 @@ export class TerrainManager {
             new TerrainManager(map, scene, controls, resolve);
         })
     }
-    setSpawnCoordinates (x: number, y: number, z: number) {
+    setSpawnCoordinates (x: number, y: number, z: number, options?: { recenter?: boolean }) {
         this.params.spawnCoordinates = [x, y, z];
-        this.previewCenter.set(x, 0, z);
-        this.currentChunk = undefined;
+        // Do not re-center chunk/minimap by default when only changing spawn.
+        // Allow explicit re-centering when desired (e.g., when teleporting immediately).
+        if (options?.recenter) {
+            this.previewCenter.set(x, 0, z);
+            this.currentChunk = undefined;
+        }
     }
 
     updateMapTexture(map: TerrainEnvironment) {
@@ -300,6 +305,7 @@ export class TerrainManager {
                 }
                 this.chunkEnvironment.environment.add(mesh);
                 this.chunkMeshes.set(key, mesh);
+                this.pendingColliderRefresh = true;
             })
             .catch(err => console.error('[TerrainManager] Failed to build chunk', err))
             .finally(() => {
@@ -501,7 +507,6 @@ diffuseColor = vec4(blended, 1.0);
                 required.add(key);
                 if (!this.chunkMeshes.has(key)) {
                     this.queueChunkBuild(cx, cz);
-                    changed = true;
                 }
             }
         }
@@ -719,6 +724,7 @@ diffuseColor = vec4(blended, 1.0);
         colliderMaterial.wireframe = false;
         colliderMaterial.opacity = 0.5;
         colliderMaterial.transparent = true;
+        this.pendingColliderRefresh = false;
         return this.collider;
     }
 
@@ -773,6 +779,31 @@ diffuseColor = vec4(blended, 1.0);
 
         this.controls.update();
     }
+
+    // Better UX helpers
+    // 1) Set spawn without re-centering by default via setSpawnCoordinates(x,y,z)
+    // 2) Explicitly re-center and teleport when desired using the methods below
+    async setSpawnAndTeleport(player: Mesh|Object3D, x: number, y: number, z: number, options?: { preload?: boolean }) {
+        // Explicitly re-center to the new spawn and teleport player there
+        this.setSpawnCoordinates(x, y, z, { recenter: true });
+        this.respawn(player);
+        if (options?.preload) {
+            await this.preloadAroundSpawn();
+        }
+    }
+
+    async teleportToSpawn(player: Mesh|Object3D, options?: { preload?: boolean; recenter?: boolean }) {
+        const [x, y, z] = this.params.spawnCoordinates;
+        // Optionally re-center to current spawn before teleport
+        if (options?.recenter) {
+            this.setSpawnCoordinates(x, y, z, { recenter: true });
+        }
+        this.respawn(player);
+        if (options?.preload) {
+            await this.preloadAroundSpawn();
+        }
+    }
+
     initPlayerEvents() {
         window.addEventListener( 'keydown', e => {
 
@@ -835,7 +866,7 @@ diffuseColor = vec4(blended, 1.0);
         let moving = false;
         if (this.collider && camera && player) {
             const chunkChanged = this.ensureChunksAround(player.position);
-            if (chunkChanged) {
+            if (chunkChanged || this.pendingColliderRefresh) {
                 this.refreshCollider();
             }
             this.collider.visible = this.params.displayCollider || false;

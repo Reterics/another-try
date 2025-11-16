@@ -11,6 +11,8 @@ import {
     Vector3
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import type { EarthParams } from "../../utils/terrain.ts";
+import { environmentWorkerClient } from "../../workers/environmentWorkerClient.ts";
 
 interface GrassImpostorFieldOptions {
     scene: Scene;
@@ -18,7 +20,15 @@ interface GrassImpostorFieldOptions {
     chunkSize: number;
     patchRadius: number;
     impostorRadius: number;
+    terrainParams: EarthParams;
     densityPerCell?: number;
+}
+
+interface ImpostorInstance {
+    worldX: number;
+    worldZ: number;
+    widthScale: number;
+    heightScale: number;
 }
 
 const jitter = (dx: number, dz: number) => {
@@ -44,6 +54,17 @@ export class GrassImpostorField {
     private readonly dummy: Object3D;
     private maxInstances: number;
     private densityPerCell: number;
+    private terrainParams: EarthParams;
+    private readonly cachedPlayerPosition: Vector3;
+    private readonly cachedCameraPosition: Vector3;
+    private layoutCenter?: Vector3;
+    private rebuildDistance: number;
+    private layoutDirty = true;
+    private currentInstances: ImpostorInstance[];
+    private currentHeights?: Float32Array;
+    private pendingInstances?: ImpostorInstance[];
+    private pendingGeneration = 0;
+    private layoutGeneration = 0;
 
     constructor(options: GrassImpostorFieldOptions) {
         this.scene = options.scene;
@@ -52,13 +73,27 @@ export class GrassImpostorField {
         this.patchRadius = options.patchRadius;
         this.impostorRadius = options.impostorRadius;
         this.densityPerCell = Math.max(1, options.densityPerCell ?? 3);
+        this.terrainParams = options.terrainParams;
         this.dummy = new Object3D();
         this.maxInstances = 0;
+        this.cachedPlayerPosition = new Vector3();
+        this.cachedCameraPosition = new Vector3();
+        this.currentInstances = [];
+        this.rebuildDistance = Math.max(this.chunkSize * 0.35, 1);
         this.rebuildMesh();
+    }
+
+    private updateRebuildDistance() {
+        this.rebuildDistance = Math.max(this.chunkSize * 0.35, 1);
     }
 
     setSampler(sampler: (x: number, z: number) => number) {
         this.sampler = sampler;
+    }
+
+    setTerrainParams(params: EarthParams) {
+        this.terrainParams = params;
+        this.layoutDirty = true;
     }
 
     setConfig(patchRadius: number, impostorRadius: number, chunkSize: number) {
@@ -67,9 +102,12 @@ export class GrassImpostorField {
         this.chunkSize = chunkSize;
         // ensure impostor radius is at least one cell beyond patch radius
         this.impostorRadius = Math.max(patchRadius + this.chunkSize, impostorRadius);
+        this.updateRebuildDistance();
         const instancesAfter = this.calculateMaxInstances();
         if (!this.mesh || instancesAfter !== instancesBefore) {
             this.rebuildMesh();
+        } else {
+            this.layoutDirty = true;
         }
     }
 
@@ -86,26 +124,51 @@ export class GrassImpostorField {
         if (!this.mesh) {
             return;
         }
-        const chunkX = Math.floor(playerPosition.x / this.chunkSize);
-        const chunkZ = Math.floor(playerPosition.z / this.chunkSize);
+        this.cachedPlayerPosition.copy(playerPosition);
+        this.cachedCameraPosition.copy(cameraPosition);
+
+        if (this.shouldRebuildLayout(playerPosition)) {
+            const layout = this.buildCandidateLayout(playerPosition);
+            this.requestImpostorHeights(layout);
+        }
+
+        if (this.currentInstances.length && this.currentHeights && this.currentHeights.length >= this.currentInstances.length) {
+            this.populateInstances(this.currentInstances, this.currentHeights, cameraPosition);
+        } else {
+            this.mesh.visible = false;
+        }
+    }
+
+    private shouldRebuildLayout(position: Vector3) {
+        if (this.layoutDirty || !this.layoutCenter) {
+            return true;
+        }
+        const dx = position.x - this.layoutCenter.x;
+        const dz = position.z - this.layoutCenter.z;
+        return (dx * dx + dz * dz) >= (this.rebuildDistance * this.rebuildDistance);
+    }
+
+    private buildCandidateLayout(position: Vector3): ImpostorInstance[] {
+        const chunkX = Math.floor(position.x / this.chunkSize);
+        const chunkZ = Math.floor(position.z / this.chunkSize);
         const maxOffset = Math.ceil(this.impostorRadius / this.chunkSize) + 1;
-        let index = 0;
-        const innerExclusion = this.patchRadius + this.chunkSize * Math.SQRT1_2; // match blades selection margin to avoid overlap
+        const innerExclusion = this.patchRadius + this.chunkSize * Math.SQRT1_2;
+        const instances: ImpostorInstance[] = [];
         outer: for (let dz = -maxOffset; dz <= maxOffset; dz++) {
             for (let dx = -maxOffset; dx <= maxOffset; dx++) {
-                if (index >= this.maxInstances) {
+                if (instances.length >= this.maxInstances) {
                     break outer;
                 }
                 const cx = chunkX + dx;
                 const cz = chunkZ + dz;
                 const cellCenterX = cx * this.chunkSize + this.chunkSize / 2;
                 const cellCenterZ = cz * this.chunkSize + this.chunkSize / 2;
-                const centerDist = Math.hypot(cellCenterX - playerPosition.x, cellCenterZ - playerPosition.z);
+                const centerDist = Math.hypot(cellCenterX - position.x, cellCenterZ - position.z);
                 if (centerDist > this.impostorRadius + this.chunkSize * Math.SQRT1_2) {
-                    continue; // cell fully outside outer circle
+                    continue;
                 }
                 for (let sample = 0; sample < this.densityPerCell; sample++) {
-                    if (index >= this.maxInstances) {
+                    if (instances.length >= this.maxInstances) {
                         break outer;
                     }
                     const hashX = cx + sample * 17.23;
@@ -113,25 +176,102 @@ export class GrassImpostorField {
                     const { offsetX, offsetZ, scale } = jitter(hashX, hashZ);
                     const worldX = cellCenterX + offsetX * this.chunkSize * 0.35;
                     const worldZ = cellCenterZ + offsetZ * this.chunkSize * 0.35;
-                    const radial = Math.hypot(worldX - playerPosition.x, worldZ - playerPosition.z);
+                    const radial = Math.hypot(worldX - position.x, worldZ - position.z);
                     if (radial <= innerExclusion || radial > this.impostorRadius) {
-                        continue; // keep impostors strictly in the ring
+                        continue;
                     }
-                    const height = this.sampler(worldX, worldZ);
-                    this.dummy.position.set(worldX, height, worldZ);
                     const heightScale = 0.8 + scale * 0.10;
                     const widthScale = 1.5 + scale * 0.6;
-                    this.dummy.scale.set(widthScale, heightScale, widthScale);
-                    this.dummy.lookAt(cameraPosition.x, height + heightScale * 0.4, cameraPosition.z);
-                    this.dummy.updateMatrix();
-                    this.mesh.setMatrixAt(index, this.dummy.matrix);
-                    index++;
+                    instances.push({ worldX, worldZ, widthScale, heightScale });
                 }
             }
         }
-        this.mesh.count = index;
+        if (!this.layoutCenter) {
+            this.layoutCenter = new Vector3();
+        }
+        this.layoutCenter.copy(position);
+        this.layoutDirty = false;
+        return instances;
+    }
+
+    private requestImpostorHeights(instances: ImpostorInstance[]) {
+        if (!instances.length) {
+            this.currentInstances = [];
+            this.currentHeights = undefined;
+            this.pendingInstances = undefined;
+            if (this.mesh) {
+                this.mesh.count = 0;
+                this.mesh.visible = false;
+            }
+            return;
+        }
+        this.pendingInstances = instances;
+        const generation = ++this.layoutGeneration;
+        this.pendingGeneration = generation;
+        const positions = new Float32Array(instances.length * 2);
+        for (let i = 0; i < instances.length; i++) {
+            positions[i * 2] = instances[i].worldX;
+            positions[i * 2 + 1] = instances[i].worldZ;
+        }
+        environmentWorkerClient.computeImpostorHeights({
+            positions,
+            terrainParams: this.terrainParams
+        }).then(({ heights }) => {
+            if (this.pendingGeneration !== generation) {
+                return;
+            }
+            this.currentInstances = this.pendingInstances ? [...this.pendingInstances] : [];
+            this.currentHeights = heights;
+            this.pendingInstances = undefined;
+            this.populateInstances(this.currentInstances, heights, this.cachedCameraPosition);
+        }).catch((err) => {
+            console.error('[GrassImpostorField] Worker impostor heights failed', err);
+            if (this.pendingGeneration !== generation || !this.pendingInstances) {
+                return;
+            }
+            const fallback = this.computeFallbackHeights(this.pendingInstances);
+            this.currentInstances = [...this.pendingInstances];
+            this.currentHeights = fallback;
+            this.pendingInstances = undefined;
+            this.populateInstances(this.currentInstances, fallback, this.cachedCameraPosition);
+        });
+    }
+
+    private computeFallbackHeights(instances: ImpostorInstance[]) {
+        const heights = new Float32Array(instances.length);
+        for (let i = 0; i < instances.length; i++) {
+            const inst = instances[i];
+            heights[i] = this.sampler(inst.worldX, inst.worldZ);
+        }
+        return heights;
+    }
+
+    private populateInstances(instances: ImpostorInstance[], heights: Float32Array, cameraPosition: Vector3) {
+        if (!this.mesh) {
+            return;
+        }
+        const count = Math.min(instances.length, heights.length, this.maxInstances);
+        for (let i = 0; i < count; i++) {
+            const inst = instances[i];
+            const height = heights[i];
+            this.dummy.position.set(inst.worldX, height, inst.worldZ);
+            this.dummy.scale.set(inst.widthScale, inst.heightScale, inst.widthScale);
+            this.dummy.lookAt(cameraPosition.x, height + inst.heightScale * 0.4, cameraPosition.z);
+            this.dummy.updateMatrix();
+            this.mesh.setMatrixAt(i, this.dummy.matrix);
+        }
+        this.mesh.count = count;
         this.mesh.instanceMatrix.needsUpdate = true;
-        this.mesh.visible = index > 0;
+        this.mesh.visible = count > 0;
+    }
+
+    private resetLayout() {
+        this.layoutDirty = true;
+        this.layoutCenter = undefined;
+        this.pendingInstances = undefined;
+        this.currentInstances = [];
+        this.currentHeights = undefined;
+        this.layoutGeneration++;
     }
 
     dispose() {
@@ -145,6 +285,7 @@ export class GrassImpostorField {
             }
             this.mesh = null;
         }
+        this.resetLayout();
     }
 
     private rebuildMesh() {
@@ -181,6 +322,7 @@ export class GrassImpostorField {
         this.mesh = new InstancedMesh(geometry, material, this.maxInstances);
         this.mesh.frustumCulled = false;
         this.scene.add(this.mesh);
+        this.layoutDirty = true;
     }
 
     private createProceduralTextures(): { diffuse: CanvasTexture; alpha: CanvasTexture } | undefined {

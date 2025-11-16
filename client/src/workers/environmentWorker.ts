@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import { EarthParams, EarthTerrain, sampleDefaultSplat } from "../utils/terrain.ts";
 
-type WorkerRequestType = 'grass-heights' | 'chunk-data';
+type WorkerRequestType = 'grass-heights' | 'chunk-data' | 'impostor-heights';
 
 type GrassHeightPayload = {
     seeds: Float32Array;
@@ -18,6 +18,11 @@ type ChunkDataPayload = {
     chunkSize: number;
     chunkSegments: number;
     splatResolution: number;
+};
+
+type ImpostorHeightsPayload = {
+    positions: Float32Array;
+    terrainParams: EarthParams;
 };
 
 interface WorkerRequest {
@@ -114,6 +119,23 @@ const handleChunkData = (
     };
 };
 
+const handleImpostorHeights = (
+    payload: ImpostorHeightsPayload
+) => {
+    const positions = payload.positions instanceof Float32Array
+        ? payload.positions
+        : new Float32Array(payload.positions);
+    const terrain = ensureTerrain(payload.terrainParams);
+    const count = positions.length / 2;
+    const heights = new Float32Array(count);
+    for (let i = 0, j = 0; i < positions.length; i += 2, j++) {
+        const wx = positions[i];
+        const wz = positions[i + 1];
+        heights[j] = terrain.sampleHeight(wx, wz);
+    }
+    return { heights };
+};
+
 ctx.onmessage = (event: MessageEvent<WorkerRequest>) => {
     const { id, type, payload } = event.data;
     const sendResponse = (message: WorkerResponse) => {
@@ -132,6 +154,9 @@ ctx.onmessage = (event: MessageEvent<WorkerRequest>) => {
             sendResponse({ id, type, success: true, payload: payloadResult });
         } else if (type === 'chunk-data') {
             const payloadResult = handleChunkData(payload as ChunkDataPayload);
+            sendResponse({ id, type, success: true, payload: payloadResult });
+        } else if (type === 'impostor-heights') {
+            const payloadResult = handleImpostorHeights(payload as ImpostorHeightsPayload);
             sendResponse({ id, type, success: true, payload: payloadResult });
         } else {
             sendResponse({ id, type, success: false, error: `Unknown worker task: ${type}` });
