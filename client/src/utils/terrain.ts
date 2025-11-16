@@ -33,7 +33,7 @@ export const defaultSplatParams: SplatParams = {
 
 export interface SplatWeights {
   // Using channels reminiscent of a typical RGBA splat texture
-  // R = sand, G = grass, B = rock, A = snow
+  // R = sand, G = grass, B = dirt, A = rock. Snow is derived from the leftover.
   r: number; g: number; b: number; a: number; // 0..1 weights
 }
 
@@ -76,28 +76,46 @@ export const sampleDefaultSplat = (
   const grassRise = smoothstep(params.grassMin - 0.05, params.grassMin + 0.05, h01);
   const grassFall = 1 - smoothstep(params.grassMax - 0.05, params.grassMax + 0.05, h01);
   let grass = Math.max(0, Math.min(1, grassRise * grassFall));
+
+  // Dirt forms a band between late grass and low rocks
+  const dirtLow = params.rockMin - 0.08;
+  const dirtHigh = params.rockMin + 0.08;
+  let dirt = smoothstep(dirtLow, params.rockMin, h01) * (1 - smoothstep(params.rockMin, dirtHigh, h01));
+  dirt = Math.max(0, Math.min(1, dirt));
+
   // Rock grows after rockMin and with slope
-  let rockHeight = smoothstep(params.rockMin - 0.05, params.rockMin + 0.05, h01);
+  let rockHeight = smoothstep(params.rockMin - 0.05, params.rockMin + 0.1, h01);
   // Snow grows after snowMin
   let snow = smoothstep(params.snowMin - 0.03, params.snowMin + 0.03, h01);
 
-  // Apply slope influence: push weight from grass/sand into rock as slope increases
+  // Apply slope influence: push weight from softer materials into rock as slope increases
   const slopeToRock = smoothstep(params.slopeRockStart, params.slopeRockFull, slope);
-  const fromSoft = Math.min(1, (sand + grass) * slopeToRock);
+  const fromSoft = Math.min(1, (sand + grass + dirt) * slopeToRock);
   rockHeight = Math.max(rockHeight, fromSoft);
   sand *= 1 - slopeToRock;
   grass *= 1 - slopeToRock * 0.8;
+  dirt *= 1 - slopeToRock * 0.6;
 
-  // Normalize and clamp
+  // Prevent lower materials from dominating under permanent snow
+  const snowMask = 1 - Math.min(1, snow);
+  sand *= snowMask;
+  grass *= snowMask;
+  dirt *= snowMask;
+  // Allow some rock detail to peek through snow while still biasing to snow
+  rockHeight *= 1 - snow * 0.5;
+
+  // Normalize and clamp (include snow to keep totals consistent; snow weight derived later)
   let r = Math.max(0, Math.min(1, sand));
   let g = Math.max(0, Math.min(1, grass));
-  let b = Math.max(0, Math.min(1, rockHeight));
-  let a = Math.max(0, Math.min(1, snow));
+  let b = Math.max(0, Math.min(1, dirt));
+  let a = Math.max(0, Math.min(1, rockHeight));
+  let s = Math.max(0, Math.min(1, snow));
 
-  const sum = r + g + b + a;
+  const sum = r + g + b + a + s;
   if (sum > 1e-6) {
-    r /= sum; g /= sum; b /= sum; a /= sum;
+    r /= sum; g /= sum; b /= sum; a /= sum; s /= sum;
   }
+  // Snow weight is not stored in the texture; derive from leftover downstream.
   return { r, g, b, a };
 };
 
@@ -117,14 +135,16 @@ export const splatDebugColor = (
     return { r: 10, g: 40, b: blue };
   }
   const w = sampleDefaultSplat(sampler, x, z, params);
+  const snowWeight = Math.max(0, 1 - (w.r + w.g + w.b + w.a));
   // Pick strongest weight and map to a flat debug color
-  const arr = [w.r, w.g, w.b, w.a];
-  const idx = arr.indexOf(Math.max(w.r, w.g, w.b, w.a));
+  const arr = [w.r, w.g, w.b, w.a, snowWeight];
+  const idx = arr.indexOf(Math.max(...arr));
   switch (idx) {
     case 0: return { r: 194, g: 178, b: 128 }; // sand (tan)
     case 1: return { r: 50, g: 160, b: 60 };   // grass (green)
-    case 2: return { r: 110, g: 110, b: 110 }; // rock (gray)
-    case 3: return { r: 250, g: 250, b: 250 }; // snow (white)
+    case 2: return { r: 134, g: 96, b: 67 };   // dirt (brown)
+    case 3: return { r: 110, g: 110, b: 110 }; // rock (gray)
+    case 4: return { r: 250, g: 250, b: 250 }; // snow (white)
     default: return { r: 128, g: 128, b: 128 };
   }
 };

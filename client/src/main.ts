@@ -39,7 +39,7 @@ let creatorController: CreatorController;
 let serverManager: ServerManager;
 let clouds: Clouds;
 // Grass configuration (world units; 1 unit = 1 meter)
-const GRASS_PATCH_INSTANCES = 6000;
+const GRASS_PATCH_INSTANCES = 2000;
 const GRASS_PATCH_SIZE = 12;
 const GRASS_PATCH_RADIUS = 128; // circle radius for real blades (units)
 const GRASS_IMPOSTOR_RADIUS = 300 + GRASS_PATCH_SIZE + GRASS_PATCH_RADIUS; // outer ring radius for impostors (units)

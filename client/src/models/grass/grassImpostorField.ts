@@ -180,7 +180,7 @@ export class GrassImpostorField {
                     if (radial <= innerExclusion || radial > this.impostorRadius) {
                         continue;
                     }
-                    const heightScale = 0.8 + scale * 0.10;
+                    const heightScale = 0.8 + scale * 0.05;
                     const widthScale = 1.5 + scale * 0.6;
                     instances.push({ worldX, worldZ, widthScale, heightScale });
                 }

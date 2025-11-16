@@ -37,13 +37,15 @@ import {
     sampleDefaultSplat
 } from "../utils/terrain.ts";
 import { environmentWorkerClient } from "../workers/environmentWorkerClient.ts";
-type TerrainTextureKey = 'grass' | 'dirt' | 'rock' | 'snow';
+import { Water } from "three/examples/jsm/objects/Water2";
+type TerrainTextureKey = 'sand' | 'grass' | 'dirt' | 'rock' | 'snow';
 
 const TERRAIN_TEXTURE_PATHS: Record<TerrainTextureKey, string> = {
-    grass: '/assets/textures/green-grass-textures.jpg',
-    dirt: '/assets/textures/attributed_b30.jpg',
-    rock: '/assets/textures/attributed_wall.jpg',
-    snow: '/assets/textures/attributed_plastic.jpg'
+    sand: '/assets/textures/attributed_sand.png',
+    grass: '/assets/textures/attributed_grass.png',
+    dirt: '/assets/textures/attributed_dirt.png',
+    rock: '/assets/textures/attributed_rock.png',
+    snow: '/assets/textures/attributed_snow.png'
 };
 
 let tempVector = new THREE.Vector3();
@@ -98,6 +100,8 @@ export class TerrainManager {
     private textureRepeatMeters = 18;
     private chunkVersion = 0;
     private pendingColliderRefresh = false;
+    private waterPlane?: Water;
+    private waterBaseSize?: number;
 
     constructor(model: ATMap, scene: Scene, controls:OrbitControls, callback: Function) {
         this.scene = scene;
@@ -148,6 +152,7 @@ export class TerrainManager {
         if (options?.recenter) {
             this.previewCenter.set(x, 0, z);
             this.currentChunk = undefined;
+            this.updateWaterPlaneTransform();
         }
     }
 
@@ -187,13 +192,15 @@ export class TerrainManager {
 
         // 2x2 supersampling per texel to reduce speckle and improve parity with heights
         const weightToColor = (r: number, g: number, b: number, a: number) => {
-            const arr = [r, g, b, a];
-            const idx = arr.indexOf(Math.max(r, g, b, a));
+            const snow = Math.max(0, 1 - (r + g + b + a));
+            const arr = [r, g, b, a, snow];
+            const idx = arr.indexOf(Math.max(...arr));
             switch (idx) {
                 case 0: return { r: 194, g: 178, b: 128 }; // sand
                 case 1: return { r: 50, g: 160, b: 60 };   // grass
-                case 2: return { r: 110, g: 110, b: 110 }; // rock
-                case 3: return { r: 250, g: 250, b: 250 }; // snow
+                case 2: return { r: 134, g: 96, b: 67 };   // dirt
+                case 3: return { r: 110, g: 110, b: 110 }; // rock
+                case 4: return { r: 250, g: 250, b: 250 }; // snow
                 default: return { r: 128, g: 128, b: 128 };
             }
         };
@@ -281,6 +288,7 @@ export class TerrainManager {
             return texture;
         };
         return {
+            sand: createTexture(TERRAIN_TEXTURE_PATHS.sand),
             grass: createTexture(TERRAIN_TEXTURE_PATHS.grass),
             dirt: createTexture(TERRAIN_TEXTURE_PATHS.dirt),
             rock: createTexture(TERRAIN_TEXTURE_PATHS.rock),
@@ -357,6 +365,7 @@ export class TerrainManager {
             }
         }
         const texture = new DataTexture(data, resolution, resolution, RGBAFormat);
+        texture.flipY = true;
         texture.needsUpdate = true;
         texture.wrapS = ClampToEdgeWrapping;
         texture.wrapT = ClampToEdgeWrapping;
@@ -367,12 +376,25 @@ export class TerrainManager {
 
     private createSplatTextureFromData(data: Uint8Array, resolution: number) {
         const texture = new DataTexture(data, resolution, resolution, RGBAFormat);
+        texture.flipY = true;
         texture.needsUpdate = true;
         texture.wrapS = ClampToEdgeWrapping;
         texture.wrapT = ClampToEdgeWrapping;
         texture.minFilter = LinearFilter;
         texture.magFilter = LinearFilter;
         return texture;
+    }
+
+    private updateWaterPlaneTransform() {
+        if (!this.waterPlane) {
+            return;
+        }
+        const patchSize = this.getProceduralPatchSize();
+        const baseSize = (this.waterBaseSize && this.waterBaseSize > 0) ? this.waterBaseSize : patchSize || 1;
+        const scale = baseSize > 0 ? patchSize / baseSize : 1;
+        this.waterPlane.scale.set(scale, scale, 1);
+        this.waterPlane.position.set(this.previewCenter.x, WATER_LEVEL, this.previewCenter.z);
+        this.waterPlane.updateMatrixWorld();
     }
 
     private createChunkMaterial(splatTexture: DataTexture): MeshStandardMaterial {
@@ -384,10 +406,11 @@ export class TerrainManager {
         });
         material.shadowSide = 2;
         material.onBeforeCompile = (shader) => {
-            shader.uniforms.tex0 = { value: this.surfaceTextures.grass };
-            shader.uniforms.tex1 = { value: this.surfaceTextures.dirt };
-            shader.uniforms.tex2 = { value: this.surfaceTextures.rock };
-            shader.uniforms.tex3 = { value: this.surfaceTextures.snow };
+            shader.uniforms.tex0 = { value: this.surfaceTextures.sand };
+            shader.uniforms.tex1 = { value: this.surfaceTextures.grass };
+            shader.uniforms.tex2 = { value: this.surfaceTextures.dirt };
+            shader.uniforms.tex3 = { value: this.surfaceTextures.rock };
+            shader.uniforms.tex4 = { value: this.surfaceTextures.snow };
             shader.uniforms.tSplat = { value: splatTexture };
             shader.vertexShader = shader.vertexShader
                 .replace('#include <common>', `
@@ -414,21 +437,27 @@ uniform sampler2D tex0;
 uniform sampler2D tex1;
 uniform sampler2D tex2;
 uniform sampler2D tex3;
+uniform sampler2D tex4;
 uniform sampler2D tSplat;
                 `)
                 .replace('#include <map_fragment>', `
 vec4 splatSample = texture2D(tSplat, vSplatUv);
-float totalWeight = splatSample.r + splatSample.g + splatSample.b + splatSample.a + 1e-5;
+float softSum = splatSample.r + splatSample.g + splatSample.b + splatSample.a;
+float snowWeight = max(0.0, 1.0 - softSum);
+float totalWeight = softSum + snowWeight + 1e-5;
 vec4 weights = splatSample / totalWeight;
+snowWeight /= totalWeight;
 vec2 tiledUv = vTileUv;
 vec4 texSample0 = texture2D(tex0, tiledUv);
 vec4 texSample1 = texture2D(tex1, tiledUv);
 vec4 texSample2 = texture2D(tex2, tiledUv);
 vec4 texSample3 = texture2D(tex3, tiledUv);
+vec4 texSample4 = texture2D(tex4, tiledUv);
 vec3 blended = texSample0.rgb * weights.r
     + texSample1.rgb * weights.g
     + texSample2.rgb * weights.b
-    + texSample3.rgb * weights.a;
+    + texSample3.rgb * weights.a
+    + texSample4.rgb * snowWeight;
 diffuseColor = vec4(blended, 1.0);
                 `);
         };
@@ -495,6 +524,7 @@ diffuseColor = vec4(blended, 1.0);
                 chunkZ * this.chunkSize + this.chunkSize / 2
             );
             //this.updateGrassAnchor();
+            this.updateWaterPlaneTransform();
         }
 
         let changed = false;
@@ -580,11 +610,19 @@ diffuseColor = vec4(blended, 1.0);
         const processObject = (c: Object3D<Object3DEventMap>|Mesh|Light|Camera) => {
             if (c instanceof Mesh && c.isMesh) {
                 if (c.material instanceof ShaderMaterial) {
-                    if (position) {
-                        c.position.add(position);
-                    }
                     if (c.name === "water") {
+                        this.waterPlane = c as Water;
+                        const geom = c.geometry as THREE.PlaneGeometry;
+                        const baseSize = geom?.parameters?.width;
+                        if (typeof baseSize === 'number' && baseSize > 0) {
+                            this.waterBaseSize = baseSize;
+                        } else if (!this.waterBaseSize) {
+                            this.waterBaseSize = this.getProceduralPatchSize();
+                        }
                         c.position.y = WATER_LEVEL;
+                        this.updateWaterPlaneTransform();
+                    } else if (position) {
+                        c.position.add(position);
                     }
                     terrainEnv.shaders.push(c);
                 } else if (c.material instanceof MeshStandardMaterial) {
@@ -1036,6 +1074,8 @@ diffuseColor = vec4(blended, 1.0);
         this.chunkMeshes.clear();
         this.chunkRequests.clear();
         this.environments = [this.chunkEnvironment];
+        this.waterPlane = undefined;
+        this.waterBaseSize = undefined;
     }
 
     async updateScene (selectedMap: ATMap): Promise<TerrainManager> {
