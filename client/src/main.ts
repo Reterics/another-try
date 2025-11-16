@@ -38,11 +38,14 @@ let controls: OrbitControls;
 let creatorController: CreatorController;
 let serverManager: ServerManager;
 let clouds: Clouds;
-const GRASS_PATCH_INSTANCES = 130000;
-const GRASS_PATCH_RADIUS = 0;
-const GRASS_IMPOSTOR_RADIUS = 2;
-const GRASS_IMPOSTOR_DENSITY = 96;
-const GRASS_LOD_STEPS = [1, 0.6];
+// Grass configuration (world units; 1 unit = 1 meter)
+const GRASS_PATCH_INSTANCES = 10000;
+const GRASS_PATCH_SIZE = 12;
+const GRASS_PATCH_RADIUS = 128; // circle radius for real blades (units)
+const GRASS_IMPOSTOR_RADIUS = 300 + GRASS_PATCH_SIZE + GRASS_PATCH_RADIUS; // outer ring radius for impostors (units)
+const GRASS_IMPOSTOR_DENSITY = 1; // impostors per chunk cell in the annulus
+const GRASS_LOD_STEPS = [ 0.5, 0.45, 0.1];
+const GRASS_LOD_RADII = [1, 64, GRASS_PATCH_RADIUS]; // must match GRASS_LOD_STEPS length; last equals GRASS_PATCH_RADIUS
 const GRASS_WIND_INTENSITY = 0.35;
 
 let minimap: MinimapController;
@@ -180,21 +183,25 @@ async function init() {
         }
         hudController.openDialog('Loading', 'Add to scene');
         await map.addToScene();
-        // Ensure terrain chunks and collider are ready before starting the loop
-        await map.preloadAroundSpawn();
 
         if (!grassManager) {
             grassManager = new GrassManager(scene, map, {
                 patchRadius: GRASS_PATCH_RADIUS,
+                impostorRadius: GRASS_IMPOSTOR_RADIUS,
+                lodRadii: GRASS_LOD_RADII,
                 instancesPerPatch: GRASS_PATCH_INSTANCES,
                 lodSteps: GRASS_LOD_STEPS,
                 windIntensity: GRASS_WIND_INTENSITY,
-                impostorRadius: GRASS_IMPOSTOR_RADIUS,
                 impostorDensity: GRASS_IMPOSTOR_DENSITY,
+                patchSize: GRASS_PATCH_SIZE,
             });
         } else {
             grassManager.setTerrain(map);
         }
+
+        // Ensure terrain chunks and collider are ready before starting the loop
+        await map.preloadAroundSpawn();
+
         if (!animationRunning) {
             animate();
         }

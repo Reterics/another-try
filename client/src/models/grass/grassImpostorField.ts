@@ -37,6 +37,7 @@ export class GrassImpostorField {
     private readonly scene: Scene;
     private sampler: (x: number, z: number) => number;
     private chunkSize: number;
+    // Radii are in world units (same as your coordinate system; 1 unit = 1 meter)
     private patchRadius: number;
     private impostorRadius: number;
     private mesh: InstancedMesh | null = null;
@@ -62,9 +63,10 @@ export class GrassImpostorField {
 
     setConfig(patchRadius: number, impostorRadius: number, chunkSize: number) {
         const instancesBefore = this.maxInstances;
-        this.patchRadius = patchRadius;
-        this.impostorRadius = Math.max(patchRadius + 1, impostorRadius);
+        this.patchRadius = patchRadius; // meters
         this.chunkSize = chunkSize;
+        // ensure impostor radius is at least one cell beyond patch radius
+        this.impostorRadius = Math.max(patchRadius + this.chunkSize, impostorRadius);
         const instancesAfter = this.calculateMaxInstances();
         if (!this.mesh || instancesAfter !== instancesBefore) {
             this.rebuildMesh();
@@ -86,30 +88,38 @@ export class GrassImpostorField {
         }
         const chunkX = Math.floor(playerPosition.x / this.chunkSize);
         const chunkZ = Math.floor(playerPosition.z / this.chunkSize);
+        const maxOffset = Math.ceil(this.impostorRadius / this.chunkSize) + 1;
         let index = 0;
-        outer: for (let dz = -this.impostorRadius; dz <= this.impostorRadius; dz++) {
-            for (let dx = -this.impostorRadius; dx <= this.impostorRadius; dx++) {
-                const ring = Math.max(Math.abs(dx), Math.abs(dz));
-                if (ring <= this.patchRadius) {
-                    continue;
-                }
+        const innerExclusion = this.patchRadius + this.chunkSize * Math.SQRT1_2; // match blades selection margin to avoid overlap
+        outer: for (let dz = -maxOffset; dz <= maxOffset; dz++) {
+            for (let dx = -maxOffset; dx <= maxOffset; dx++) {
                 if (index >= this.maxInstances) {
                     break outer;
+                }
+                const cx = chunkX + dx;
+                const cz = chunkZ + dz;
+                const cellCenterX = cx * this.chunkSize + this.chunkSize / 2;
+                const cellCenterZ = cz * this.chunkSize + this.chunkSize / 2;
+                const centerDist = Math.hypot(cellCenterX - playerPosition.x, cellCenterZ - playerPosition.z);
+                if (centerDist > this.impostorRadius + this.chunkSize * Math.SQRT1_2) {
+                    continue; // cell fully outside outer circle
                 }
                 for (let sample = 0; sample < this.densityPerCell; sample++) {
                     if (index >= this.maxInstances) {
                         break outer;
                     }
-                    const hashX = chunkX + dx + sample * 17.23;
-                    const hashZ = chunkZ + dz + sample * 9.31;
+                    const hashX = cx + sample * 17.23;
+                    const hashZ = cz + sample * 9.31;
                     const { offsetX, offsetZ, scale } = jitter(hashX, hashZ);
-                    const cellCenterX = (chunkX + dx) * this.chunkSize + this.chunkSize / 2;
-                    const cellCenterZ = (chunkZ + dz) * this.chunkSize + this.chunkSize / 2;
                     const worldX = cellCenterX + offsetX * this.chunkSize * 0.35;
                     const worldZ = cellCenterZ + offsetZ * this.chunkSize * 0.35;
+                    const radial = Math.hypot(worldX - playerPosition.x, worldZ - playerPosition.z);
+                    if (radial <= innerExclusion || radial > this.impostorRadius) {
+                        continue; // keep impostors strictly in the ring
+                    }
                     const height = this.sampler(worldX, worldZ);
                     this.dummy.position.set(worldX, height, worldZ);
-                    const heightScale = 0.8 + scale * 0.45;
+                    const heightScale = 0.8 + scale * 0.15;
                     const widthScale = 1.5 + scale * 0.6;
                     this.dummy.scale.set(widthScale, heightScale, widthScale);
                     this.dummy.lookAt(cameraPosition.x, height + heightScale * 0.4, cameraPosition.z);
@@ -236,8 +246,10 @@ export class GrassImpostorField {
     }
 
     private calculateMaxInstances() {
-        const totalCells = (this.impostorRadius * 2 + 1) ** 2;
-        const innerCells = (this.patchRadius * 2 + 1) ** 2;
-        return Math.max(0, totalCells - innerCells) * this.densityPerCell;
+        // Approximate number of chunk cells in the circular annulus
+        const cellArea = this.chunkSize * this.chunkSize;
+        const annulusArea = Math.max(0, Math.PI * (this.impostorRadius * this.impostorRadius - this.patchRadius * this.patchRadius));
+        const cells = Math.max(0, Math.floor(annulusArea / cellArea));
+        return Math.max(0, cells) * this.densityPerCell;
     }
 }

@@ -158,6 +158,16 @@ export class AdaptiveGrassPatch {
         this.rebuildHeights(origin);
     }
 
+    // New: allow placing the patch at any world-space origin (decoupled from terrain chunks)
+    setOrigin(x: number, z: number) {
+        // Update uniform directly with provided origin
+        const origin = new Vector2(x, z);
+        (this.material.uniforms.patchOrigin.value as Vector2).copy(origin);
+        this.mesh.visible = false;
+        this.heightsReady = false;
+        this.rebuildHeights(origin);
+    }
+
     setDensity(factor: number) {
         const normalized = Math.max(0, Math.min(1, factor));
         const clamped = Math.max(0, Math.floor(this.maxInstances * normalized));

@@ -31,12 +31,19 @@ export interface GrassOptions {
 }
 
 export interface GrassManagerOptions {
+    // World-space radii (same units as your coordinate system; 1 unit = 1 meter)
     patchRadius?: number
+    impostorRadius?: number
+    // Distances where LOD steps change (ascending), same units as patchRadius
+    lodRadii?: number[]
+
+    // Optional grass patch cell size (meters). If omitted, falls back to terrain chunk size.
+    patchSize?: number
+
     instancesPerPatch?: number
     maxPatches?: number
     enabled?: boolean
     lodSteps?: number[]
     windIntensity?: number
-    impostorRadius?: number
     impostorDensity?: number
 }
