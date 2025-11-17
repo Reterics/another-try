@@ -21,15 +21,25 @@ export class MinimapController extends EventManager{
     private readonly viewCoverage = 0.4;
     private readonly minZoom = 0.6;
     private readonly maxZoom = 3;
+    // HTML canvas reference and resize observer to keep aspect/frustum correct
+    private canvas!: HTMLCanvasElement;
+    private resizeObserver?: ResizeObserver;
+    private mapEl?: HTMLDivElement;
 
     constructor({boundingBox, texture, target}: MinimapInputArguments) {
         super();
 
         this.outer = target || this.renderHTML();
+        // Cache the map element if present (for sizing and masking robustness)
+        this.mapEl = this.outer.querySelector('.map') as HTMLDivElement | null || undefined;
         const minimapCanvas = this.outer.querySelector('canvas');
         if (!minimapCanvas) {
             throw Error('Target Element must have a canvas to render');
         }
+        this.canvas = minimapCanvas as HTMLCanvasElement;
+        // Ensure the canvas fills its container; the container will control aspect/shape
+        this.canvas.style.width = '100%';
+        this.canvas.style.height = '100%';
 
         this.textureLoader = new TextureLoader();
         const baseTexture = texture
@@ -39,6 +49,8 @@ export class MinimapController extends EventManager{
         this.spriteMaterial = new SpriteMaterial({ map: prepared, color: 0xffffff });
         this.sprite = new Sprite(this.spriteMaterial);
         this.sprite.position.set(0,0,0);
+        // Ensure rotation around center of the sprite
+        this.sprite.center.set(0.5, 0.5);
         this.scene = new Scene();
         this.scene.add(this.sprite);
         this.currentTextureUrl = texture || undefined;
@@ -60,13 +72,33 @@ export class MinimapController extends EventManager{
             1,
             2000
         );
-        this.camera.zoom = 1;
+        this.camera.zoom = 2;
         this.camera.position.set(0, 0, 150);
         this.camera.lookAt(0, 0, 0);
 
-        this.renderer = new WebGLRenderer({ canvas: minimapCanvas });
+        this.renderer = new WebGLRenderer({ canvas: this.canvas, antialias: true, alpha: true });
+        // Render with transparent background so HTML can mask the canvas into a circle
+        this.renderer.setClearColor(0x000000, 0);
+        // Respect device pixel ratio for crisp texturing
+        // Note: keep consistent with main app; adjust if performance is a concern
+        // @ts-ignore
+        this.renderer.setPixelRatio(window.devicePixelRatio || 1);
+        this.snapCircleSize();
+        this.updateRendererSize();
         this.currentSpan = this.dimensions.width || 1;
         this.applyPatchSpan(this.currentSpan);
+
+        // Observe canvas size to keep frustum/renderer aspect-correct
+        if ('ResizeObserver' in window) {
+            // @ts-ignore
+            this.resizeObserver = new ResizeObserver(() => {
+                this.snapCircleSize();
+                this.updateRendererSize();
+                this.applyPatchSpan(this.currentSpan);
+            });
+            this.resizeObserver.observe(this.canvas);
+            if (this.mapEl) this.resizeObserver.observe(this.mapEl);
+        }
     }
     
     setTexture(texture?: string) {
@@ -117,12 +149,18 @@ export class MinimapController extends EventManager{
 
     private applyPatchSpan(span: number) {
         const viewWidth = Math.max(10, span * this.viewCoverage);
-        const halfView = viewWidth / 2;
-        this.camera.left = -halfView;
-        this.camera.right = halfView;
-        this.camera.top = halfView;
-        this.camera.bottom = -halfView;
+        // Match camera frustum to the canvas aspect to avoid deformation when rotating
+        const w = this.canvas?.clientWidth || this.dimensions.width || 1;
+        const h = this.canvas?.clientHeight || this.dimensions.height || 1;
+        const aspect = h > 0 ? (w / h) : 1;
+        const halfV = viewWidth / 2;
+        const halfH = halfV * aspect;
+        this.camera.left = -halfH;
+        this.camera.right = halfH;
+        this.camera.top = halfV;
+        this.camera.bottom = -halfV;
         this.camera.updateProjectionMatrix();
+        // Keep sprite square in world units; camera handles aspect
         this.sprite.scale.set(span, span, 1);
     }
 
@@ -130,9 +168,23 @@ export class MinimapController extends EventManager{
         if (position) {
             this.lastPlayerPosition.copy(position);
         }
+        // Offset between player and current minimap center in world space
         const dx = this.lastPlayerPosition.x - this.currentCenter.x;
         const dz = this.lastPlayerPosition.z - this.currentCenter.z;
-        this.sprite.position.set(-dx, -dz, 0);
+        
+        // The minimap texture is rotated by `spriteMaterial.rotation` which we set to `-heading + π`.
+        // To keep the player visually centered and move the map in the correct on-screen direction,
+        // translate the sprite in the same rotated space as the texture.
+        // That means rotate the world offset by the same angle used for texture alignment (without the π flip).
+        const angle = this.lastHeading - Math.PI / 2; // swapped to +heading to correct horizontal (E/W) inversion; π still excluded for translation
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const rx = dx * cos - dz * sin;
+        const rz = dx * sin + dz * cos;
+        
+        // Move the map opposite to the player's world movement (player stays centered)
+        // Try axis-swap variant so that screen X corresponds to world +Z and screen Y to world +X in the rotated frame.
+        this.sprite.position.set(rz, -rx, 0);
     }
 
     private applyTexture(texture: Texture) {
@@ -142,6 +194,18 @@ export class MinimapController extends EventManager{
             previous.dispose();
         }
         this.spriteMaterial.map = texture;
+        // Improve texture sampling quality on rotation
+        try {
+            // @ts-ignore
+            const maxAniso = this.renderer?.capabilities?.getMaxAnisotropy?.() || 1;
+            if (this.spriteMaterial.map && 'anisotropy' in this.spriteMaterial.map) {
+                // @ts-ignore
+                this.spriteMaterial.map.anisotropy = maxAniso;
+                this.spriteMaterial.map.needsUpdate = true;
+            }
+        } catch (e) {
+            // ignore capabilities errors
+        }
         this.spriteMaterial.needsUpdate = true;
     }
 
@@ -156,9 +220,12 @@ export class MinimapController extends EventManager{
 
     update(position?: Vector3, rotation?: Euler) {
         if (rotation) {
+            // Use provided yaw heading when movement is negligible
             this.lastHeading = rotation.y;
         }
-        this.sprite.rotation.z = -this.lastHeading;
+        // Rotate sprite via material.rotation (Sprite uses material's rotation for 2D spin)
+        // Add π to correct North/South inversion (texture/world alignment)
+        this.spriteMaterial.rotation = -this.lastHeading + Math.PI;
         this.updateSpriteOffset(position);
         this.renderer.render(this.scene, this.camera);
     }
@@ -234,11 +301,45 @@ export class MinimapController extends EventManager{
         controllers.appendChild(zoomIn);
         controllers.appendChild(zoomOut);
 
+        map.appendChild(controllers);
 
         outer.appendChild(map);
-        outer.appendChild(controllers);
         this.outer = outer;
         document.body.appendChild(this.outer);
         return outer;
+    }
+
+    private snapCircleSize() {
+        if (!this.mapEl) return;
+        const r = this.mapEl.getBoundingClientRect();
+        // Determine the target square size in CSS pixels; prefer the smaller side
+        let size = Math.floor(Math.min(r.width, r.height));
+        // Snap to even integer to avoid half-pixel anti-alias artifacts at some DPRs
+        if (size % 2 !== 0) size -= 1;
+        if (size <= 0) return;
+        // Enforce exact width; height comes from aspect-ratio 1/1
+        const prev = this.mapEl.style.width;
+        const target = `${size}px`;
+        if (prev !== target) {
+            this.mapEl.style.width = target;
+            // Ensure a perfect square layout
+            // @ts-ignore: aspectRatio is supported in modern browsers
+            this.mapEl.style.aspectRatio = '1 / 1';
+        }
+    }
+
+    private updateRendererSize() {
+        if (!this.canvas || !this.renderer) return;
+        const rect = this.canvas.getBoundingClientRect();
+        const dpr = (window.devicePixelRatio || 1);
+        const width = Math.max(1, Math.floor(rect.width * dpr));
+        const height = Math.max(1, Math.floor(rect.height * dpr));
+        if (this.canvas.width !== width || this.canvas.height !== height) {
+            this.canvas.width = width;
+            this.canvas.height = height;
+            this.renderer.setSize(width, height, false);
+            // Projection will be recalculated in applyPatchSpan(), but update here for safety
+            this.camera.updateProjectionMatrix();
+        }
     }
 }

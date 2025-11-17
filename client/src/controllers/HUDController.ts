@@ -6,6 +6,7 @@ import { PlayerNames, PlayerScores } from "../types/main.ts";
 import { EventManager } from "../lib/EventManager.ts";
 import { ATMap } from "../../../types/map.ts";
 import { demoMap } from "../models/demoMap.ts";
+import * as THREE from 'three';
 
 export class HUDController extends EventManager{
     private readonly inGame: HTMLDivElement;
@@ -188,9 +189,31 @@ export class HUDController extends EventManager{
             }
 
             const position = controller.getPosition();
+
+            // Compute camera heading (0-360, 0 = North (+Z), XZ-plane)
+            let headingText = '';
+            try {
+                const cam = controller.controls?.object as THREE.Camera | undefined;
+                if (cam) {
+                    const dir = new THREE.Vector3();
+                    cam.getWorldDirection(dir);
+                    // Project onto XZ plane
+                    dir.y = 0;
+                    if (dir.lengthSq() > 1e-6) {
+                        dir.normalize();
+                        // atan2(x, z) gives 0 at +Z, 90 at +X, 180 at -Z, 270 at -X
+                        let deg = Math.atan2(dir.x, dir.z) * 180 / Math.PI;
+                        if (deg < 0) deg += 360;
+                        headingText = '  Heading: ' + Math.round(deg).toString().padStart(3, ' ') + '°';
+                    }
+                }
+            } catch (e) {
+                // ignore heading errors
+            }
+
             this.updateText('X: ' + position.x.toFixed(2) +
                 ' Y: ' + position.y.toFixed(2) +
-                ' Z: ' + position.z.toFixed(2), this.footer);
+                ' Z: ' + position.z.toFixed(2) + headingText, this.footer);
 
             this.updateLines(tableData, this.stats);
         }

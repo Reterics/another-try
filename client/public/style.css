@@ -174,7 +174,7 @@ a.logo-title {
     background-size: cover;
     padding: 9px;
     color: #d1d1d1;
-    top: 177px;
+    top: 220px;
     right: 5px
 }
 
@@ -222,34 +222,55 @@ a.logo-title {
     position: absolute;
     top: 5px;
     right: 5px;
-    background-image: url(./textures/hud_messages.png);
-    background-position: center top;
-    background-repeat: no-repeat;
-    background-size: contain;
     display: flex;
     flex-direction: row;
-    width: 300px;
-    height: 147px;
-    padding: 11px;
-    padding-right: 5px;
+    /* Remove fixed width/height and padding to avoid distorting the circle */
+}
+
+/* Circular minimap viewport */
+.minimap-outer .map {
+    position: relative;
+    width: 200px;              /* even integer width avoids half-pixel artifacts */
+    height: 200px;              /* even integer width avoids half-pixel artifacts */
+    aspect-ratio: 1 / 1;       /* keep square */
+    box-sizing: content-box;   /* borders/padding won't shrink inner content */
+    overflow: hidden;          /* clip to circle */
+}
+.minimap-outer .map canvas {
+    border-radius: 50%;        /* fallback */
+    clip-path: circle(50% at 50% 50%);
+
+}
+.minimap-outer .map::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.2); /* decorative ring; doesn't affect layout */
+    pointer-events: none;
 }
 
 .minimap-outer .controllers {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
     display: flex;
     flex-flow: column;
-    padding-top: 15px;
-    padding-left: 3px;
+    gap: 6px;
 }
 
 .minimap-outer .controllers .zoom {
     padding: 3px;
     font-size: 16px;
     font-weight: bold;
-    background: #3f3f3f;
-    border: 1px solid #c3c3c3;
-    color: #c3c3c3;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
     margin-bottom: 3px;
     cursor: pointer;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
 }
 
 .minimap-outer canvas.minimap {

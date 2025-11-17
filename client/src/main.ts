@@ -325,6 +325,17 @@ function animate() {
 
     renderer.render( scene, camera );
     if (minimap) {
-        minimap.update(heroPlayer.position, heroPlayer.rotation);
+        const dir = new THREE.Vector3();
+        camera.getWorldDirection(dir);
+        // Project camera forward onto XZ plane and compute heading (0 at +Z)
+        dir.y = 0;
+        let headingRad = 0;
+        if (dir.lengthSq() > 1e-6) {
+            dir.normalize();
+            headingRad = Math.atan2(dir.x, dir.z);
+        }
+        // Pass only yaw via Euler.y so MinimapController can rotate sprite accordingly
+        const yawEuler = new THREE.Euler(0, headingRad, 0);
+        minimap.update(heroPlayer.position, yawEuler);
     }
 }
