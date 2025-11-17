@@ -49,6 +49,7 @@ const GRASS_LOD_RADII = [1, 64, GRASS_PATCH_RADIUS]; // must match GRASS_LOD_STE
 const GRASS_WIND_INTENSITY = 0.35;
 
 let minimap: MinimapController;
+let minimapTextureCleanup: (() => void) | null = null;
 
 
 init();
@@ -206,9 +207,22 @@ async function init() {
             animate();
         }
         map.respawn(heroPlayer);
+        if (minimapTextureCleanup) {
+            minimapTextureCleanup();
+            minimapTextureCleanup = null;
+        }
         minimap = new MinimapController({
             boundingBox: map.getBoundingBox() || undefined,
             texture: selected.texture || ''
+        });
+        const spawn = map.getSpawnPoint();
+        minimap.setPatch({ x: spawn.x, z: spawn.z }, map.getProceduralPatchSize());
+        minimapTextureCleanup = map.onMinimapTextureUpdated(({ texture, center, span }) => {
+            if (!minimap) {
+                return;
+            }
+            minimap.setPatch(center, span);
+            minimap.setTexture(texture || selected.texture || '');
         });
 
         hudController.closeDialog();

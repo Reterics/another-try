@@ -1,5 +1,4 @@
-import * as THREE from "three";
-import {Euler, OrthographicCamera, Scene, Vector3, WebGLRenderer} from "three";
+import {CanvasTexture, Euler, OrthographicCamera, Scene, Sprite, SpriteMaterial, SRGBColorSpace, Texture, TextureLoader, Vector3, WebGLRenderer} from "three";
 import {MinimapDimensions, MinimapInputArguments} from "../types/controller.ts";
 import {EventManager} from "../lib/EventManager.ts";
 
@@ -10,6 +9,18 @@ export class MinimapController extends EventManager{
     private renderer: WebGLRenderer;
     private dimensions: MinimapDimensions;
     private outer: HTMLDivElement;
+    private sprite: Sprite;
+    private spriteMaterial: SpriteMaterial;
+    private textureLoader: TextureLoader;
+    private currentTextureUrl?: string;
+    private pendingTextureUrl?: string;
+    private currentCenter = new Vector3();
+    private currentSpan = 1;
+    private lastPlayerPosition = new Vector3();
+    private lastHeading = 0;
+    private readonly viewCoverage = 0.4;
+    private readonly minZoom = 0.6;
+    private readonly maxZoom = 3;
 
     constructor({boundingBox, texture, target}: MinimapInputArguments) {
         super();
@@ -20,14 +31,17 @@ export class MinimapController extends EventManager{
             throw Error('Target Element must have a canvas to render');
         }
 
-        const mapTexture = texture
-            ? new THREE.TextureLoader().load(texture)
+        this.textureLoader = new TextureLoader();
+        const baseTexture = texture
+            ? this.textureLoader.load(texture)
             : this.buildFallbackTexture();
-        const material = new THREE.SpriteMaterial({ map: mapTexture, color: 0xffffff });
-        const sprite = new THREE.Sprite(material);
-        sprite.position.set(0,0,0);
-        this.scene = new THREE.Scene();
-        this.scene.add(sprite);
+        const prepared = this.prepareTexture(baseTexture);
+        this.spriteMaterial = new SpriteMaterial({ map: prepared, color: 0xffffff });
+        this.sprite = new Sprite(this.spriteMaterial);
+        this.sprite.position.set(0,0,0);
+        this.scene = new Scene();
+        this.scene.add(this.sprite);
+        this.currentTextureUrl = texture || undefined;
 
         this.dimensions = {
             left: boundingBox ? boundingBox.min.x : minimapCanvas.width / -2,
@@ -38,49 +52,124 @@ export class MinimapController extends EventManager{
             height: boundingBox ? boundingBox.max.z - boundingBox.min.z : minimapCanvas.height
         };
 
-        this.camera = new THREE.OrthographicCamera(
-            -this.dimensions.right, // left
-            -this.dimensions.left, // right
-            this.dimensions.top, // top
-            this.dimensions.bottom, // bottom
-            1, // near
-            2000 // far
+        this.camera = new OrthographicCamera(
+            -this.dimensions.width / 2,
+            this.dimensions.width / 2,
+            this.dimensions.height / 2,
+            -this.dimensions.height / 2,
+            1,
+            2000
         );
         this.camera.zoom = 1;
+        this.camera.position.set(0, 0, 150);
+        this.camera.lookAt(0, 0, 0);
 
-        this.renderer = new THREE.WebGLRenderer({ canvas: minimapCanvas });
-        //this.renderer.setSize(this.dimensions.width, this.dimensions.height);
-        sprite.scale.set(this.dimensions.width, this.dimensions.height, 1);
+        this.renderer = new WebGLRenderer({ canvas: minimapCanvas });
+        this.currentSpan = this.dimensions.width || 1;
+        this.applyPatchSpan(this.currentSpan);
     }
     
-    update(position?: Vector3, rotation?: Euler) {
-        if (position) {
-            //const vector2D = position.clone().project(this.camera); // Assuming `camera` is your orthographic camera
-            this.camera.position.set(-position.x, -position.z, -150);
-            this.camera.lookAt(-position.x, -position.z, 0);
+    setTexture(texture?: string) {
+        if (!texture) {
+            this.pendingTextureUrl = undefined;
+            this.currentTextureUrl = undefined;
+            this.applyTexture(this.buildFallbackTexture());
+            return;
         }
-        if (rotation) {
+        if (texture === this.currentTextureUrl) {
+            return;
+        }
+        const requestUrl = texture;
+        this.pendingTextureUrl = requestUrl;
+        this.textureLoader.load(
+            texture,
+            (tex) => {
+                if (this.pendingTextureUrl !== requestUrl) {
+                    tex.dispose();
+                    return;
+                }
+                this.pendingTextureUrl = undefined;
+                this.currentTextureUrl = requestUrl;
+                this.applyTexture(tex);
+            },
+            undefined,
+            (err) => {
+                if (this.pendingTextureUrl === requestUrl) {
+                    this.pendingTextureUrl = undefined;
+                }
+                console.warn('[Minimap] Failed to update texture', err);
+            }
+        );
+    }
 
+    setPatch(center: { x: number; z: number }, span: number) {
+        this.currentCenter.set(center.x, 0, center.z);
+        if (!this.lastPlayerPosition.lengthSq()) {
+            this.lastPlayerPosition.copy(this.currentCenter);
         }
+        const safeSpan = Math.max(10, span || 10);
+        if (Math.abs(safeSpan - this.currentSpan) > 1e-3) {
+            this.currentSpan = safeSpan;
+            this.applyPatchSpan(this.currentSpan);
+        }
+        this.updateSpriteOffset();
+    }
+
+    private applyPatchSpan(span: number) {
+        const viewWidth = Math.max(10, span * this.viewCoverage);
+        const halfView = viewWidth / 2;
+        this.camera.left = -halfView;
+        this.camera.right = halfView;
+        this.camera.top = halfView;
+        this.camera.bottom = -halfView;
         this.camera.updateProjectionMatrix();
+        this.sprite.scale.set(span, span, 1);
+    }
+
+    private updateSpriteOffset(position?: Vector3) {
+        if (position) {
+            this.lastPlayerPosition.copy(position);
+        }
+        const dx = this.lastPlayerPosition.x - this.currentCenter.x;
+        const dz = this.lastPlayerPosition.z - this.currentCenter.z;
+        this.sprite.position.set(-dx, -dz, 0);
+    }
+
+    private applyTexture(texture: Texture) {
+        this.prepareTexture(texture);
+        const previous = this.spriteMaterial.map;
+        if (previous && previous !== texture) {
+            previous.dispose();
+        }
+        this.spriteMaterial.map = texture;
+        this.spriteMaterial.needsUpdate = true;
+    }
+
+    private prepareTexture(texture: Texture) {
+        if ('colorSpace' in texture) {
+            // @ts-ignore
+            texture.colorSpace = SRGBColorSpace;
+        }
+        texture.needsUpdate = true;
+        return texture;
+    }
+
+    update(position?: Vector3, rotation?: Euler) {
+        if (rotation) {
+            this.lastHeading = rotation.y;
+        }
+        this.sprite.rotation.z = -this.lastHeading;
+        this.updateSpriteOffset(position);
         this.renderer.render(this.scene, this.camera);
     }
 
     zoom (delta: number) {
-        if (delta < 0) {
-            if (0.11 < this.camera.zoom && this.camera.zoom <= 1) {
-                this.camera.zoom -= 0.1;
-            } else if (this.camera.zoom > 1){
-                this.camera.zoom += delta;
-            }
-        } else {
-            if (0.1 <= this.camera.zoom && this.camera.zoom < 1) {
-                this.camera.zoom += 0.1;
-            } else {
-                this.camera.zoom += delta;
-            }
+        const step = delta > 0 ? 0.2 : -0.2;
+        const nextZoom = Math.min(this.maxZoom, Math.max(this.minZoom, this.camera.zoom + step));
+        if (nextZoom !== this.camera.zoom) {
+            this.camera.zoom = nextZoom;
+            this.camera.updateProjectionMatrix();
         }
-        this.camera.updateProjectionMatrix();
     }
 
     private buildFallbackTexture(size = 256) {
@@ -105,12 +194,8 @@ export class MinimapController extends EventManager{
                 ctx.stroke();
             }
         }
-        const texture = new THREE.CanvasTexture(canvas);
-        if ('colorSpace' in texture) {
-            // @ts-ignore
-            texture.colorSpace = THREE.SRGBColorSpace;
-        }
-        return texture;
+        const texture = new CanvasTexture(canvas);
+        return this.prepareTexture(texture);
     }
 
     protected renderHTML() {

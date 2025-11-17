@@ -102,6 +102,11 @@ export class TerrainManager {
     private pendingColliderRefresh = false;
     private waterPlane?: Water;
     private waterBaseSize?: number;
+    private minimapCenter: Vector3;
+    private minimapSpan = 0;
+    private readonly minimapSpanMultiplier = 3;
+    private readonly minimapUpdateThreshold = 0.45;
+    private minimapTextureListeners = new Set<(payload: { texture?: string; center: { x: number; z: number }; span: number }) => void>();
 
     constructor(model: ATMap, scene: Scene, controls:OrbitControls, callback: Function) {
         this.scene = scene;
@@ -136,6 +141,8 @@ export class TerrainManager {
             spawnCoordinates: [spawnX, spawnY, spawnZ] // X Y Z
         };
         this.previewCenter = new Vector3(spawnX, 0, spawnZ);
+        this.minimapCenter = this.previewCenter.clone();
+        this.minimapSpan = this.getProceduralPatchSize() * this.minimapSpanMultiplier;
         this.initMethod = this._loadMapItems(callback);
         return this;
     }
@@ -153,6 +160,8 @@ export class TerrainManager {
             this.previewCenter.set(x, 0, z);
             this.currentChunk = undefined;
             this.updateWaterPlaneTransform();
+            this.minimapCenter.set(x, 0, z);
+            this.minimapSpan = this.getProceduralPatchSize() * this.minimapSpanMultiplier;
         }
     }
 
@@ -168,7 +177,7 @@ export class TerrainManager {
         }
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d') as CanvasRenderingContext2D;
-        const size = 256;
+        const size = 512;
 
         // Build a debug splat map (flat colors for now) by sampling the procedural terrain
         if (!plane.geometry.boundingBox) plane.geometry.computeBoundingBox();
@@ -267,6 +276,7 @@ export class TerrainManager {
 
         // Keep DataURL for debug/export if needed elsewhere
         map.texture = canvas.toDataURL();
+        this.emitMinimapTextureUpdate();
         return map.texture;
     }
 
@@ -551,17 +561,21 @@ diffuseColor = vec4(blended, 1.0);
         }
 
         if (changed || centerChanged) {
-            this.updateProceduralMinimapTexture(this.previewCenter);
+            this.updateProceduralMinimapTexture(position ?? this.previewCenter);
             this.chunkVersion++;
+        } else {
+            this.refreshMinimapIfNeeded(position);
         }
         return changed;
     }
 
-    private updateProceduralMinimapTexture(center: Vector3, resolution = 128) {
+    private updateProceduralMinimapTexture(center: Vector3, resolution = 256, spanOverride?: number) {
         if (typeof document === 'undefined') {
             return;
         }
-        const span = this.getProceduralPatchSize();
+        const baseSpan = this.getProceduralPatchSize();
+        const targetSpan = baseSpan * this.minimapSpanMultiplier;
+        const span = Math.max(targetSpan, spanOverride ?? targetSpan);
         const canvas = document.createElement('canvas');
         canvas.width = resolution;
         canvas.height = resolution;
@@ -587,6 +601,23 @@ diffuseColor = vec4(blended, 1.0);
         }
         context.putImageData(image, 0, 0);
         this.map.texture = canvas.toDataURL();
+        this.minimapCenter.copy(center);
+        this.minimapSpan = span;
+        this.emitMinimapTextureUpdate();
+    }
+
+    private refreshMinimapIfNeeded(center?: Vector3) {
+        if (!center) {
+            return;
+        }
+        const span = this.minimapSpan > 0 ? this.minimapSpan : this.getProceduralPatchSize() * this.minimapSpanMultiplier;
+        const threshold = span * 0.5 * this.minimapUpdateThreshold;
+        if (
+            Math.abs(center.x - this.minimapCenter.x) > threshold ||
+            Math.abs(center.z - this.minimapCenter.z) > threshold
+        ) {
+            this.updateProceduralMinimapTexture(center);
+        }
     }
 
     async importEnvironment(map: ATMap, position?: Vector3): Promise<TerrainEnvironment> {
@@ -767,7 +798,10 @@ diffuseColor = vec4(blended, 1.0);
     }
 
     async _loadMapItems(callback: Function|undefined): Promise<TerrainManager> {
-        this.ensureChunksAround(this.getSpawnPoint());
+        const spawnCenter = this.getSpawnPoint();
+        this.minimapCenter.copy(spawnCenter);
+        this.minimapSpan = this.getProceduralPatchSize() * this.minimapSpanMultiplier;
+        this.ensureChunksAround(spawnCenter);
         const terrain = await this.importEnvironment(this.map);
         if (terrain.texture && terrain.texture !== this.map.texture) {
             this.map.texture = terrain.texture;
@@ -1076,6 +1110,7 @@ diffuseColor = vec4(blended, 1.0);
         this.environments = [this.chunkEnvironment];
         this.waterPlane = undefined;
         this.waterBaseSize = undefined;
+        this.minimapTextureListeners.clear();
     }
 
     async updateScene (selectedMap: ATMap): Promise<TerrainManager> {
@@ -1094,6 +1129,27 @@ diffuseColor = vec4(blended, 1.0);
 
     getMap() {
         return this.map;
+    }
+
+    onMinimapTextureUpdated(listener: (payload: { texture?: string; center: { x: number; z: number }; span: number }) => void) {
+        this.minimapTextureListeners.add(listener);
+        listener({
+            texture: this.map.texture,
+            center: { x: this.minimapCenter.x, z: this.minimapCenter.z },
+            span: this.minimapSpan
+        });
+        return () => {
+            this.minimapTextureListeners.delete(listener);
+        };
+    }
+
+    private emitMinimapTextureUpdate() {
+        const payload = {
+            texture: this.map.texture,
+            center: { x: this.minimapCenter.x, z: this.minimapCenter.z },
+            span: this.minimapSpan
+        };
+        this.minimapTextureListeners.forEach(cb => cb(payload));
     }
 
     getHeightAt(x: number, z: number) {
