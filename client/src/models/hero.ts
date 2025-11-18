@@ -73,7 +73,7 @@ export class Hero {
         return this;
     }
 
-    async reloadFromGltf(file = './assets/characters/mixamo_leonard.glb') {
+    async reloadFromGltf(file = './assets/characters/player_1.glb') {
         const group = await loadModel.gltf(file);
 
         if (group) {
@@ -95,7 +95,7 @@ export class Hero {
     }
 
     static async Create(scene: Scene) {
-        const group = await loadModel.gltf('./assets/characters/mixamo_leonard.glb');
+        const group = await loadModel.gltf('./assets/characters/player_1.glb');
         let player = null;
         if (group) {
             player = group.scene;
@@ -103,10 +103,17 @@ export class Hero {
             player.animations = group.animations;
             player.castShadow = true;
             player.receiveShadow = false;
-
+            player.traverse(o => {
+                const mesh = o as any;
+                if (mesh.isMesh && mesh.material) {
+                    mesh.material.depthWrite = true;
+                    mesh.material.depthTest = true;
+                }
+            });
             player.children[0].position.set(0,-1.5,0);
             player.children[0].scale.set(0.05,0.05,0.05);
         }
+
         return new Hero(scene, player);
     }
 
@@ -144,7 +151,8 @@ export class Hero {
             return;
         }
 
-        const clip = THREE.AnimationClip.findByName( this.root.animations, name );
+        const clip = THREE.AnimationClip.findByName( this.root.animations, name ) ||
+            this.root.animations.find(animation => animation && animation.name.toLowerCase().includes(name.toLowerCase()));
         if (clip) {
             //this.action.stop();
             this.mixer.stopAllAction();

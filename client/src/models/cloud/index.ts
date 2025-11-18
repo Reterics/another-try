@@ -74,7 +74,8 @@ export default class Clouds {
             vertexShader,
             fragmentShader,
             transparent: true,
-            depthWrite: false,
+            depthWrite: true,
+            depthTest: true,
             side: DoubleSide
         });
 

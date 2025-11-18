@@ -309,7 +309,8 @@ export class GrassImpostorField {
         const materialParams = {
             transparent: true,
             opacity: 0.92,
-            depthWrite: false,
+            depthWrite: true,
+            depthTest: true,
             alphaTest: 0.5,
         } as MeshBasicMaterialParameters;
         if (textures) {
