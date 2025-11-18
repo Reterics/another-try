@@ -57,7 +57,6 @@ let tempSegment = new THREE.Line3();
 const upVector = new THREE.Vector3( 0, 1, 0 );
 //const direction = new THREE.Vector3();
 const velocity = new THREE.Vector3();
-let timeUntilSprintOptionDisables: Date | undefined | null;
 
 
 interface toMergeType {
@@ -84,7 +83,10 @@ export class TerrainManager {
     playerIsOnGround = false;
     canJump = false;
     sprinting = false; // Temporary not available
-    energy = 10;
+    energy = 20;
+    energyMax = 20;
+    drainSecondsToEmpty = 10; // sprinting from full to empty takes 10s
+    regenPerSecond = 1.2; // matches previous ~0.02/frame at 60 FPS
     fwdPressed = false; bkdPressed = false; lftPressed = false; rgtPressed = false;
     private readonly energyNode: HTMLProgressElement | null;
     private map: ATMap;
@@ -882,22 +884,15 @@ diffuseColor = vec4(blended, 1.0);
             switch ( e.code ) {
 
                 case 'KeyW':
-                    if(!this.fwdPressed) {
-                        const now = new Date()
-
-                        if(timeUntilSprintOptionDisables != null && timeUntilSprintOptionDisables > now) {
-                            this.sprinting = true; // Temporary not available
-                        }
-
-                        now.setSeconds(now.getSeconds() + 1)
-                        timeUntilSprintOptionDisables = now
-                    }
                     this.fwdPressed = true;
-
                     break;
                 case 'KeyS': this.bkdPressed = true; break;
                 case 'KeyD': this.rgtPressed = true; break;
                 case 'KeyA': this.lftPressed = true; break;
+                case 'ShiftLeft':
+                case 'ShiftRight':
+                    this.sprinting = true;
+                    break;
                 case 'Space':
                     // this.controls.camera.position.y = 10;
                     if ( this.playerIsOnGround && this.canJump) {
@@ -916,6 +911,9 @@ diffuseColor = vec4(blended, 1.0);
                 case 'KeyS': this.bkdPressed = false; break;
                 case 'KeyD': this.rgtPressed = false; break;
                 case 'KeyA': this.lftPressed = false; break;
+                case 'ShiftLeft':
+                case 'ShiftRight':
+                    this.sprinting = false; break;
             }
         });
     }
@@ -943,19 +941,23 @@ diffuseColor = vec4(blended, 1.0);
             }
             this.collider.visible = this.params.displayCollider || false;
 
-            if(this.sprinting) {
-                if(this.energy > 0) {
-                    velocity.z -= this.params.playerSpeed;
-                    this.energy -= 3.00
-                }
-                else {
-                    this.sprinting = false
-                }
+            // Sprint energy handling (hold Shift to sprint)
+            const anyMoveKey = this.fwdPressed || this.bkdPressed || this.lftPressed || this.rgtPressed;
+            const sprintingNow = this.sprinting && anyMoveKey && this.playerIsOnGround && this.energy > 0;
+            const drainPerSecond = this.energyMax / Math.max(0.0001, this.drainSecondsToEmpty);
+            if (sprintingNow) {
+                // Drain energy time-based so full bar depletes in exactly drainSecondsToEmpty seconds
+                this.energy -= drainPerSecond * delta;
+            } else {
+                // Regenerate energy time-based when not sprinting
+                this.energy += this.regenPerSecond * delta;
             }
-            else {
-                if(this.energy < 20) {
-                    this.energy += 0.02
-                }
+            // Clamp and auto-stop
+            if (this.energy <= 0) {
+                this.energy = 0;
+                this.sprinting = false; // auto-stop sprint when out of energy
+            } else if (this.energy > this.energyMax) {
+                this.energy = this.energyMax;
             }
 
             if (this.energyNode) {
@@ -997,9 +999,15 @@ diffuseColor = vec4(blended, 1.0);
             tempVector.applyAxisAngle(upVector, angle);
 
             if (this.fwdPressed || this.bkdPressed || this.lftPressed || this.rgtPressed) {
-                player.position.addScaledVector( tempVector, this.params.playerSpeed * delta );
+                const speedMultiplier = (this.sprinting && this.playerIsOnGround && this.energy > 0) ? 2.0 : 1.0;
+                const moveSpeed = this.params.playerSpeed * speedMultiplier;
+                player.position.addScaledVector( tempVector, moveSpeed * delta );
                 player.lookAt(player.position.clone().add(tempVector));
-                hero.changeAnimation('Walk');
+                if (speedMultiplier > 1.0) {
+                    hero.changeAnimation('Run');
+                } else {
+                    hero.changeAnimation('Walk');
+                }
                 moving = true;
                 // console.log(getCoordNeighbours([player.position.x, player.position.z, player.position.y], 100));
             } else {
