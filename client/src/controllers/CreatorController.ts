@@ -76,6 +76,11 @@ export class CreatorController extends EventManager {
                 "type": "model",
                 "path": "assets/models/tree.gltf",
                 "name": "Tree"
+            },
+            {
+                "type": "model",
+                "path": "assets/models/panel_house.glb",
+                "name": "Tree"
             }
         ];
         this.shadowTypeIndex = 0;
