@@ -300,16 +300,66 @@ export class CreatorController extends EventManager {
                 travelDistance = Math.min(this.far, hits[0].distance);
             }
             object.position.copy(camera.position).addScaledVector(forward, travelDistance);
+            if (hits.length && hits[0].object.name !== "plane") {
+                this.placeObjectFlushToHit(object, hits[0]);
+            }
         } else if (this.view === "tps" && hits[0]) {
             const objectHit = hits.find(h => !["collider", "plane"].includes(h.object.name));
             const primaryHit = objectHit || hits[0];
 
             object.position.copy(primaryHit.point);
+
+            if (primaryHit.object.name !== 'plane') {
+                this.placeObjectFlushToHit(object, primaryHit);
+            }
         }
 
         object.position.x = roundToPrecision(object.position.x, this.precision);
         object.position.y = roundToPrecision(object.position.y, this.precision);
         object.position.z = roundToPrecision(object.position.z, this.precision);
+    }
+
+    private placeObjectFlushToHit(object: Object3D, hit: THREE.Intersection) {
+        const mesh = object as THREE.Mesh;
+        const point = hit.point.clone();
+
+        // 1) Surface normal in world space
+        const normal = new THREE.Vector3(0, 1, 0); // default up
+        if (hit.face) {
+            normal.copy(hit.face.normal);
+            normal.transformDirection(hit.object.matrixWorld);
+            normal.normalize();
+        }
+
+        // 2) Object half extents in world space
+        let halfExtentAlongNormal = 0.5; // fallback
+        if ((mesh as any).isMesh && mesh.geometry) {
+            const geom = mesh.geometry as THREE.BufferGeometry;
+            if (!geom.boundingBox) {
+                geom.computeBoundingBox();
+            }
+            if (geom.boundingBox) {
+                const size = new THREE.Vector3();
+                geom.boundingBox.getSize(size);
+
+                // Apply object scale
+                size.multiply(mesh.scale);
+
+                const halfSize = size.multiplyScalar(0.5);
+
+                // Project half extents onto the normal (Manhattan projection)
+                halfExtentAlongNormal =
+                    Math.abs(normal.x) * halfSize.x +
+                    Math.abs(normal.y) * halfSize.y +
+                    Math.abs(normal.z) * halfSize.z;
+            }
+        }
+
+        const epsilon = 0.001;
+        const offset = normal.clone().multiplyScalar(halfExtentAlongNormal + epsilon);
+
+        // 3) Final position: hit point + offset
+        object.position.copy(point).add(offset);
     }
 
     onMouseMove (event: MouseEvent) {
