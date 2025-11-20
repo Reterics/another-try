@@ -72,7 +72,7 @@ export class MinimapController extends EventManager{
             1,
             2000
         );
-        this.camera.zoom = 2;
+        this.camera.zoom = 1;
         this.camera.position.set(0, 0, 150);
         this.camera.lookAt(0, 0, 0);
 

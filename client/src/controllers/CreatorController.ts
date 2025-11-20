@@ -1,7 +1,7 @@
 import {Mesh, Scene, Object3D, Camera} from "three";
 import * as THREE from "three";
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import {createShadowObject, isCollisionDetected} from "../utils/model";
+import {createShadowObject} from "../utils/model";
 import {Active3DMode, ControllerView} from "../types/three";
 import { roundToPrecision } from "../utils/math";
 import {HUDController} from "./HUDController.ts";
@@ -156,6 +156,7 @@ export class CreatorController extends EventManager {
                 } else {
                     this.view = 'tps';
                 }
+                this.updateView()
                 break;
             case 'KeyE':
                 this.shadowTypeIndex++;
@@ -267,52 +268,48 @@ export class CreatorController extends EventManager {
         return this.hero.getPosition()
     }
 
-    dropObject (object: Object3D|undefined, event: MouseEventLike) {
-        if (object) {
-            const camera = this.controls.object as Camera;
-            const movementSpeed = this.far < 3 ? this.far : 2; // Adjust the speed as needed
-            object.position.copy(camera.position)
+    dropObject(object: Object3D | undefined, event: MouseEventLike) {
+        if (!object) return;
 
-            const mouse = this.view === "tps" ? this.getCursorPosition(event) : this.getCenterPosition();
-            const rayCaster = new THREE.Raycaster();
-            rayCaster.setFromCamera(mouse, camera);
-            const intersectObjects = this.scene.children.filter((mesh: Object3D) =>
-                mesh.name.startsWith("mesh") || mesh.name === "plane" || mesh.name === "collider");
-            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+        const camera = this.controls.object as Camera;
+        const forward = new THREE.Vector3(0, 0, -1)
+            .applyQuaternion(camera.quaternion)
+            .normalize();
 
-            if (this.view === "fps") {
-                rayCaster.set(camera.position, forward);
+        const ndc = this.view === "tps"
+            ? this.getCursorPosition(event)
+            : this.getCenterPosition();
+
+        const rayCaster = new THREE.Raycaster();
+        rayCaster.setFromCamera(ndc, camera);
+
+        const targets = this.scene.children.filter(o => {
+            if (o === object) return false;
+
+            return o.name === "collider" ||
+                    o.name === "plane" ||
+                    o.name.startsWith("mesh");
             }
-            const intersects = rayCaster.intersectObjects(intersectObjects,
-                true);
-            const objectsInPath = intersects.map(o=>o.object);
+        );
 
+        const hits = rayCaster.intersectObjects(targets, true);
 
-            if (this.view === "fps") {
-                const directionVector = forward.multiplyScalar(movementSpeed);
-                const obj = (object as Mesh);
-                if (obj.isMesh) {
-                    obj.geometry.computeBoundingBox()
-                }
-                object.updateMatrixWorld();
-                object.position.add(directionVector);
-
-                let i = 0;
-                while (!objectsInPath.find(o=> isCollisionDetected(o, object))) {
-                    object.position.add(directionVector);
-                    i++;
-                    if (i >= this.far) {
-                        break;
-                    }
-                }
-            } else if (intersects[0]) {
-                object.position.copy(intersects[0].point);
+        if (this.view === "fps") {
+            let travelDistance = this.far;
+            if (hits.length) {
+                travelDistance = Math.min(this.far, hits[0].distance);
             }
+            object.position.copy(camera.position).addScaledVector(forward, travelDistance);
+        } else if (this.view === "tps" && hits[0]) {
+            const objectHit = hits.find(h => !["collider", "plane"].includes(h.object.name));
+            const primaryHit = objectHit || hits[0];
 
-            object.position.x = roundToPrecision(object.position.x, this.precision);
-            object.position.y = roundToPrecision(object.position.y, this.precision);
-            object.position.z = roundToPrecision(object.position.z, this.precision);
+            object.position.copy(primaryHit.point);
         }
+
+        object.position.x = roundToPrecision(object.position.x, this.precision);
+        object.position.y = roundToPrecision(object.position.y, this.precision);
+        object.position.z = roundToPrecision(object.position.z, this.precision);
     }
 
     onMouseMove (event: MouseEvent) {
@@ -348,6 +345,35 @@ export class CreatorController extends EventManager {
             return shadowObject.scale.x.toFixed(4);
         }
         return "1.0000";
+    }
+
+    updateView() {
+        const heroObject = this.hero.getObject();
+        if (this.view === 'tps') {
+            this.controls.maxPolarAngle = Math.PI / 2;
+            this.controls.minDistance = 1;
+            this.controls.maxDistance = 40;
+            const targetDistance = 30;
+
+            if (!heroObject.visible) {
+                heroObject.visible = true;
+            }
+
+            const camera = this.controls.object as THREE.PerspectiveCamera;
+
+            const dir = new THREE.Vector3()
+                .subVectors(camera.position, this.controls.target)
+                .normalize();
+
+            camera.position.copy(this.controls.target).addScaledVector(dir, targetDistance);
+        } else if (this.view === 'fps') {
+            this.controls.maxPolarAngle = Math.PI;
+            this.controls.minDistance = 1e-4;
+            this.controls.maxDistance = 1e-4;
+            if (heroObject.visible) {
+                heroObject.visible = false;
+            }
+        }
     }
 
     protected _changeFar(delta: number, event?: MouseEventLike) {

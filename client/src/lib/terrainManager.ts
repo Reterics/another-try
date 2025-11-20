@@ -38,6 +38,7 @@ import {
 } from "../utils/terrain.ts";
 import { environmentWorkerClient } from "../workers/environmentWorkerClient.ts";
 import { Water } from "three/examples/jsm/objects/Water2";
+import {CreatorController} from "../controllers/CreatorController.ts";
 type TerrainTextureKey = 'sand' | 'grass' | 'dirt' | 'rock' | 'snow';
 
 const TERRAIN_TEXTURE_PATHS: Record<TerrainTextureKey, string> = {
@@ -80,6 +81,7 @@ export class TerrainManager {
     initMethod: Promise<TerrainManager>;
     private loaded = false;
     private controls: OrbitControls;
+    private creatorController: CreatorController;
     playerIsOnGround = false;
     canJump = false;
     sprinting = false; // Temporary not available
@@ -110,9 +112,10 @@ export class TerrainManager {
     private readonly minimapUpdateThreshold = 0.45;
     private minimapTextureListeners = new Set<(payload: { texture?: string; center: { x: number; z: number }; span: number }) => void>();
 
-    constructor(model: ATMap, scene: Scene, controls:OrbitControls, callback: Function) {
+    constructor(model: ATMap, scene: Scene, controls:OrbitControls, callback: Function, creatorController: CreatorController) {
         this.scene = scene;
         this.controls = controls;
+        this.creatorController = creatorController;
         this.environment = new THREE.Group();
         this.environment.name = "environment";
         this.chunkEnvironment = {
@@ -149,9 +152,9 @@ export class TerrainManager {
         return this;
     }
 
-    static CreateMap(map: ATMap, scene: Scene, controls:OrbitControls): Promise<TerrainManager> {
+    static CreateMap(map: ATMap, scene: Scene, controls:OrbitControls, creatorController: CreatorController): Promise<TerrainManager> {
         return new Promise(resolve => {
-            new TerrainManager(map, scene, controls, resolve);
+            new TerrainManager(map, scene, controls, resolve, creatorController);
         })
     }
     setSpawnCoordinates (x: number, y: number, z: number, options?: { recenter?: boolean }) {
@@ -896,7 +899,7 @@ diffuseColor = vec4(blended, 1.0);
                 case 'Space':
                     // this.controls.camera.position.y = 10;
                     if ( this.playerIsOnGround && this.canJump) {
-                        velocity.y = 10.0;
+                        velocity.y = 17;
                         this.playerIsOnGround = false;
                     }
                     break;
@@ -1089,9 +1092,11 @@ diffuseColor = vec4(blended, 1.0);
             }
 
             // adjust the camera
+            const target = this.creatorController.view === 'fps' ?
+                player.position.clone().add(new Vector3(0, 7, 0)) : player.position;
             camera.position.sub( this.controls.target );
-            this.controls.target.copy( player.position );
-            camera.position.add( player.position );
+            this.controls.target.copy( target );
+            camera.position.add( target );
 
             // if the player has fallen too far below the level reset their position to the start
             if ( player.position.y < - 500 ) {

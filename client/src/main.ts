@@ -177,7 +177,7 @@ async function init() {
     hudController.on('map:select', async (selected: ATMap)=> {
         hudController.openDialog('Loading', 'Create Map...');
         if (!map) {
-            map = await TerrainManager.CreateMap(selected, scene, controls);
+            map = await TerrainManager.CreateMap(selected, scene, controls, creatorController);
             map.initPlayerEvents();
         } else {
             await map.updateScene(selected);
@@ -204,6 +204,7 @@ async function init() {
         await map.preloadAroundSpawn();
 
         if (!animationRunning) {
+            creatorController.updateView();
             animate();
         }
         map.respawn(heroPlayer);
@@ -277,24 +278,6 @@ function animate() {
                 y: round(dir.y),
                 z: round(dir.z)
             }])
-        }
-
-
-        //heroPlayer.position.copy(camera.position);
-        if (creatorController.view === 'tps') {
-            controls.maxPolarAngle = Math.PI / 2;
-            controls.minDistance = 1;
-            controls.maxDistance = 40;
-            if (!heroPlayer.visible) {
-                heroPlayer.visible = true;
-            }
-        } else if (creatorController.view === 'fps') {
-            controls.maxPolarAngle = Math.PI;
-            controls.minDistance = 1e-4;
-            controls.maxDistance = 1e-4;
-            if (heroPlayer.visible) {
-                heroPlayer.visible = false;
-            }
         }
 
         const physicsSteps = map.params.physicsSteps || 1;
