@@ -379,14 +379,7 @@ export class TerrainManager {
                 data[idx + 3] = Math.min(255, Math.round(weights.a * 255));
             }
         }
-        const texture = new DataTexture(data, resolution, resolution, RGBAFormat);
-        texture.flipY = true;
-        texture.needsUpdate = true;
-        texture.wrapS = ClampToEdgeWrapping;
-        texture.wrapT = ClampToEdgeWrapping;
-        texture.minFilter = LinearFilter;
-        texture.magFilter = LinearFilter;
-        return texture;
+        return this.createSplatTextureFromData(data, resolution)
     }
 
     private createSplatTextureFromData(data: Uint8Array, resolution: number) {

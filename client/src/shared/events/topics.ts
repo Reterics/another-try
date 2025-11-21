@@ -8,7 +8,13 @@ export type Topic =
   | 'Renderer.Frame'
   | 'Renderer.Resized'
   | 'UI.Minimap.ZoomChanged'
-  | 'Player.HeadingChanged';
+  | 'UI.HUD.MapSelected'
+  | 'Player.HeadingChanged'
+  | 'Player.PositionChanged'
+  | 'Creator.PointerClicked'
+  | 'Creator.ObjectPlaced'
+  | 'Server.Connected'
+  | 'Server.ObjectReceived';
 
 // Optional grouped constants for discoverability in IDEs.
 export const Topics = {
@@ -20,8 +26,20 @@ export const Topics = {
     Minimap: {
       ZoomChanged: 'UI.Minimap.ZoomChanged' as const,
     },
+    HUD: {
+      MapSelected: 'UI.HUD.MapSelected' as const,
+    },
   },
   Player: {
     HeadingChanged: 'Player.HeadingChanged' as const,
+    PositionChanged: 'Player.PositionChanged' as const,
+  },
+  Creator: {
+    PointerClicked: 'Creator.PointerClicked' as const,
+    ObjectPlaced: 'Creator.ObjectPlaced' as const,
+  },
+  Server: {
+    Connected: 'Server.Connected' as const,
+    ObjectReceived: 'Server.ObjectReceived' as const,
   },
 } as const;

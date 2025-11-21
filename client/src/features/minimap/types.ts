@@ -6,7 +6,7 @@
  * should be added here.
  */
 
-import type { WebGLRenderer, Texture, ColorSpace, PixelFormat, TextureFilter } from 'three';
+import type { WebGLRenderer, Texture, ColorSpace, PixelFormat, MinificationTextureFilter, MagnificationTextureFilter } from 'three';
 
 export type Vec2 = { x: number; y: number };
 
@@ -57,8 +57,8 @@ export interface MinimapTextureParams {
   /** Preferred color space (e.g., SRGBColorSpace). */
   colorSpace?: ColorSpace;
   /** Optional texture filters. */
-  minFilter?: TextureFilter;
-  magFilter?: TextureFilter;
+  minFilter?: MinificationTextureFilter;
+  magFilter?: MagnificationTextureFilter;
   /** Optional pixel format (depends on three.js version/capabilities). */
   format?: PixelFormat;
   /** Desired anisotropy; final value should be clamped to renderer.capabilities. */

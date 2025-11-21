@@ -67,8 +67,7 @@ export function snapCircleSize(mapEl?: HTMLElement | null): void {
   const target = `${size}px`;
   if (mapEl.style.width !== target) {
     mapEl.style.width = target;
-    // @ts-ignore
-    mapEl.style.aspectRatio = '1 / 1';
+    mapEl.style.setProperty('aspect-ratio', '1 / 1');
   }
 }
 
