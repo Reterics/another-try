@@ -19,6 +19,15 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
 
-    "types": ["./src/types/imports.d.ts"]
+    "types": ["./src/types/imports.d.ts"],
+
+    /* Path aliases */
+    "baseUrl": ".",
+    "paths": {
+      "@app/*": ["src/*"],
+      "@engine/*": ["src/engine/*"],
+      "@features/*": ["src/features/*"],
+      "@shared/*": ["src/shared/*"]
+    }
   }
 }

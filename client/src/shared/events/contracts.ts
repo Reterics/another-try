@@ -1,3 +1,13 @@
+/**
+ * Event payload contracts for the typed EventBus.
+ *
+ * Purpose:
+ * - Provide a single mapping from topic string literals to payload shapes.
+ * - Enable end-to-end typing for `publish` and `subscribe` without `any` leaks.
+ *
+ * Key dependencies:
+ * - Relies on topic names defined in `topics.ts`.
+ */
 import type { Topic } from './topics';
 
 /**
