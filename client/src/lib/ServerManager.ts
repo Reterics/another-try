@@ -5,10 +5,11 @@ import {Object3D, Scene} from "three";
 import {ObjectPositionMessage, PositionMessage} from "../../../types/messages.ts";
 import {HUDController} from "../controllers/HUDController.ts";
 import {Sphere} from "../models/sphere.ts";
-import {EventManager} from "./EventManager.ts";
 import {serverURL} from "../utils/model.ts";
+import EventBus from "@shared/events/EventBus.ts";
+import { Topics } from "@shared/events/topics.ts";
 
-export class ServerManager extends EventManager {
+export class ServerManager {
     private socket: Socket|undefined;
     private readonly players: PlayerList;
     private readonly playerNames: PlayerNames;
@@ -18,9 +19,10 @@ export class ServerManager extends EventManager {
     private active: boolean;
     private playerIndex: number | undefined;
     private hud: HUDController;
+    private readonly bus: EventBus;
 
-    constructor(scene: Scene, hud: HUDController) {
-        super();
+    constructor(scene: Scene, hud: HUDController, eventBus: EventBus) {
+        this.bus = eventBus;
         this.scene = scene;
         const nameNode = document.getElementById("name") as HTMLInputElement;
         if (nameNode) {
@@ -58,11 +60,11 @@ export class ServerManager extends EventManager {
         this.socket.on('data', this.data.bind(this));
         this.socket.on('shoot', this.shoot.bind(this));
         this.socket.on('object', (msg: ObjectPositionMessage)=> {
-            this.emit('object', msg);
+            this.bus.publish(Topics.Server.ObjectReceived, { message: msg });
         });
         this.socket.on('connect', () => {
             this.active = true;
-            this.emit('connect');
+            this.bus.publish(Topics.Server.Connected, {});
         });
     }
 

@@ -1,4 +1,5 @@
 import {Box3, Mesh} from "three";
+import type EventBus from "../shared/events/EventBus.ts";
 
 export interface ShadowType extends Mesh {
     refType?: string
@@ -15,6 +16,7 @@ export interface MinimapInputArguments {
     boundingBox?: Box3
     texture?: string
     target?: HTMLDivElement
+    eventBus?: EventBus
 }
 
 export interface MinimapDimensions {

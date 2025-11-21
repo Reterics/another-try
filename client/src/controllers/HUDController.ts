@@ -3,12 +3,13 @@ import pauseMenuTemplate from '../pages/pause.html?raw'
 import inGameTemplate from '../pages/ingame.html?raw'
 import { CreatorController } from "./CreatorController.ts";
 import { PlayerNames, PlayerScores } from "../types/main.ts";
-import { EventManager } from "../lib/EventManager.ts";
 import { ATMap } from "../../../types/map.ts";
 import { demoMap } from "../models/demoMap.ts";
 import * as THREE from 'three';
+import EventBus from "@shared/events/EventBus.ts";
+import { Topics } from "@shared/events/topics.ts";
 
-export class HUDController extends EventManager{
+export class HUDController {
     private readonly inGame: HTMLDivElement;
     private readonly mainMenu: HTMLDivElement;
     private readonly pauseMenu: HTMLDivElement;
@@ -26,9 +27,10 @@ export class HUDController extends EventManager{
     private maps: ATMap[];
     private dialog: HTMLDivElement|undefined;
     private side: HTMLDivElement|undefined;
+    private readonly bus: EventBus;
 
-    constructor() {
-        super();
+    constructor(eventBus: EventBus) {
+        this.bus = eventBus;
         const inGame = document.createElement('div');
         inGame.id = 'inGame';
         inGame.innerHTML = inGameTemplate;
@@ -88,7 +90,7 @@ export class HUDController extends EventManager{
                 for(let i = 0; i < pauseParent.children.length; i++) {
                     const element = pauseParent.children[i] as HTMLElement;
                     if (element === targetNode) {
-                        element.style.display = 'block';
+                        element.style.display = 'flex';
                     } else {
                         element.style.display = 'none';
                     }
@@ -100,6 +102,15 @@ export class HUDController extends EventManager{
             demoMap
         ];
 
+        const enterButton = this.mainMenu.querySelector('.primary-btn');
+        if (enterButton) {
+            enterButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                const firstMap = this.maps[0];
+                this.renderGame(firstMap ? firstMap.id : null);
+            });
+        }
+
         this.cursor = 0;
         this.messageBuffer = [];
     }
@@ -107,12 +118,12 @@ export class HUDController extends EventManager{
     renderMenu() {
         this.inGame.style.display = 'none';
         this.pauseMenu.style.display = 'none';
-        this.mainMenu.style.display = 'block';
+        this.mainMenu.style.display = 'flex';
     }
 
     renderPauseMenu() {
         this.inGame.style.display = 'none';
-        this.pauseMenu.style.display = 'block';
+        this.pauseMenu.style.display = 'flex';
         this.mainMenu.style.display = 'none';
     }
 
@@ -120,7 +131,7 @@ export class HUDController extends EventManager{
         if (this.pauseMenu.style.display === 'none') {
             this.renderPauseMenu();
         } else {
-            this.inGame.style.display = 'block';
+            this.inGame.style.display = 'flex';
             this.pauseMenu.style.display = 'none';
             this.mainMenu.style.display = 'none';
         }
@@ -134,7 +145,7 @@ export class HUDController extends EventManager{
         this.mainMenu.style.display = 'none';
         const map = this.maps.find(map=>map.id === id);
         if (map) {
-            this.emit('map:select', map);
+            this.bus.publish(Topics.UI.HUD.MapSelected, { map });
         } else {
             console.warn('Map is not found for ', id);
         }

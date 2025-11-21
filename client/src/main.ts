@@ -7,12 +7,20 @@ import {HUDController} from "./controllers/HUDController.ts";
 import {acceleratedRaycast, computeBoundsTree, disposeBoundsTree} from "three-mesh-bvh";
 import {CreatorController} from "./controllers/CreatorController.ts";
 import {ServerManager} from "./lib/ServerManager.ts";
-import {ObjectPositionMessage} from "../../types/messages.ts";
-import {ATMap} from "../../types/map.ts";
 import {MinimapController} from "./controllers/MinimapController.ts";
 import Clouds from "./models/cloud";
 import ATSky from "./models/sky.ts";
 import {GrassManager} from "./models/grass/grassManager.ts";
+import EventBus, { Subscription } from '@shared/events/EventBus.ts';
+import { Topics } from '@shared/events/topics.ts';
+import { FrameLoop } from '@engine/render/FrameLoop.ts';
+import ResizeSystem from '@engine/render/ResizeSystem.ts';
+import createRenderer from '@engine/render/RendererFactory.ts';
+
+// Typed EventBus (non-destructive wiring): instantiated here and passed to FrameLoop only.
+const eventBus = new EventBus();
+FrameLoop.setEventBus(eventBus);
+const busSubscriptions: Subscription[] = [];
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
@@ -21,14 +29,15 @@ THREE.Mesh.prototype.raycast = acceleratedRaycast;
 let shoot = false,
     isChatActive = false;
 
-let prevTime = performance.now();
 let isTabActive: boolean = true;
 const direction = new THREE.Vector3();
+const headingVector = new THREE.Vector3();
+let lastVisibleFrame = true;
 let heroPlayer: Object3D;
 let map: TerrainManager;
 let animationRunning = false;
 
-const hudController = new HUDController();
+const hudController = new HUDController(eventBus);
 let camera: PerspectiveCamera;
 let renderer: WebGLRenderer;
 let scene: Scene;
@@ -39,7 +48,7 @@ let creatorController: CreatorController;
 let serverManager: ServerManager;
 let clouds: Clouds;
 // Grass configuration (world units; 1 unit = 1 meter)
-const GRASS_PATCH_INSTANCES = 2000;
+const GRASS_PATCH_INSTANCES = 10000;
 const GRASS_PATCH_SIZE = 12;
 const GRASS_PATCH_RADIUS = 128; // circle radius for real blades (units)
 const GRASS_IMPOSTOR_RADIUS = 300 + GRASS_PATCH_SIZE + GRASS_PATCH_RADIUS; // outer ring radius for impostors (units)
@@ -50,6 +59,81 @@ const GRASS_WIND_INTENSITY = 0.35;
 
 let minimap: MinimapController;
 let minimapTextureCleanup: (() => void) | null = null;
+
+busSubscriptions.push(
+    eventBus.subscribe(Topics.Creator.PointerClicked, ({ mode }) => {
+        if (mode === 'pointer') {
+            shoot = true;
+        }
+    })
+);
+
+busSubscriptions.push(
+    eventBus.subscribe(Topics.Creator.ObjectPlaced, ({ message }) => {
+        if (message && Array.isArray(message.coordinates) && message.asset) {
+            serverManager?.send("object", message);
+        }
+    })
+);
+
+busSubscriptions.push(
+    eventBus.subscribe(Topics.UI.HUD.MapSelected, async ({ map: selected }) => {
+        hudController.openDialog('Loading', 'Create Map...');
+        if (!map) {
+            map = await TerrainManager.CreateMap(selected, scene, controls, creatorController);
+            map.initPlayerEvents();
+        } else {
+            await map.updateScene(selected);
+        }
+        hudController.openDialog('Loading', 'Add to scene');
+        await map.addToScene();
+
+        if (!grassManager) {
+            grassManager = new GrassManager(scene, map, {
+                patchRadius: GRASS_PATCH_RADIUS,
+                impostorRadius: GRASS_IMPOSTOR_RADIUS,
+                lodRadii: GRASS_LOD_RADII,
+                instancesPerPatch: GRASS_PATCH_INSTANCES,
+                lodSteps: GRASS_LOD_STEPS,
+                windIntensity: GRASS_WIND_INTENSITY,
+                impostorDensity: GRASS_IMPOSTOR_DENSITY,
+                patchSize: GRASS_PATCH_SIZE,
+            });
+        } else {
+            grassManager.setTerrain(map);
+        }
+
+        await map.preloadAroundSpawn();
+
+        if (!animationRunning) {
+            creatorController.updateView();
+            FrameLoop.onFrame(animate);
+            FrameLoop.start();
+            animationRunning = true;
+        }
+        map.respawn(heroPlayer);
+        if (minimapTextureCleanup) {
+            minimapTextureCleanup();
+            minimapTextureCleanup = null;
+        }
+        minimap = new MinimapController({
+            boundingBox: map.getBoundingBox() || undefined,
+            texture: selected.texture || '',
+            eventBus,
+        });
+        const spawn = map.getSpawnPoint();
+        minimap.setPatch({ x: spawn.x, z: spawn.z }, map.getProceduralPatchSize());
+        minimapTextureCleanup = map.onMinimapTextureUpdated(({ texture, center, span }) => {
+            if (!minimap) {
+                return;
+            }
+            minimap.setPatch(center, span);
+            minimap.setTexture(texture || selected.texture || '');
+        });
+
+        hudController.closeDialog();
+    })
+);
 
 
 init();
@@ -65,10 +149,9 @@ async function init() {
     //heroPlayer.position.copy(camera.position);
     hero.addToScene();
 
-    renderer = new THREE.WebGLRenderer( { antialias: true, powerPreference: "high-performance" } );
-    renderer.setPixelRatio( window.devicePixelRatio );
-    renderer.setSize( window.innerWidth, window.innerHeight );
-    document.body.appendChild( renderer.domElement );
+    const { renderer: createdRenderer, canvas } = createRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer = createdRenderer;
+    document.body.appendChild(canvas);
 
     controls = new OrbitControls( camera, renderer.domElement );
     controls.mouseButtons = {
@@ -78,10 +161,16 @@ async function init() {
     };
     window.onfocus = function () {
         isTabActive = true;
+        if (animationRunning) {
+            FrameLoop.start();
+        }
     };
 
     window.onblur = function () {
         isTabActive = false;
+        if (animationRunning) {
+            FrameLoop.stop();
+        }
     };
 
     scene.add( controls.object );
@@ -118,148 +207,79 @@ async function init() {
     };
 
     document.addEventListener( 'keydown', onKeyDown, false );
-    window.addEventListener( 'resize', onWindowResize, false );
+
+    // Keep renderer and camera in sync with window size via ResizeSystem
+    const resizer = new ResizeSystem({ renderer, camera, eventBus });
+    resizer.start();
 
     const sky = new ATSky(scene);
     sky.addToScene();
     clouds = new Clouds(scene);
     clouds.addToScene();
-    creatorController = new CreatorController(scene, hudController, hero, controls);
+    creatorController = new CreatorController(scene, hudController, hero, controls, eventBus);
     await creatorController.updateShadowObject();
-    creatorController.on('click', () => {
-        if (creatorController.active === 'pointer') {
-            shoot = true;
-        }
-    });
-    creatorController.on('object', (msg: ObjectPositionMessage) => {
-        if (msg && Array.isArray(msg.coordinates) && msg.asset) {
-            serverManager.send("object", msg);
-        }
-    });
-
-    serverManager = new ServerManager(scene, hudController);
+    serverManager = new ServerManager(scene, hudController, eventBus);
     hudController.renderMaps();
 
-    serverManager.connect();
-    serverManager.on('connect', async () => {
-        const maps = await serverManager.get('maps');
-        if (maps && Array.isArray(maps)) {
-            const filteredMaps = hudController.getMaps().filter(map=>map.id === 'fallback');
-            maps.forEach(map => {
-                if(map.id !== 'fallback'){
-                    filteredMaps.push(map)
+    busSubscriptions.push(
+        eventBus.subscribe(Topics.Server.Connected, async () => {
+            const maps = await serverManager.get('maps');
+            if (maps && Array.isArray(maps)) {
+                const filteredMaps = hudController.getMaps().filter(map=>map.id === 'fallback');
+                maps.forEach(map => {
+                    if(map.id !== 'fallback'){
+                        filteredMaps.push(map)
+                    }
+                });
+
+                hudController.setMaps(filteredMaps);
+                hudController.renderMaps();
+            }
+            const assets = await serverManager.get('assets');
+            if (Array.isArray(assets)) {
+                creatorController.updateAssets(assets);
+            }
+
+        })
+    );
+    busSubscriptions.push(
+        eventBus.subscribe(Topics.Server.ObjectReceived, async ({ message }) => {
+            if (message.type === "object" && Array.isArray(message.coordinates) && message.asset) {
+                const obj = await creatorController.getShadowObjectByIndex(message.asset);
+                if (obj &&
+                    typeof message.coordinates[0] === "number" &&
+                    typeof message.coordinates[1] === "number" &&
+                    typeof message.coordinates[3] === "number"
+                ) {
+                    obj.name = "mesh_bullet_brick";
+                    obj.position.set(message.coordinates[0], message.coordinates[1], message.coordinates[3]);
+                    scene.add(obj);
                 }
-            });
-
-            hudController.setMaps(filteredMaps);
-            hudController.renderMaps();
-        }
-        const assets = await serverManager.get('assets');
-        if (Array.isArray(assets)) {
-            creatorController.updateAssets(assets);
-        }
-
-    });
-    serverManager.on('object', async (msg: ObjectPositionMessage) => {
-        if (msg.type === "object" && Array.isArray(msg.coordinates) && msg.asset) {
-            const obj = await creatorController.getShadowObjectByIndex(msg.asset);
-            if (obj &&
-                typeof msg.coordinates[0] === "number" &&
-                typeof msg.coordinates[1] === "number" &&
-                typeof msg.coordinates[3] === "number"
-            ) {
-                obj.name = "mesh_bullet_brick";
-                obj.position.set(msg.coordinates[0], msg.coordinates[1], msg.coordinates[3]);
-                scene.add(obj);
             }
-        }
-    })
-    hudController.on('map:select', async (selected: ATMap)=> {
-        hudController.openDialog('Loading', 'Create Map...');
-        if (!map) {
-            map = await TerrainManager.CreateMap(selected, scene, controls, creatorController);
-            map.initPlayerEvents();
-        } else {
-            await map.updateScene(selected);
-        }
-        hudController.openDialog('Loading', 'Add to scene');
-        await map.addToScene();
+        })
+    );
 
-        if (!grassManager) {
-            grassManager = new GrassManager(scene, map, {
-                patchRadius: GRASS_PATCH_RADIUS,
-                impostorRadius: GRASS_IMPOSTOR_RADIUS,
-                lodRadii: GRASS_LOD_RADII,
-                instancesPerPatch: GRASS_PATCH_INSTANCES,
-                lodSteps: GRASS_LOD_STEPS,
-                windIntensity: GRASS_WIND_INTENSITY,
-                impostorDensity: GRASS_IMPOSTOR_DENSITY,
-                patchSize: GRASS_PATCH_SIZE,
-            });
-        } else {
-            grassManager.setTerrain(map);
-        }
-
-        // Ensure terrain chunks and collider are ready before starting the loop
-        await map.preloadAroundSpawn();
-
-        if (!animationRunning) {
-            creatorController.updateView();
-            animate();
-        }
-        map.respawn(heroPlayer);
-        if (minimapTextureCleanup) {
-            minimapTextureCleanup();
-            minimapTextureCleanup = null;
-        }
-        minimap = new MinimapController({
-            boundingBox: map.getBoundingBox() || undefined,
-            texture: selected.texture || ''
-        });
-        const spawn = map.getSpawnPoint();
-        minimap.setPatch({ x: spawn.x, z: spawn.z }, map.getProceduralPatchSize());
-        minimapTextureCleanup = map.onMinimapTextureUpdated(({ texture, center, span }) => {
-            if (!minimap) {
-                return;
-            }
-            minimap.setPatch(center, span);
-            minimap.setTexture(texture || selected.texture || '');
-        });
-
-        hudController.closeDialog();
-    });
+    serverManager.connect();
 
 }
 
-
-function onWindowResize() {
-
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-
-    renderer.setSize( window.innerWidth, window.innerHeight );
-
-}
 
 function round(num: number) {
     return Math.round(num * 100) / 100
 }
 
-function animate() {
-    requestAnimationFrame( animate );
-    if (!animationRunning) {
-        animationRunning = true;
-    }
-    if (document.hidden || !isTabActive) { // No render if the tab is not open
-        prevTime = 0;
+function animate(dt: number, elapsed: number) {
+    // If tab is hidden or inactive, skip updates and ensure next visible frame uses zero delta
+    if (document.hidden || !isTabActive) {
+        lastVisibleFrame = true;
         return;
     }
-    const time = performance.now();
-    const elapsedSeconds = time * 0.001;
-    const cameFromHidden = prevTime === 0;
-    const delta = cameFromHidden ? 0 : ( time - prevTime ) / 1000;
+
+    const cameFromHidden = lastVisibleFrame;
+    const delta = cameFromHidden ? 0 : dt;
+    const elapsedSeconds = elapsed;
     if (cameFromHidden) {
-        prevTime = time;
+        lastVisibleFrame = false;
     }
 
     if ((serverManager.isActive() || map.getMap().id === 'fallback')
@@ -300,25 +320,26 @@ function animate() {
         grassManager?.update(heroPlayer.position, camera.position, elapsedSeconds);
     }
 
+    if (heroPlayer) {
+        const heroPos = heroPlayer.position;
+        eventBus.publish(Topics.Player.PositionChanged, {
+            position: { x: heroPos.x, y: heroPos.y, z: heroPos.z },
+        });
+    }
+
+    const dir = headingVector;
+    camera.getWorldDirection(dir);
+    dir.y = 0;
+    let headingRad = 0;
+    if (dir.lengthSq() > 1e-6) {
+        dir.normalize();
+        headingRad = Math.atan2(dir.x, dir.z);
+    }
+    eventBus.publish(Topics.Player.HeadingChanged, { radians: headingRad });
+
     if (clouds) {
         clouds.update(delta, camera.position);
     }
 
-    prevTime = time;
-
     renderer.render( scene, camera );
-    if (minimap) {
-        const dir = new THREE.Vector3();
-        camera.getWorldDirection(dir);
-        // Project camera forward onto XZ plane and compute heading (0 at +Z)
-        dir.y = 0;
-        let headingRad = 0;
-        if (dir.lengthSq() > 1e-6) {
-            dir.normalize();
-            headingRad = Math.atan2(dir.x, dir.z);
-        }
-        // Pass only yaw via Euler.y so MinimapController can rotate sprite accordingly
-        const yawEuler = new THREE.Euler(0, headingRad, 0);
-        minimap.update(heroPlayer.position, yawEuler);
-    }
 }

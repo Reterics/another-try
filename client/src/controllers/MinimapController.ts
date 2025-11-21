@@ -1,9 +1,14 @@
-import {CanvasTexture, Euler, OrthographicCamera, Scene, Sprite, SpriteMaterial, SRGBColorSpace, Texture, TextureLoader, Vector3, WebGLRenderer} from "three";
-import {MinimapDimensions, MinimapInputArguments} from "../types/controller.ts";
-import {EventManager} from "../lib/EventManager.ts";
+import { Euler, OrthographicCamera, Scene, Sprite, SpriteMaterial, Texture, TextureLoader, Vector3, WebGLRenderer } from "three";
+import { MinimapDimensions, MinimapInputArguments } from "../types/controller.ts";
+import { bindMinimapControls, MinimapDomBindingsHandle, createMinimapRoot, snapCircleSize } from "../features/minimap/MinimapDom.ts";
+import { prepareMapTexture, createFallbackTexture } from "../features/minimap/MinimapTextureService.ts";
+import { createMinimapCamera, MinimapCamera } from "../features/minimap/MinimapCamera.ts";
+import ResourceTracker from "../engine/assets/ResourceTracker.ts";
+import EventBus, { Subscription } from "@shared/events/EventBus.ts";
+import { Topics } from "@shared/events/topics.ts";
 
 
-export class MinimapController extends EventManager{
+export class MinimapController {
     private readonly scene: Scene;
     private readonly camera: OrthographicCamera;
     private renderer: WebGLRenderer;
@@ -18,20 +23,50 @@ export class MinimapController extends EventManager{
     private currentSpan = 1;
     private lastPlayerPosition = new Vector3();
     private lastHeading = 0;
-    private readonly viewCoverage = 0.4;
     private readonly minZoom = 0.6;
     private readonly maxZoom = 3;
     // HTML canvas reference and resize observer to keep aspect/frustum correct
     private canvas!: HTMLCanvasElement;
     private resizeObserver?: ResizeObserver;
     private mapEl?: HTMLDivElement;
+    private domBindings?: MinimapDomBindingsHandle;
+    // New: typed camera helper and resource tracker
+    private miniCam: MinimapCamera = createMinimapCamera();
+    private resources: ResourceTracker = new ResourceTracker();
+    private bus?: EventBus;
+    private busSubscriptions: Subscription[] = [];
+    private readonly busPosition = new Vector3();
+    private readonly busHeading = new Euler();
 
-    constructor({boundingBox, texture, target}: MinimapInputArguments) {
-        super();
-
-        this.outer = target || this.renderHTML();
+    constructor({boundingBox, texture, target, eventBus}: MinimapInputArguments) {
+        this.bus = eventBus;
+        this.outer = target || createMinimapRoot();
         // Cache the map element if present (for sizing and masking robustness)
         this.mapEl = this.outer.querySelector('.map') as HTMLDivElement | null || undefined;
+
+        // Bind DOM controls via MinimapDom helper (extracting DOM responsibility)
+        this.domBindings = bindMinimapControls({
+            container: this.outer,
+            onZoomChanged: (delta: number) => {
+                this.zoom(delta);
+                this.bus?.publish(Topics.UI.Minimap.ZoomChanged, { delta });
+            },
+        });
+        if (this.bus) {
+            this.busSubscriptions.push(
+                this.bus.subscribe(Topics.Player.PositionChanged, ({ position }) => {
+                    this.busPosition.set(position.x, position.y, position.z);
+                    this.update(this.busPosition, undefined);
+                }),
+            );
+            this.busSubscriptions.push(
+                this.bus.subscribe(Topics.Player.HeadingChanged, ({ radians }) => {
+                    this.busHeading.set(0, radians, 0);
+                    this.update(undefined, this.busHeading);
+                }),
+            );
+        }
+
         const minimapCanvas = this.outer.querySelector('canvas');
         if (!minimapCanvas) {
             throw Error('Target Element must have a canvas to render');
@@ -44,9 +79,11 @@ export class MinimapController extends EventManager{
         this.textureLoader = new TextureLoader();
         const baseTexture = texture
             ? this.textureLoader.load(texture)
-            : this.buildFallbackTexture();
-        const prepared = this.prepareTexture(baseTexture);
-        this.spriteMaterial = new SpriteMaterial({ map: prepared, color: 0xffffff });
+            : createFallbackTexture();
+        // Create material without final texture; we'll prepare and assign after renderer is ready
+        this.spriteMaterial = new SpriteMaterial({ color: 0xffffff });
+        // Track material for cleanup
+        this.resources.track(this.spriteMaterial);
         this.sprite = new Sprite(this.spriteMaterial);
         this.sprite.position.set(0,0,0);
         // Ensure rotation around center of the sprite
@@ -81,18 +118,18 @@ export class MinimapController extends EventManager{
         this.renderer.setClearColor(0x000000, 0);
         // Respect device pixel ratio for crisp texturing
         // Note: keep consistent with main app; adjust if performance is a concern
-        // @ts-ignore
         this.renderer.setPixelRatio(window.devicePixelRatio || 1);
-        this.snapCircleSize();
+        snapCircleSize(this.mapEl);
         this.updateRendererSize();
         this.currentSpan = this.dimensions.width || 1;
         this.applyPatchSpan(this.currentSpan);
+        // Prepare and assign initial texture now that renderer is ready
+        this.applyTexture(baseTexture);
 
         // Observe canvas size to keep frustum/renderer aspect-correct
         if ('ResizeObserver' in window) {
-            // @ts-ignore
             this.resizeObserver = new ResizeObserver(() => {
-                this.snapCircleSize();
+                snapCircleSize(this.mapEl);
                 this.updateRendererSize();
                 this.applyPatchSpan(this.currentSpan);
             });
@@ -105,7 +142,7 @@ export class MinimapController extends EventManager{
         if (!texture) {
             this.pendingTextureUrl = undefined;
             this.currentTextureUrl = undefined;
-            this.applyTexture(this.buildFallbackTexture());
+            this.applyTexture(createFallbackTexture());
             return;
         }
         if (texture === this.currentTextureUrl) {
@@ -148,13 +185,27 @@ export class MinimapController extends EventManager{
     }
 
     private applyPatchSpan(span: number) {
-        const viewWidth = Math.max(10, span * this.viewCoverage);
-        // Match camera frustum to the canvas aspect to avoid deformation when rotating
+        // Use typed MinimapCamera to compute visible frustum based on aspect and zoom
         const w = this.canvas?.clientWidth || this.dimensions.width || 1;
         const h = this.canvas?.clientHeight || this.dimensions.height || 1;
         const aspect = h > 0 ? (w / h) : 1;
-        const halfV = viewWidth / 2;
-        const halfH = halfV * aspect;
+        const params = {
+            worldBounds: {
+                min: { x: this.dimensions.left, y: this.dimensions.bottom },
+                max: { x: this.dimensions.right, y: this.dimensions.top },
+            },
+            playerPosition: { x: this.currentCenter.x, y: this.currentCenter.z },
+            zoom: this.camera.zoom,
+            aspect,
+            span,
+        } as const;
+        const frustum = this.miniCam.computeFrustum(params);
+        // Compute pre-zoom frustum planes to match previous behavior:
+        // old code set planes from span*viewCoverage and relied on camera.zoom for magnification.
+        const widthPreZoom = Math.max(10, frustum.span * this.camera.zoom);
+        const heightPreZoom = Math.max(10, widthPreZoom / aspect);
+        const halfH = widthPreZoom / 2;
+        const halfV = heightPreZoom / 2;
         this.camera.left = -halfH;
         this.camera.right = halfH;
         this.camera.top = halfV;
@@ -172,50 +223,40 @@ export class MinimapController extends EventManager{
         const dx = this.lastPlayerPosition.x - this.currentCenter.x;
         const dz = this.lastPlayerPosition.z - this.currentCenter.z;
         
-        // The minimap texture is rotated by `spriteMaterial.rotation` which we set to `-heading + π`.
-        // To keep the player visually centered and move the map in the correct on-screen direction,
-        // translate the sprite in the same rotated space as the texture.
-        // That means rotate the world offset by the same angle used for texture alignment (without the π flip).
-        const angle = this.lastHeading - Math.PI / 2; // swapped to +heading to correct horizontal (E/W) inversion; π still excluded for translation
-        const cos = Math.cos(angle);
-        const sin = Math.sin(angle);
-        const rx = dx * cos - dz * sin;
-        const rz = dx * sin + dz * cos;
-        
-        // Move the map opposite to the player's world movement (player stays centered)
-        // Try axis-swap variant so that screen X corresponds to world +Z and screen Y to world +X in the rotated frame.
-        this.sprite.position.set(rz, -rx, 0);
+        // Move the map opposite to the player's world movement so the player stays centered.
+        // Translation occurs in world axes regardless of sprite rotation, so keep mapping simple:
+        // screen X follows world X, screen Y follows world Z.
+        this.sprite.position.set(-dx, -dz, 0);
     }
 
-    private applyTexture(texture: Texture) {
-        this.prepareTexture(texture);
+    private applyTexture(srcTexture: Texture) {
+        // Derive pixel size for texture preparation
+        const img = (srcTexture as Texture).image as { width?: number, height?: number };
+        let width = this.canvas?.width || 256;
+        let height = this.canvas?.height || 256;
+        if (img && typeof img === 'object') {
+            if (typeof img.width === 'number' && img.width > 0) width = img.width;
+            if (typeof img.height === 'number' && img.height > 0) height = img.height;
+        }
+        const { texture } = prepareMapTexture({
+            renderer: this.renderer,
+            size: { width, height },
+            sourceData: srcTexture,
+            // Request reasonable anisotropy; service will clamp to caps
+            anisotropy: 8,
+        });
+
         const previous = this.spriteMaterial.map;
         if (previous && previous !== texture) {
-            previous.dispose();
+            // Untrack and dispose the old texture explicitly to avoid leaks
+            this.resources.untrack(previous);
+            try { previous.dispose(); } catch {}
         }
-        this.spriteMaterial.map = texture;
-        // Improve texture sampling quality on rotation
-        try {
-            // @ts-ignore
-            const maxAniso = this.renderer?.capabilities?.getMaxAnisotropy?.() || 1;
-            if (this.spriteMaterial.map && 'anisotropy' in this.spriteMaterial.map) {
-                // @ts-ignore
-                this.spriteMaterial.map.anisotropy = maxAniso;
-                this.spriteMaterial.map.needsUpdate = true;
-            }
-        } catch (e) {
-            // ignore capabilities errors
-        }
-        this.spriteMaterial.needsUpdate = true;
-    }
 
-    private prepareTexture(texture: Texture) {
-        if ('colorSpace' in texture) {
-            // @ts-ignore
-            texture.colorSpace = SRGBColorSpace;
-        }
-        texture.needsUpdate = true;
-        return texture;
+        // Track new texture and assign
+        this.resources.track(texture);
+        this.spriteMaterial.map = texture;
+        this.spriteMaterial.needsUpdate = true;
     }
 
     update(position?: Vector3, rotation?: Euler) {
@@ -239,94 +280,6 @@ export class MinimapController extends EventManager{
         }
     }
 
-    private buildFallbackTexture(size = 256) {
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-            ctx.fillStyle = '#0b2139';
-            ctx.fillRect(0, 0, size, size);
-            ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-            ctx.lineWidth = 1;
-            const step = size / 16;
-            for (let i = 0; i <= size; i += step) {
-                ctx.beginPath();
-                ctx.moveTo(i, 0);
-                ctx.lineTo(i, size);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.moveTo(0, i);
-                ctx.lineTo(size, i);
-                ctx.stroke();
-            }
-        }
-        const texture = new CanvasTexture(canvas);
-        return this.prepareTexture(texture);
-    }
-
-    protected renderHTML() {
-        if(this.outer) {
-            return this.outer;
-        }
-        const outer = document.createElement('div');
-        outer.classList.add('minimap-outer');
-
-        const map = document.createElement('div');
-        map.classList.add('map');
-        const canvas = document.createElement('canvas');
-        canvas.classList.add('minimap');
-
-        const controllers = document.createElement('div');
-        controllers.classList.add('controllers');
-
-        const zoomIn = document.createElement('button');
-        zoomIn.innerHTML = '+';
-        zoomIn.classList.add('zoom');
-        zoomIn.classList.add('zoom-in');
-        zoomIn.onclick = () => {
-            this.zoom(1);
-            this.emit('zoom', 1);
-        };
-        const zoomOut = document.createElement('button');
-        zoomOut.innerHTML = '-';
-        zoomOut.classList.add('zoom');
-        zoomOut.classList.add('zoom-out');
-        zoomOut.onclick = () => {
-            this.zoom(-1);
-            this.emit('zoom', -1);
-        };
-
-        map.appendChild(canvas);
-        controllers.appendChild(zoomIn);
-        controllers.appendChild(zoomOut);
-
-        map.appendChild(controllers);
-
-        outer.appendChild(map);
-        this.outer = outer;
-        document.body.appendChild(this.outer);
-        return outer;
-    }
-
-    private snapCircleSize() {
-        if (!this.mapEl) return;
-        const r = this.mapEl.getBoundingClientRect();
-        // Determine the target square size in CSS pixels; prefer the smaller side
-        let size = Math.floor(Math.min(r.width, r.height));
-        // Snap to even integer to avoid half-pixel anti-alias artifacts at some DPRs
-        if (size % 2 !== 0) size -= 1;
-        if (size <= 0) return;
-        // Enforce exact width; height comes from aspect-ratio 1/1
-        const prev = this.mapEl.style.width;
-        const target = `${size}px`;
-        if (prev !== target) {
-            this.mapEl.style.width = target;
-            // Ensure a perfect square layout
-            // @ts-ignore: aspectRatio is supported in modern browsers
-            this.mapEl.style.aspectRatio = '1 / 1';
-        }
-    }
 
     private updateRendererSize() {
         if (!this.canvas || !this.renderer) return;
@@ -341,5 +294,37 @@ export class MinimapController extends EventManager{
             // Projection will be recalculated in applyPatchSpan(), but update here for safety
             this.camera.updateProjectionMatrix();
         }
+    }
+
+    /**
+     * Clean up DOM bindings and observers; can be called by the owner when disposing the minimap.
+     */
+    destroy() {
+        // Unbind DOM events
+        if (this.domBindings) {
+            this.domBindings.unbind();
+            this.domBindings = undefined;
+        }
+        if (this.busSubscriptions.length) {
+            for (const sub of this.busSubscriptions) {
+                try {
+                    sub.unsubscribe();
+                } catch {}
+            }
+            this.busSubscriptions = [];
+        }
+        // Stop observing resizes
+        if (this.resizeObserver) {
+            try { this.resizeObserver.disconnect(); } catch {}
+            this.resizeObserver = undefined;
+        }
+        // Dispose tracked GPU resources (textures, materials, etc.)
+        try { this.resources.disposeAll(); } catch {}
+        // Explicitly dispose renderer and release its context if possible
+        try { this.renderer?.dispose(); } catch {}
+        // Null references to help GC in long-lived pages (optional)
+        // Keep references eligible for GC by removing scene attachments
+        try { this.scene.remove(this.sprite); } catch {}
+        // Allow fields to be reclaimed naturally without unsafe casts
     }
 }
