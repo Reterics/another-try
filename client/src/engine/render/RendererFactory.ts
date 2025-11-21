@@ -60,85 +60,118 @@ function clamp(val: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, val));
 }
 
+function isBrowser(): boolean {
+    return typeof window !== 'undefined' && typeof document !== 'undefined';
+}
+
+/**
+ * Compute initial CSS size for the renderer.
+ * - Prefer explicit width/height where provided.
+ * - Otherwise derive from container, then canvas parent, then window.
+ */
+function computeInitialSize(
+    canvas: HTMLCanvasElement,
+    container: HTMLElement | undefined,
+    explicitWidth: number | undefined,
+    explicitHeight: number | undefined
+): { width: number; height: number } {
+    const inBrowser = isBrowser();
+
+    // Helper: get fallback rect from DOM
+    const getRect = (): DOMRect | undefined => {
+        if (container) return container.getBoundingClientRect();
+        if (canvas.parentElement) return canvas.parentElement.getBoundingClientRect();
+        if (inBrowser) {
+            return new DOMRect(0, 0, window.innerWidth, window.innerHeight);
+        }
+        return undefined;
+    };
+
+    const rect = getRect();
+
+    const defaultWidth = rect?.width ?? 1;
+    const defaultHeight = rect?.height ?? 1;
+
+    const width = Math.max(1, Math.floor(explicitWidth ?? defaultWidth));
+    const height = Math.max(1, Math.floor(explicitHeight ?? defaultHeight));
+
+    return { width, height };
+}
+
 export function createRenderer(options: RendererFactoryOptions = {}): RendererFactoryResult {
-  const {
-    canvas: providedCanvas,
-    container,
-    antialias,
-    alpha,
-    powerPreference,
-    preserveDrawingBuffer,
-    failIfMajorPerformanceCaveat,
-    maxPixelRatio = 2,
-    width: providedWidth,
-    height: providedHeight,
-    outputColorSpace,
-    toneMapping = THREE.NoToneMapping,
-    toneMappingExposure = 1,
-  } = options;
+    const {
+        canvas: providedCanvas,
+        container,
+        antialias,
+        alpha,
+        powerPreference,
+        preserveDrawingBuffer,
+        failIfMajorPerformanceCaveat,
+        pixelRatio,
+        maxPixelRatio = 2,
+        width: explicitWidth,
+        height: explicitHeight,
+        outputColorSpace = THREE.SRGBColorSpace,
+        toneMapping = THREE.NoToneMapping,
+        toneMappingExposure = 1,
+    } = options;
 
-  // Canvas selection/creation
-  const canvas = providedCanvas ?? document.createElement('canvas');
-  if (!providedCanvas && container) {
-    // Non‑destructive: append only when container is explicitly given.
-    container.appendChild(canvas);
-  }
+    const inBrowser = isBrowser();
 
-  // Instantiate renderer
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    antialias,
-    alpha,
-    powerPreference,
-    preserveDrawingBuffer,
-    failIfMajorPerformanceCaveat,
-  });
+    if (!inBrowser && !providedCanvas) {
+        throw new Error(
+            'createRenderer: DOM is not available (SSR), and no canvas was provided. ' +
+            'Pass an existing canvas when calling this on the server.'
+        );
+    }
 
-  // Color space (r152+). Guard at runtime for older versions.
-  if ('outputColorSpace' in renderer) {
-    (renderer as any).outputColorSpace = outputColorSpace ?? THREE.SRGBColorSpace;
-  }
+    // Canvas selection/creation
+    const canvas =
+        providedCanvas ??
+        ((): HTMLCanvasElement => {
+            // At this point we know we're in the browser
+            const c = document.createElement('canvas');
+            if (container) {
+                container.appendChild(c);
+            }
+            return c;
+        })();
 
-  // Tone mapping & exposure
-  if ('toneMapping' in renderer) {
+    // Instantiate renderer
+    const renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias,
+        alpha,
+        powerPreference,
+        preserveDrawingBuffer,
+        failIfMajorPerformanceCaveat,
+    });
+
+    // Color space (latest Three.js API)
+    renderer.outputColorSpace = outputColorSpace;
+
+    // Tone mapping & exposure (latest Three.js API)
     renderer.toneMapping = toneMapping;
-  }
-  if ('toneMappingExposure' in (renderer as any)) {
-    (renderer as any).toneMappingExposure = toneMappingExposure;
-  } else if ('exposure' in (renderer as any)) {
-    (renderer as any).exposure = toneMappingExposure;
-  }
+    renderer.toneMappingExposure = toneMappingExposure;
 
-  // Pixel ratio
-  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-  const targetPR = clamp(options.pixelRatio ?? dpr, 1, Math.max(1, maxPixelRatio));
-  renderer.setPixelRatio(targetPR);
+    // Pixel ratio
+    const devicePixelRatio =
+        (inBrowser && window.devicePixelRatio) || 1;
 
-  // Initial size
-  let width = 0;
-  let height = 0;
-  if (typeof providedWidth === 'number' && typeof providedHeight === 'number') {
-    width = Math.max(1, Math.floor(providedWidth));
-    height = Math.max(1, Math.floor(providedHeight));
-  } else if (container) {
-    const rect = container.getBoundingClientRect();
-    width = Math.max(1, Math.floor(rect.width));
-    height = Math.max(1, Math.floor(rect.height));
-  } else if (canvas.parentElement) {
-    const rect = canvas.parentElement.getBoundingClientRect();
-    width = Math.max(1, Math.floor(rect.width));
-    height = Math.max(1, Math.floor(rect.height));
-  } else if (typeof window !== 'undefined') {
-    width = Math.max(1, Math.floor(window.innerWidth));
-    height = Math.max(1, Math.floor(window.innerHeight));
-  } else {
-    width = 1;
-    height = 1;
-  }
+    const maxPR = Math.max(1, maxPixelRatio);
+    const targetPixelRatio = clamp(pixelRatio ?? devicePixelRatio, 1, maxPR);
+    renderer.setPixelRatio(targetPixelRatio);
 
-  renderer.setSize(width, height, false);
+    // Initial size
+    const { width, height } = computeInitialSize(
+        canvas,
+        container,
+        explicitWidth,
+        explicitHeight
+    );
+    renderer.setSize(width, height, false);
 
-  return { renderer, canvas, width, height };
+    return { renderer, canvas, width, height };
 }
 
 export default createRenderer;

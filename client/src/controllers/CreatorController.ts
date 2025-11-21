@@ -7,12 +7,14 @@ import { roundToPrecision } from "../utils/math";
 import {HUDController} from "./HUDController.ts";
 import {Hero} from "../models/hero.ts";
 import {AssetObject} from "../../../types/assets";
-import {EventManager} from "../lib/EventManager.ts";
 import {MouseEventLike, ShadowType} from "../types/controller.ts";
+import EventBus from "@shared/events/EventBus.ts";
+import { Topics } from "@shared/events/topics.ts";
+import type { ObjectPositionMessage } from "../../../types/messages.ts";
 
 let prevTime = performance.now();
 
-export class CreatorController extends EventManager {
+export class CreatorController {
     controls: OrbitControls;
     private scene: Scene;
     target: null;
@@ -30,9 +32,10 @@ export class CreatorController extends EventManager {
     shadowInstances: Object3D[];
     private _shadowLoad?: Promise<ShadowType | null>;
     private _lastMouse: MouseEventLike;
+    private readonly bus: EventBus;
 
-    constructor(scene: Scene, hudController: HUDController, hero: Hero, controls: OrbitControls) {
-        super();
+    constructor(scene: Scene, hudController: HUDController, hero: Hero, controls: OrbitControls, eventBus: EventBus) {
+        this.bus = eventBus;
         this.controls =  controls;
 
         const obj = this.controls.object;
@@ -320,6 +323,7 @@ export class CreatorController extends EventManager {
     }
 
     private placeObjectFlushToHit(object: Object3D, hit: THREE.Intersection) {
+        const isMesh = (x: unknown): x is THREE.Mesh => !!x && typeof x === 'object' && (x as { isMesh?: boolean }).isMesh === true;
         const mesh = object as THREE.Mesh;
         const point = hit.point.clone();
 
@@ -333,7 +337,7 @@ export class CreatorController extends EventManager {
 
         // 2) Object half extents in world space
         let halfExtentAlongNormal = 0.5; // fallback
-        if ((mesh as any).isMesh && mesh.geometry) {
+        if (isMesh(mesh) && mesh.geometry) {
             const geom = mesh.geometry as THREE.BufferGeometry;
             if (!geom.boundingBox) {
                 geom.computeBoundingBox();
@@ -377,16 +381,18 @@ export class CreatorController extends EventManager {
             this.dropObject(bulletObject, event);
             bulletObject.name = "mesh_bullet_brick";
 
-            this.emit('object', {
-                position: bulletObject.position.toArray(),
-                asset: this.shadowTypeIndex
-            });
+            const payload: ObjectPositionMessage = {
+                coordinates: bulletObject.position.toArray(),
+                asset: this.shadowTypeIndex,
+                type: 'object'
+            };
+            this.bus.publish(Topics.Creator.ObjectPlaced, { message: payload });
         }
     }
 
     onClick (event: MouseEvent) {
         event.preventDefault()
-        this.emit('click');
+        this.bus.publish(Topics.Creator.PointerClicked, { mode: this.active });
     }
 
     getScale() {

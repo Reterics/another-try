@@ -26,6 +26,10 @@ export interface ResizeSystemOptions {
   eventBus?: EventBus;
 }
 
+function isPerspectiveCamera(cam: unknown): cam is THREE.PerspectiveCamera {
+  return !!cam && typeof cam === 'object' && (cam as { isPerspectiveCamera?: boolean }).isPerspectiveCamera === true;
+}
+
 export class ResizeSystem {
   private renderer: THREE.WebGLRenderer;
   private camera?: THREE.Camera;
@@ -99,8 +103,8 @@ export class ResizeSystem {
     this.renderer.setSize(width, height, false);
 
     // Update camera aspect for perspective cameras only (safe default)
-    const cam = this.camera as THREE.PerspectiveCamera | undefined;
-    if (cam && (cam as any).isPerspectiveCamera) {
+    const cam = this.camera;
+    if (isPerspectiveCamera(cam)) {
       cam.aspect = width / Math.max(1, height);
       cam.updateProjectionMatrix();
     }
