@@ -18,7 +18,7 @@ Another Try is a TypeScript-first, web-native multiplayer RPG targeting WebGL2-c
 
 Screenshots:
 
-![ingame5.png](client/public/ingame5.png)
+![ingame6.png](client/public/ingame6.png)
 
 ---
 
@@ -57,24 +57,65 @@ High-level data flows:
 
 ## Repository Layout
 
+Root:
+- `types/` shared TypeScript types/interfaces
+- `.github/workflows/` CI pipelines (frontend/backend)
+- `LICENSE`, `README.md`, `REFERENCE_README.md`
+
+<details>
+<summary>Client (Vite + Three.js)</summary>
+
+```text
+client/
+├── public/                 # Static assets and marketing images
+│   ├── assets/             # Logos, GLB/FBX models, grass blades, textures
+│   │   ├── images/{png,svg,pdf}/
+│   │   ├── textures/       # Attributed materials (grass, dirt, rock, snow, etc.)
+│   │   ├── grass/          # Grass blade albedo/alpha maps
+│   │   └── models/         # Tree, ship, panel house
+│   ├── textures/           # HUD sprites, menu backgrounds, water maps
+│   ├── ingame*.{png,jpg}   # Screenshots
+│   └── style.css           # Base landing styles
+├── src/                    # Application code
+│   ├── main.ts             # App entry
+│   ├── controllers/        # HUD, minimap, creator UI controllers
+│   ├── engine/render/      # Render pipeline (FrameLoop, RendererFactory, ResizeSystem)
+│   ├── features/
+│   │   ├── hud/            # HUD DOM bindings
+│   │   └── minimap/        # Minimap camera/DOM/texture service + README
+│   ├── lib/                # Managers (terrain, server connection)
+│   ├── models/             # Scene entities and shaders (grass, cloud, hero, sky, box, sphere, demo map)
+│   │   └── grass/          # Grass pipeline + GLSL shaders
+│   ├── shared/events/      # Event bus, topics, contracts (+ README)
+│   ├── types/              # Domain typings
+│   ├── utils/              # Math, noise, model helpers, terrain utilities
+│   └── workers/            # Environment web workers (main/client)
+├── docs/inventories/       # Design notes (e.g., 2025-11-21-structure.md)
+├── index.html              # Vite HTML entry
+├── vite.config.ts          # Vite configuration
+├── tsconfig.json
+├── package.json
+└── package-lock.json
 ```
-another-try/
-├─ client/                  # Web client (Vite, Three.js, shaders)
-│  ├─ public/               # Static assets (images, textures, screenshots)
-│  ├─ src/                  # Application code
-│  │  ├─ models/            # Domain-specific render/game objects (terrain, grass, hero, etc.)
-│  │  └─ ...
-│  └─ vite.config.ts        # Build configuration
-├─ server/                  # Game backend (Node.js, Express, Socket.IO)
-│  ├─ services/             # Backend services (e.g., assets)
-│  ├─ firebase/             # Firebase integrations
-│  └─ ...                   # Entry compiled to dist/server/index.js
-├─ types/                   # Shared TypeScript types/interfaces
-├─ .github/workflows/       # CI pipelines (frontend/backend)
-├─ LICENSE
-├─ README.md
-└─ REFERENCE_README.md      # Style reference used for this README
+</details>
+
+<details>
+<summary>Server (Node.js + Express + Socket.IO)</summary>
+
+```text
+server/
+├── controllers/        # HTTP/WebSocket handlers (game, map, asset proxy)
+├── services/           # Backend services (assets, cache, map)
+├── firebase/           # Firebase config + storage helpers
+├── lib/                # REST API wiring and shared utilities
+├── types/              # Shared type declarations
+├── index.ts            # Server entrypoint
+├── tsconfig.json
+├── package.json
+├── package-lock.json
+└── dist/               # Compiled output (build step)
 ```
+</details>
 
 ---
 
