@@ -1,5 +1,4 @@
-import menuTemplate from '../pages/menu.html?raw'
-import inGameTemplate from '../pages/ingame.html?raw'
+import menuTemplate from '../pages/menu.html?raw';
 import { CreatorController } from "./CreatorController.ts";
 import { PlayerNames, PlayerScores } from "../types/main.ts";
 import { ATMap } from "../../../types/map.ts";
@@ -7,6 +6,7 @@ import { demoMap } from "../models/demoMap.ts";
 import * as THREE from 'three';
 import EventBus from "@shared/events/EventBus.ts";
 import { Topics } from "@shared/events/topics.ts";
+import {createHudDom, HudDomRefs} from '../features/hud/HudDom.ts';
 
 export class HUDController {
     private readonly inGame: HTMLDivElement;
@@ -15,16 +15,10 @@ export class HUDController {
     private _updatePeriod: number;
     private _elapsed: number;
     _preDelta: number;
-    private stats: HTMLElement|null;
-    private scores: HTMLElement|null;
-    private messageInput: HTMLElement|null;
-    private messageList: HTMLElement|null;
     private cursor: number;
     private messageBuffer: HTMLElement[];
-    private footer: HTMLElement|null;
     private maps: ATMap[];
     private dialog: HTMLDivElement|undefined;
-    private side: HTMLDivElement|undefined;
     private readonly bus: EventBus;
     private videoSettings: { lod: 'low' | 'medium' | 'high'; textureQuality: 'low' | 'medium' | 'high'; postfx: 'off' | 'medium' | 'high' } = {
         lod: 'medium',
@@ -34,16 +28,7 @@ export class HUDController {
     private playerNameCache: string = 'Traveler';
     private hasEnteredGame = false;
 
-    // New HUD element refs
-    private playerNameEl: HTMLElement | null = null;
-    private playerLevelEl: HTMLElement | null = null;
-    private healthBarEl: HTMLElement | null = null;
-    private healthTextEl: HTMLElement | null = null;
-    private healthRateEl: HTMLElement | null = null;
-    private staminaBarEl: HTMLElement | null = null;
-    private staminaTextEl: HTMLElement | null = null;
-    private staminaRateEl: HTMLElement | null = null;
-    private energyEl: HTMLProgressElement | null = null;
+    private readonly hud: HudDomRefs;
 
     // Simple health state
     private healthCurrent: number = 100;
@@ -53,15 +38,14 @@ export class HUDController {
 
     constructor(eventBus: EventBus) {
         this.bus = eventBus;
-        const inGame = document.createElement('div');
-        inGame.id = 'inGame';
-        inGame.innerHTML = inGameTemplate;
+        const { root: inGame, refs } = createHudDom();
 
         const mainMenu = document.createElement('div');
         mainMenu.id = 'mainMenu';
         mainMenu.innerHTML = menuTemplate;
         mainMenu.classList.add('has-bg');
 
+        this.hud = refs;
         this.inGame = inGame;
         this.mainMenu = mainMenu;
         document.body.appendChild(this.inGame);
@@ -71,24 +55,7 @@ export class HUDController {
         this._elapsed = 0;
         this._preDelta = 0;
 
-        this.element = document.querySelector('#HUD-information');
-        this.stats = document.querySelector('#HUD-stats') as HTMLElement;
-        this.scores = document.querySelector('#HUD-information') as HTMLElement;
-        this.messageInput = document.querySelector('#messageInput') as HTMLElement;
-        this.messageList = document.querySelector('#messageList') as HTMLElement;
-        this.footer = document.querySelector('#HUD-footer') as HTMLElement;
-        this.side = document.querySelector('.side-buttons') as HTMLDivElement;
-        // New element refs
-        this.playerNameEl = document.querySelector('#HUD-player-name');
-        this.playerLevelEl = document.querySelector('#HUD-player-level');
-        this.healthBarEl = document.querySelector('#HUD-health-bar');
-        this.healthTextEl = document.querySelector('#HUD-health-text');
-        this.healthRateEl = document.querySelector('#HUD-health-rate');
-        this.staminaBarEl = document.querySelector('#HUD-stamina-bar');
-        this.staminaTextEl = document.querySelector('#HUD-stamina-text');
-        this.staminaRateEl = document.querySelector('#HUD-stamina-rate');
-        this.energyEl = document.querySelector('#HUD-energy') as HTMLProgressElement | null;
-
+        this.element = refs.info;
         this.mainMenu.onclick = (event: MouseEvent) => {
             const target: HTMLElement = event.target as HTMLElement;
             if (target && target.parentElement && target.parentElement.id === 'maps' && target.id) {
@@ -108,10 +75,10 @@ export class HUDController {
     }
 
     private bindMainMenu() {
-        const enterButton = this.mainMenu.querySelector('.primary-btn');
-        const continueItem = this.mainMenu.querySelector('[data-action="continue"]');
-        const newGameItem = this.mainMenu.querySelector('[data-action="new-game"]');
-        const settingsItem = this.mainMenu.querySelector('[data-action="settings"]');
+        const enterButton = this.mainMenu.querySelector('.primary-btn') as HTMLElement | null;
+        const continueItem = this.mainMenu.querySelector('[data-action="continue"]') as HTMLElement | null;
+        const newGameItem = this.mainMenu.querySelector('[data-action="new-game"]') as HTMLElement | null;
+        const settingsItem = this.mainMenu.querySelector('[data-action="settings"]') as HTMLElement | null;
         const newGameSection = this.mainMenu.querySelector('#new-game-section') as HTMLElement | null;
         const settingsSection = this.mainMenu.querySelector('#settings-section') as HTMLElement | null;
         const newNameInput = this.mainMenu.querySelector('#menu-player-name') as HTMLInputElement | null;
@@ -157,31 +124,22 @@ export class HUDController {
             return false;
         };
 
+        const startGame = (event: MouseEvent) => {
+            event.preventDefault();
+            if (resumeIfPaused()) {
+                return;
+            }
+            const save = this.readSaveGame();
+            const mapId = save?.mapId || (this.maps[0] ? this.maps[0].id : null);
+            if (!mapId) return;
+            this.renderGame(mapId);
+            showSection(null);
+        }
         if (continueItem) {
-            continueItem.addEventListener('click', (event) => {
-                event.preventDefault();
-                if (resumeIfPaused()) {
-                    return;
-                }
-                const save = this.readSaveGame();
-                const mapId = save?.mapId || (this.maps[0] ? this.maps[0].id : null);
-                if (!mapId) return;
-                this.renderGame(mapId);
-                showSection(null);
-            });
+            continueItem.onclick = startGame;
         }
         if (enterButton) {
-            enterButton.addEventListener('click', (event) => {
-                event.preventDefault();
-                if (resumeIfPaused()) {
-                    return;
-                }
-                const save = this.readSaveGame();
-                const mapId = save?.mapId || (this.maps[0] ? this.maps[0].id : null);
-                if (!mapId) return;
-                this.renderGame(mapId);
-                showSection(null);
-            });
+            enterButton.onclick = startGame;
         }
         if (newGameItem) {
             newGameItem.addEventListener('click', (event) => {
@@ -328,7 +286,7 @@ export class HUDController {
 
     setPlayerName(name: string) {
         this.playerNameCache = name;
-        if (this.playerNameEl) this.playerNameEl.textContent = name;
+        if (this.hud.playerName) this.hud.playerName.textContent = name;
     }
 
     getPlayerName(): string {
@@ -336,16 +294,16 @@ export class HUDController {
     }
 
     setPlayerLevel(text: string) {
-        if (this.playerLevelEl) this.playerLevelEl.textContent = text;
+        if (this.hud.playerLevel) this.hud.playerLevel.textContent = text;
     }
 
     setHealth(current: number, max: number, ratePerSec?: number) {
         this.healthCurrent = Math.max(0, Math.min(current, max));
         this.healthMax = Math.max(1, max);
         const ratio = this.healthCurrent / this.healthMax;
-        if (this.healthBarEl) (this.healthBarEl as HTMLElement).style.transform = `scaleX(${ratio})`;
-        if (this.healthTextEl) this.healthTextEl.textContent = `${Math.round(this.healthCurrent)} / ${Math.round(this.healthMax)}`;
-        if (this.healthRateEl) this.healthRateEl.textContent = ratePerSec ? `${ratePerSec > 0 ? '+' : ''}${Math.round(ratePerSec)} / s` : '';
+        if (this.hud.healthBar) (this.hud.healthBar as HTMLElement).style.transform = `scaleX(${ratio})`;
+        if (this.hud.healthText) this.hud.healthText.textContent = `${Math.round(this.healthCurrent)} / ${Math.round(this.healthMax)}`;
+        if (this.hud.healthRate) this.hud.healthRate.textContent = ratePerSec ? `${ratePerSec > 0 ? '+' : ''}${Math.round(ratePerSec)} / s` : '';
     }
 
     applyDamage(amount: number) {
@@ -353,19 +311,19 @@ export class HUDController {
     }
 
     private updateStaminaFromEnergy() {
-        if (!this.energyEl) return;
+        if (!this.hud.energy) return;
         const now = performance.now();
-        const energy = this.energyEl.value;
-        const max = this.energyEl.max || 1;
+        const energy = this.hud.energy.value;
+        const max = this.hud.energy.max || 1;
         const ratio = max ? energy / max : 0;
-        if (this.staminaBarEl) (this.staminaBarEl as HTMLElement).style.transform = `scaleX(${ratio})`;
-        if (this.staminaTextEl) this.staminaTextEl.textContent = `${Math.round(energy)} / ${Math.round(max)}`;
+        if (this.hud.staminaBar) (this.hud.staminaBar as HTMLElement).style.transform = `scaleX(${ratio})`;
+        if (this.hud.staminaText) this.hud.staminaText.textContent = `${Math.round(energy)} / ${Math.round(max)}`;
         // compute rate per second based on delta time
         const dt = (now - this.lastEnergyStamp) / 1000;
         if (dt > 0.2) {
             const dE = energy - this.lastEnergyValue;
             const rate = dE / dt;
-            if (this.staminaRateEl) this.staminaRateEl.textContent = `${rate >= 0 ? '+' : ''}${Math.round(rate)} / s`;
+            if (this.hud.staminaRate) this.hud.staminaRate.textContent = `${rate >= 0 ? '+' : ''}${Math.round(rate)} / s`;
             this.lastEnergyValue = energy;
             this.lastEnergyStamp = now;
         }
@@ -436,9 +394,9 @@ export class HUDController {
 
             this.updateText('X: ' + position.x.toFixed(2) +
                 ' Y: ' + position.y.toFixed(2) +
-                ' Z: ' + position.z.toFixed(2) + headingText, this.footer);
+                ' Z: ' + position.z.toFixed(2) + headingText, this.hud.footer);
 
-            this.updateLines(tableData, this.stats);
+            this.updateLines(tableData, this.hud.stats);
         }
     }
 
@@ -463,8 +421,8 @@ export class HUDController {
                 output += ", "
             }
         }
-        if (this.scores) {
-            this.scores.innerHTML = output;
+        if (this.hud.info) {
+            this.hud.info.innerHTML = output;
         }
     }
 
@@ -477,11 +435,11 @@ export class HUDController {
         }
     }
     onMessage(message: string) {
-        if (this.messageList) {
+        if (this.hud.messageList) {
             const div = document.createElement('div');
             div.innerHTML = message;
-            this.messageList.appendChild(div);
-            this.messageList.scrollTop = this.messageList.scrollHeight;
+            this.hud.messageList.appendChild(div);
+            this.hud.messageList.scrollTop = this.hud.messageList.scrollHeight;
             const index = this.messageBuffer.findIndex(element=>element.innerText === message);
             if (index !== -1) {
                 this.messageBuffer[index].outerHTML = '';
@@ -497,72 +455,72 @@ export class HUDController {
     }
 
     toggleChat() {
-        if (this.messageInput && this.messageList && this.messageList.parentElement) {
-            const visible = window.getComputedStyle(this.messageInput).display !== 'none';
+        if (this.hud.messageInput && this.hud.messageList && this.hud.messageList.parentElement) {
+            const visible = window.getComputedStyle(this.hud.messageInput).display !== 'none';
             if (visible) {
-                this.messageInput.style.display = "none";
+                this.hud.messageInput.style.display = "none";
             } else {
-                this.messageInput.style.display = "flex";
+                this.hud.messageInput.style.display = "flex";
             }
         }
     }
 
     isChatActive(): boolean {
-        if (!this.messageInput) return false;
-        return window.getComputedStyle(this.messageInput).display !== 'none';
+        if (!this.hud.messageInput) return false;
+        return window.getComputedStyle(this.hud.messageInput).display !== 'none';
     }
 
     getMessage(html = false): string {
-        if (this.messageInput) {
+        if (this.hud.messageInput) {
             if (html) {
-                return this.messageInput.innerHTML;
+                return this.hud.messageInput.innerHTML;
             }
-            return this.messageInput.innerText;
+            return this.hud.messageInput.innerText;
         }
         return "";
     }
 
     clearMessage() {
-        if (this.messageInput) {
-            this.messageInput.innerHTML = "";
+        if (this.hud.messageInput) {
+            this.hud.messageInput.innerHTML = "";
             this.cursor = 0;
 
         }
     }
 
     type(key: string) {
-        if (this.messageInput) {
-            const message = this.messageInput.innerText;
+        if (this.hud.messageInput) {
+            const message = this.hud.messageInput.innerText;
             const beforeCursor = message.substring(0, this.cursor);
             const afterCursor = message.substring(this.cursor);
-            this.messageInput.innerText = beforeCursor + key + afterCursor;
+            this.hud.messageInput.innerText = beforeCursor + key + afterCursor;
             this.cursor+=key.length;
         }
     }
 
     backspace() {
-        if (this.messageInput && this.cursor) {
-            const message = this.messageInput.innerText;
+        if (this.hud.messageInput && this.cursor) {
+            const message = this.hud.messageInput.innerText;
             const beforeCursor = message.substring(0, this.cursor - 1);
             const afterCursor = message.substring(this.cursor);
-            this.messageInput.innerText = beforeCursor + afterCursor;
+            this.hud.messageInput.innerText = beforeCursor + afterCursor;
             this.cursor--;
         }
     }
 
     delete () {
-        if (this.messageInput) {
-            const message = this.messageInput.innerText;
+        if (this.hud.messageInput) {
+            const message = this.hud.messageInput.innerText;
             const beforeCursor = message.substring(0, this.cursor);
             const afterCursor = message.substring(this.cursor + 1);
-            this.messageInput.innerText = beforeCursor + afterCursor;
+            this.hud.messageInput.innerText = beforeCursor + afterCursor;
         }
     }
 
     updateCursor(delta: number) {
         this.cursor += delta;
-        if (this.messageInput) {
-            if (this.cursor >= this.messageInput.innerText.length) {
+        if (this.hud.messageInput) {
+            if (this.cursor >= this.hud.messageInput.innerText.length) {
                 this.cursor--;
             }
             if (this.cursor < 0) {
@@ -638,11 +596,11 @@ export class HUDController {
     }
 
     setActiveSide(active: string) {
-        if (!this.side) {
+        if (!this.hud.sideButtons) {
             return;
         }
-        const activeNode = this.side.querySelector('[data-active=' + active + ']');
-        this.side.querySelectorAll('.side-button').forEach(node=>{
+        const activeNode = this.hud.sideButtons.querySelector('[data-active=' + active + ']');
+        this.hud.sideButtons.querySelectorAll('.side-button').forEach(node=>{
             if (node === activeNode) {
                 node.classList.add('selected');
             } else {
