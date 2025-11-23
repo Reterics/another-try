@@ -7,6 +7,7 @@ import EventBus from "@shared/events/EventBus.ts";
 import { Topics } from "@shared/events/topics.ts";
 import { createHudDom, HudDomRefs } from '../features/hud/HudDom.ts';
 import { createMenuDom, MenuDomRefs } from '../features/hud/MenuDom.ts';
+import { FrameLoop } from '@engine/render/FrameLoop.ts';
 
 export class HUDController {
     private readonly inGame: HTMLDivElement;
@@ -20,10 +21,11 @@ export class HUDController {
     private maps: ATMap[];
     private dialog: HTMLDivElement|undefined;
     private readonly bus: EventBus;
-    private videoSettings: { lod: 'low' | 'medium' | 'high'; textureQuality: 'low' | 'medium' | 'high'; postfx: 'off' | 'medium' | 'high' } = {
+    private videoSettings: { lod: 'low' | 'medium' | 'high'; textureQuality: 'low' | 'medium' | 'high'; postfx: 'off' | 'medium' | 'high'; maxFps: number } = {
         lod: 'medium',
         textureQuality: 'high',
         postfx: 'medium',
+        maxFps: 0,
     };
     private playerNameCache: string = 'Traveler';
     private hasEnteredGame = false;
@@ -204,10 +206,12 @@ export class HUDController {
             const raw = localStorage.getItem('video:settings');
             if (raw) {
                 const parsed = JSON.parse(raw);
+                const parsedMaxFps = Number(parsed.maxFps);
                 this.videoSettings = {
                     lod: parsed.lod ?? this.videoSettings.lod,
                     textureQuality: parsed.textureQuality ?? this.videoSettings.textureQuality,
                     postfx: parsed.postfx ?? this.videoSettings.postfx,
+                    maxFps: Number.isFinite(parsedMaxFps) ? parsedMaxFps : this.videoSettings.maxFps,
                 };
             }
         } catch (_) { /* ignore */ }
@@ -218,22 +222,38 @@ export class HUDController {
         const lod = this.mainMenu.querySelector('#menu-lod') as HTMLSelectElement | null;
         const tex = this.mainMenu.querySelector('#menu-texture-quality') as HTMLSelectElement | null;
         const postfx = this.mainMenu.querySelector('#menu-postfx') as HTMLSelectElement | null;
+        const maxFps = this.mainMenu.querySelector('#menu-max-fps') as HTMLSelectElement | null;
         if (lod) lod.value = this.videoSettings.lod;
         if (tex) tex.value = this.videoSettings.textureQuality;
         if (postfx) postfx.value = this.videoSettings.postfx;
+        if (maxFps) maxFps.value = String(this.videoSettings.maxFps ?? 0);
+        this.applyVideoSettings();
     }
 
     private saveVideoSettingsFromUI() {
         const lod = (this.mainMenu.querySelector('#menu-lod') as HTMLSelectElement | null)?.value as 'low' | 'medium' | 'high' | undefined;
         const tex = (this.mainMenu.querySelector('#menu-texture-quality') as HTMLSelectElement | null)?.value as 'low' | 'medium' | 'high' | undefined;
         const postfx = (this.mainMenu.querySelector('#menu-postfx') as HTMLSelectElement | null)?.value as 'off' | 'medium' | 'high' | undefined;
+        const maxFpsValue = (this.mainMenu.querySelector('#menu-max-fps') as HTMLSelectElement | null)?.value;
         if (lod) this.videoSettings.lod = lod;
         if (tex) this.videoSettings.textureQuality = tex;
         if (postfx) this.videoSettings.postfx = postfx;
+        if (typeof maxFpsValue === 'string') {
+            const parsed = Number(maxFpsValue);
+            if (Number.isFinite(parsed) && parsed >= 0) {
+                this.videoSettings.maxFps = parsed;
+            }
+        }
+        this.applyVideoSettings();
         try {
             localStorage.setItem('video:settings', JSON.stringify(this.videoSettings));
         } catch (_) { /* ignore */ }
         console.info('[HUD] Applied video settings', this.videoSettings);
+    }
+
+    private applyVideoSettings() {
+        const { maxFps } = this.videoSettings;
+        FrameLoop.setMaxFPS(maxFps && maxFps > 0 ? maxFps : undefined);
     }
 
     renderMenu() {

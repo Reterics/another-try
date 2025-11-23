@@ -281,9 +281,7 @@ table {
 /* Messages */
 #inGame .message-panel {
     pointer-events: none;
-    flex: 1;
-    max-width: 380px;
-    min-width: 280px;
+    width: 280px;
     background: var(--panel-soft);
     border-radius: var(--radius-lg);
     border: 1px solid rgba(31, 41, 55, 0.9);
@@ -469,7 +467,7 @@ table {
 }
 
 #mainMenu.has-bg {
-    background: linear-gradient(125deg, rgba(5, 7, 11, 0.9) 0%, rgba(5, 7, 11, 0.6) 45%, rgba(5, 7, 11, 0.4) 100%), url('/ingame5.png') center/cover no-repeat;
+    background: linear-gradient(125deg, rgba(5, 7, 11, 0.9) 0%, rgba(5, 7, 11, 0.6) 45%, rgba(5, 7, 11, 0.4) 100%), url('/ingame6.png') center/cover no-repeat;
 }
 
 #mainMenu .main-menu {
@@ -740,3 +738,10 @@ th, td {
 tr:nth-child(even) {
     background: rgba(148, 163, 184, 0.12);
 }
+
+.hud-footer-wrap {
+    width: 280px;
+    align-self: end;
+    text-align-last: end;
+}
+

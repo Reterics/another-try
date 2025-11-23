@@ -142,6 +142,16 @@ export function createMenuDom(): { root: HTMLDivElement; refs: MenuDomRefs } {
           <option value="high">Cinematic</option>
         </select>
       </div>
+      <div class="field">
+        <label for="menu-max-fps">Max FPS</label>
+        <select id="menu-max-fps" name="menu-max-fps">
+          <option value="0">Uncapped (Native)</option>
+          <option value="30">30 FPS</option>
+          <option value="60">60 FPS</option>
+          <option value="90">90 FPS</option>
+          <option value="120">120 FPS</option>
+        </select>
+      </div>
     `;
     const applySettingsBtn = document.createElement('button');
     applySettingsBtn.classList.add('cta');
