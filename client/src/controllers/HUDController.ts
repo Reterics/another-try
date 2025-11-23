@@ -1,5 +1,4 @@
 import menuTemplate from '../pages/menu.html?raw'
-import pauseMenuTemplate from '../pages/pause.html?raw'
 import inGameTemplate from '../pages/ingame.html?raw'
 import { CreatorController } from "./CreatorController.ts";
 import { PlayerNames, PlayerScores } from "../types/main.ts";
@@ -12,7 +11,6 @@ import { Topics } from "@shared/events/topics.ts";
 export class HUDController {
     private readonly inGame: HTMLDivElement;
     private readonly mainMenu: HTMLDivElement;
-    private readonly pauseMenu: HTMLDivElement;
     element: HTMLElement|null;
     private _updatePeriod: number;
     private _elapsed: number;
@@ -28,6 +26,13 @@ export class HUDController {
     private dialog: HTMLDivElement|undefined;
     private side: HTMLDivElement|undefined;
     private readonly bus: EventBus;
+    private videoSettings: { lod: 'low' | 'medium' | 'high'; textureQuality: 'low' | 'medium' | 'high'; postfx: 'off' | 'medium' | 'high' } = {
+        lod: 'medium',
+        textureQuality: 'high',
+        postfx: 'medium',
+    };
+    private playerNameCache: string = 'Traveler';
+    private hasEnteredGame = false;
 
     // New HUD element refs
     private playerNameEl: HTMLElement | null = null;
@@ -55,17 +60,12 @@ export class HUDController {
         const mainMenu = document.createElement('div');
         mainMenu.id = 'mainMenu';
         mainMenu.innerHTML = menuTemplate;
-
-        const pauseMenu = document.createElement('div');
-        pauseMenu.id = 'pauseMenu';
-        pauseMenu.innerHTML = pauseMenuTemplate;
+        mainMenu.classList.add('has-bg');
 
         this.inGame = inGame;
         this.mainMenu = mainMenu;
-        this.pauseMenu = pauseMenu;
         document.body.appendChild(this.inGame);
         document.body.appendChild(this.mainMenu);
-        document.body.appendChild(this.pauseMenu);
 
         this._updatePeriod = 1;
         this._elapsed = 0;
@@ -89,7 +89,6 @@ export class HUDController {
         this.staminaRateEl = document.querySelector('#HUD-stamina-rate');
         this.energyEl = document.querySelector('#HUD-energy') as HTMLProgressElement | null;
 
-
         this.mainMenu.onclick = (event: MouseEvent) => {
             const target: HTMLElement = event.target as HTMLElement;
             if (target && target.parentElement && target.parentElement.id === 'maps' && target.id) {
@@ -97,79 +96,218 @@ export class HUDController {
                 this.renderGame(level);
             }
         };
-        this.pauseMenu.onclick = (e) => {
-            const target = e.target as Element;
-            let pauseParent = document.getElementById('pauseParent');
-
-            const targetId = target ? target.getAttribute('data-target') : null;
-            if (targetId === 'menu') {
-                return this.renderMenu();
-            }
-            const targetNode = targetId ? document.getElementById(targetId) : null;
-            if (!targetNode) {
-                return this.renderGame(null);
-            }
-
-            if (!pauseParent) {
-                pauseParent = targetNode.parentElement;
-            }
-            if (pauseParent) {
-                for(let i = 0; i < pauseParent.children.length; i++) {
-                    const element = pauseParent.children[i] as HTMLElement;
-                    if (element === targetNode) {
-                        element.style.display = 'flex';
-                    } else {
-                        element.style.display = 'none';
-                    }
-                }
-            }
-        };
-
         this.maps = [
             demoMap
         ];
 
-        const enterButton = this.mainMenu.querySelector('.primary-btn');
-        if (enterButton) {
-            enterButton.addEventListener('click', (event) => {
-                event.preventDefault();
-                const firstMap = this.maps[0];
-                this.renderGame(firstMap ? firstMap.id : null);
-            });
-        }
+        this.bindMainMenu();
+        this.updateSaveAvailability();
 
         this.cursor = 0;
         this.messageBuffer = [];
     }
 
+    private bindMainMenu() {
+        const enterButton = this.mainMenu.querySelector('.primary-btn');
+        const continueItem = this.mainMenu.querySelector('[data-action="continue"]');
+        const newGameItem = this.mainMenu.querySelector('[data-action="new-game"]');
+        const settingsItem = this.mainMenu.querySelector('[data-action="settings"]');
+        const newGameSection = this.mainMenu.querySelector('#new-game-section') as HTMLElement | null;
+        const settingsSection = this.mainMenu.querySelector('#settings-section') as HTMLElement | null;
+        const newNameInput = this.mainMenu.querySelector('#menu-player-name') as HTMLInputElement | null;
+        const startNewBtn = this.mainMenu.querySelector('#menu-start-new') as HTMLButtonElement | null;
+        const applySettingsBtn = this.mainMenu.querySelector('#menu-apply-settings') as HTMLButtonElement | null;
+        const hintSection = this.mainMenu.querySelector('#menu-hint') as HTMLElement | null;
+        const menuPanel = this.mainMenu.querySelector('.menu-panel') as HTMLElement | null;
+        try {
+            const storedName = localStorage.getItem('player:name');
+            if (storedName && newNameInput) newNameInput.value = storedName;
+        } catch (_) { /* ignore */ }
+
+        const showSection = (section: HTMLElement | null) => {
+            if (!newGameSection || !settingsSection) return;
+            const showingSettings = section === settingsSection;
+            const showingNewGame = section === newGameSection;
+            newGameSection.style.display = showingNewGame ? 'block' : 'none';
+            settingsSection.style.display = showingSettings ? 'block' : 'none';
+            if (hintSection) {
+                hintSection.style.display = section ? 'none' : 'block';
+            }
+            if (menuPanel) {
+                if (showingSettings || showingNewGame) {
+                    menuPanel.classList.add('submenu-open');
+                } else {
+                    menuPanel.classList.remove('submenu-open');
+                }
+                if (showingSettings) {
+                    menuPanel.classList.add('settings-open');
+                } else {
+                    menuPanel.classList.remove('settings-open');
+                }
+            }
+        };
+
+        const resumeIfPaused = () => {
+            if (this.hasEnteredGame) {
+                this.inGame.style.display = 'block';
+                this.mainMenu.style.display = 'none';
+                this.mainMenu.classList.remove('has-bg');
+                return true;
+            }
+            return false;
+        };
+
+        if (continueItem) {
+            continueItem.addEventListener('click', (event) => {
+                event.preventDefault();
+                if (resumeIfPaused()) {
+                    return;
+                }
+                const save = this.readSaveGame();
+                const mapId = save?.mapId || (this.maps[0] ? this.maps[0].id : null);
+                if (!mapId) return;
+                this.renderGame(mapId);
+                showSection(null);
+            });
+        }
+        if (enterButton) {
+            enterButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                if (resumeIfPaused()) {
+                    return;
+                }
+                const save = this.readSaveGame();
+                const mapId = save?.mapId || (this.maps[0] ? this.maps[0].id : null);
+                if (!mapId) return;
+                this.renderGame(mapId);
+                showSection(null);
+            });
+        }
+        if (newGameItem) {
+            newGameItem.addEventListener('click', (event) => {
+                event.preventDefault();
+                showSection(newGameSection);
+                newNameInput?.focus();
+            });
+        }
+        if (settingsItem) {
+            settingsItem.addEventListener('click', (event) => {
+                event.preventDefault();
+                this.loadVideoSettingsIntoUI();
+                showSection(settingsSection);
+            });
+        }
+        if (startNewBtn) {
+            startNewBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                const name = (newNameInput?.value || '').trim() || 'Traveler';
+                try {
+                    localStorage.setItem('player:name', name);
+                } catch (_) { /* ignore */ }
+                this.setPlayerName(name);
+                const firstMap = this.maps[0];
+                this.renderGame(firstMap ? firstMap.id : null);
+                showSection(null);
+            });
+        }
+        if (applySettingsBtn) {
+            applySettingsBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                this.saveVideoSettingsFromUI();
+                showSection(null);
+            });
+        }
+
+        this.loadVideoSettingsIntoUI();
+    }
+
+    updateSaveAvailability(saveData?: { name?: string; date?: string }) {
+        const parsed = saveData ?? this.readSaveGame();
+        const hasSave = !!parsed;
+        const continueItem = this.mainMenu.querySelector('[data-action="continue"]') as HTMLElement | null;
+        const profileEl = this.mainMenu.querySelector('.menu-footer span strong') as HTMLElement | null;
+        const autosaveEl = this.mainMenu.querySelector('.menu-footer span:last-child strong') as HTMLElement | null;
+        if (continueItem) {
+            continueItem.classList.toggle('disabled', !hasSave);
+        }
+        if (profileEl) {
+            profileEl.textContent = parsed?.name || 'New Profile';
+        }
+        if (autosaveEl) {
+            autosaveEl.textContent = parsed?.date ? new Date(parsed.date).toLocaleString() : 'No save';
+        }
+    }
+
+    private readSaveGame(): { name: string; date: string; coords?: any; mapId?: string } | null {
+        try {
+            const raw = localStorage.getItem('saveGame');
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (parsed && parsed.name && parsed.date) return parsed;
+        } catch (_) { /* ignore */ }
+        return null;
+    }
+
+    private readStoredVideoSettings() {
+        try {
+            const raw = localStorage.getItem('video:settings');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                this.videoSettings = {
+                    lod: parsed.lod ?? this.videoSettings.lod,
+                    textureQuality: parsed.textureQuality ?? this.videoSettings.textureQuality,
+                    postfx: parsed.postfx ?? this.videoSettings.postfx,
+                };
+            }
+        } catch (_) { /* ignore */ }
+    }
+
+    private loadVideoSettingsIntoUI() {
+        this.readStoredVideoSettings();
+        const lod = this.mainMenu.querySelector('#menu-lod') as HTMLSelectElement | null;
+        const tex = this.mainMenu.querySelector('#menu-texture-quality') as HTMLSelectElement | null;
+        const postfx = this.mainMenu.querySelector('#menu-postfx') as HTMLSelectElement | null;
+        if (lod) lod.value = this.videoSettings.lod;
+        if (tex) tex.value = this.videoSettings.textureQuality;
+        if (postfx) postfx.value = this.videoSettings.postfx;
+    }
+
+    private saveVideoSettingsFromUI() {
+        const lod = (this.mainMenu.querySelector('#menu-lod') as HTMLSelectElement | null)?.value as 'low' | 'medium' | 'high' | undefined;
+        const tex = (this.mainMenu.querySelector('#menu-texture-quality') as HTMLSelectElement | null)?.value as 'low' | 'medium' | 'high' | undefined;
+        const postfx = (this.mainMenu.querySelector('#menu-postfx') as HTMLSelectElement | null)?.value as 'off' | 'medium' | 'high' | undefined;
+        if (lod) this.videoSettings.lod = lod;
+        if (tex) this.videoSettings.textureQuality = tex;
+        if (postfx) this.videoSettings.postfx = postfx;
+        try {
+            localStorage.setItem('video:settings', JSON.stringify(this.videoSettings));
+        } catch (_) { /* ignore */ }
+        console.info('[HUD] Applied video settings', this.videoSettings);
+    }
+
     renderMenu() {
         this.inGame.style.display = 'none';
-        this.pauseMenu.style.display = 'none';
         this.mainMenu.style.display = 'flex';
+        this.mainMenu.classList.add('has-bg');
     }
 
     renderPauseMenu() {
         this.inGame.style.display = 'none';
-        this.pauseMenu.style.display = 'flex';
-        this.mainMenu.style.display = 'none';
+        this.mainMenu.style.display = 'flex';
+        this.mainMenu.classList.remove('has-bg');
     }
 
     switchPauseMenu() {
-        if (this.pauseMenu.style.display === 'none') {
-            this.renderPauseMenu();
-        } else {
-            this.inGame.style.display = 'flex';
-            this.pauseMenu.style.display = 'none';
-            this.mainMenu.style.display = 'none';
-        }
+        this.renderPauseMenu();
     }
 
 
     renderGame (id: string|null) {
         console.log('Render map: ', id);
+        this.hasEnteredGame = true;
         this.inGame.style.display = 'block';
-        this.pauseMenu.style.display = 'none';
         this.mainMenu.style.display = 'none';
+        this.mainMenu.classList.remove('has-bg');
         const map = this.maps.find(map=>map.id === id);
         if (map) {
             this.bus.publish(Topics.UI.HUD.MapSelected, { map });
@@ -189,7 +327,12 @@ export class HUDController {
     }
 
     setPlayerName(name: string) {
+        this.playerNameCache = name;
         if (this.playerNameEl) this.playerNameEl.textContent = name;
+    }
+
+    getPlayerName(): string {
+        return this.playerNameCache;
     }
 
     setPlayerLevel(text: string) {
