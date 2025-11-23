@@ -92,15 +92,18 @@ export class ResizeSystem {
       width = Math.max(1, Math.floor(rect.width));
       height = Math.max(1, Math.floor(rect.height));
     } else {
-      width = Math.max(1, Math.floor(window.innerWidth));
-      height = Math.max(1, Math.floor(window.innerHeight));
+      const de = document.documentElement;
+      const w = Math.max(1, Math.floor(de?.clientWidth || window.innerWidth));
+      const h = Math.max(1, Math.floor(de?.clientHeight || window.innerHeight));
+      width = w;
+      height = h;
     }
     return { width, height };
   }
 
   private apply(width: number, height: number): void {
-    // Update renderer
-    this.renderer.setSize(width, height, false);
+    // Update renderer (also apply CSS size so canvas matches layout in CSS pixels)
+    this.renderer.setSize(width, height, true);
 
     // Update camera aspect for perspective cameras only (safe default)
     const cam = this.camera;

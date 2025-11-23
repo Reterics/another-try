@@ -82,7 +82,10 @@ function computeInitialSize(
         if (container) return container.getBoundingClientRect();
         if (canvas.parentElement) return canvas.parentElement.getBoundingClientRect();
         if (inBrowser) {
-            return new DOMRect(0, 0, window.innerWidth, window.innerHeight);
+            const de = document.documentElement;
+            const w = Math.max(1, Math.floor(de?.clientWidth || window.innerWidth));
+            const h = Math.max(1, Math.floor(de?.clientHeight || window.innerHeight));
+            return new DOMRect(0, 0, w, h);
         }
         return undefined;
     };
@@ -169,7 +172,7 @@ export function createRenderer(options: RendererFactoryOptions = {}): RendererFa
         explicitWidth,
         explicitHeight
     );
-    renderer.setSize(width, height, false);
+    renderer.setSize(width, height, true);
 
     return { renderer, canvas, width, height };
 }

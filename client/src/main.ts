@@ -116,10 +116,12 @@ busSubscriptions.push(
             minimapTextureCleanup();
             minimapTextureCleanup = null;
         }
+        const hudMini = document.getElementById('HUD-minimap') as HTMLDivElement | null;
         minimap = new MinimapController({
             boundingBox: map.getBoundingBox() || undefined,
             texture: selected.texture || '',
             eventBus,
+            target: hudMini || undefined,
         });
         const spawn = map.getSpawnPoint();
         minimap.setPatch({ x: spawn.x, z: spawn.z }, map.getProceduralPatchSize());
@@ -220,6 +222,13 @@ async function init() {
     await creatorController.updateShadowObject();
     serverManager = new ServerManager(scene, hudController, eventBus);
     hudController.renderMaps();
+
+    // Initialize HUD with persisted player name and default health
+    try {
+        const storedName = localStorage.getItem('player:name');
+        if (storedName) hudController.setPlayerName(storedName);
+    } catch (e) { /* ignore */ }
+    hudController.setHealth(100, 100);
 
     busSubscriptions.push(
         eventBus.subscribe(Topics.Server.Connected, async () => {

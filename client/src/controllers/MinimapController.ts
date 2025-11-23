@@ -37,6 +37,8 @@ export class MinimapController {
     private busSubscriptions: Subscription[] = [];
     private readonly busPosition = new Vector3();
     private readonly busHeading = new Euler();
+    // North label element (optional)
+    private headingEl?: HTMLElement;
 
     constructor({boundingBox, texture, target, eventBus}: MinimapInputArguments) {
         this.bus = eventBus;
@@ -80,6 +82,16 @@ export class MinimapController {
         const baseTexture = texture
             ? this.textureLoader.load(texture)
             : createFallbackTexture();
+        // Query optional North label inside the target container
+        this.headingEl = (this.outer.querySelector('.minimap-heading') as HTMLElement) || undefined;
+        if (this.headingEl) {
+            // Ensure the label is centered for polar transforms; CSS may already set positions
+            this.headingEl.style.left = '50%';
+            this.headingEl.style.top = '50%';
+            this.headingEl.style.transform = 'translate(-50%, -50%)';
+            this.headingEl.style.willChange = 'transform';
+            this.headingEl.style.pointerEvents = 'none';
+        }
         // Create material without final texture; we'll prepare and assign after renderer is ready
         this.spriteMaterial = new SpriteMaterial({ color: 0xffffff });
         // Track material for cleanup
@@ -181,7 +193,7 @@ export class MinimapController {
             this.currentSpan = safeSpan;
             this.applyPatchSpan(this.currentSpan);
         }
-        this.updateSpriteOffset();
+        this.updateSpriteOffset(undefined);
     }
 
     private applyPatchSpan(span: number) {
@@ -222,11 +234,20 @@ export class MinimapController {
         // Offset between player and current minimap center in world space
         const dx = this.lastPlayerPosition.x - this.currentCenter.x;
         const dz = this.lastPlayerPosition.z - this.currentCenter.z;
-        
-        // Move the map opposite to the player's world movement so the player stays centered.
-        // Translation occurs in world axes regardless of sprite rotation, so keep mapping simple:
-        // screen X follows world X, screen Y follows world Z.
-        this.sprite.position.set(-dx, -dz, 0);
+
+        // The minimap texture is rotated by `spriteMaterial.rotation` which we set to `-heading + π`.
+        // To keep the player visually centered and move the map in the correct on-screen direction,
+        // translate the sprite in the same rotated space as the texture.
+        // That means rotate the world offset by the same angle used for texture alignment (without the π flip).
+        const angle = this.lastHeading - Math.PI / 2; // swapped to +heading to correct horizontal (E/W) inversion; π still excluded for translation
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const rx = dx * cos - dz * sin;
+        const rz = dx * sin + dz * cos;
+
+        // Move the map opposite to the player's world movement (player stays centered)
+        // Try axis-swap variant so that screen X corresponds to world +Z and screen Y to world +X in the rotated frame.
+        this.sprite.position.set(rz, -rx, 0);
     }
 
     private applyTexture(srcTexture: Texture) {
@@ -264,9 +285,23 @@ export class MinimapController {
             // Use provided yaw heading when movement is negligible
             this.lastHeading = rotation.y;
         }
+        const headingRotation = -this.lastHeading;
+        const mapRotation = headingRotation + Math.PI;
         // Rotate sprite via material.rotation (Sprite uses material's rotation for 2D spin)
-        // Add π to correct North/South inversion (texture/world alignment)
-        this.spriteMaterial.rotation = -this.lastHeading + Math.PI;
+        // Add PI to correct North/South inversion (texture/world alignment)
+        this.spriteMaterial.rotation = mapRotation;
+
+        // Update North label to orbit around the perimeter, anchored to world North
+        if (this.headingEl) {
+            const rect = this.outer.getBoundingClientRect();
+            const size = Math.min(rect.width, rect.height);
+            // Subtract borders/padding so the label sits inside the rim
+            const r = Math.max(0, size * 0.5 - 10);
+            const theta = -mapRotation; // same direction as map rotation
+            // Place the label on a circle at radius r. Keep text upright for readability.
+            this.headingEl.style.transform = `translate(-50%, -50%) rotate(${theta}rad) translate(0, ${-r}px) rotate(${-theta}rad)`;
+        }
+
         this.updateSpriteOffset(position);
         this.renderer.render(this.scene, this.camera);
     }

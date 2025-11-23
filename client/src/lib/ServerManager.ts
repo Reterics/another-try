@@ -24,9 +24,12 @@ export class ServerManager {
     constructor(scene: Scene, hud: HUDController, eventBus: EventBus) {
         this.bus = eventBus;
         this.scene = scene;
+        const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('player:name') : null;
         const nameNode = document.getElementById("name") as HTMLInputElement;
-        if (nameNode) {
+        if (nameNode && nameNode.value) {
             this.name = nameNode.value;
+        } else if (stored) {
+            this.name = stored;
         } else {
             this.name = 'Player';
         }
@@ -97,7 +100,9 @@ export class ServerManager {
 
         if (msg.type == "bul col") {
             if(msg.player == this.playerIndex) {
-                message = "You just got shot"
+                message = "You just got shot";
+                // Apply a small health decrement to local HUD (placeholder until real damage model)
+                this.hud.applyDamage(10);
             }
             else if (msg.attacker) {
                 message = "\"" + this.playerNames[msg.player] + "\" was shot by \"" + this.playerNames[msg.attacker] + "\""
@@ -118,6 +123,8 @@ export class ServerManager {
             if (this.name) {
                 this.socket?.emit("data", {type: "name", name: this.name})
                 this.playerNames[this.playerIndex] = this.name;
+                try { localStorage.setItem('player:name', this.name); } catch(e) {}
+                this.hud.setPlayerName(this.name);
             }
         }
         else if(msg.type == "name") {

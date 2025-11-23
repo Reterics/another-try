@@ -1,24 +1,194 @@
-<div class="background-image"></div>
+<style>
+/* Scoped variables and layout for Main Menu */
+#mainMenu {
+    /* scope CSS vars to this container */
+    --bg: #05070b;
+    --panel: rgba(15, 23, 42, 0.88);
+    --panel-soft: rgba(15, 23, 42, 0.72);
+    --accent: #38bdf8;
+    --accent-soft: rgba(56, 189, 248, 0.18);
+    --text-main: #f9fafb;
+    --text-muted: #9ca3af;
+    --border-subtle: rgba(148, 163, 184, 0.28);
+    --shadow-soft: 0 18px 40px rgba(0, 0, 0, 0.55);
 
-<div class="menu-overlay">
-    <main class="menu-hero single">
-        <section class="hero-card">
-            <div class="logo-mark stack">
-                <span class="logo-title">Another Try</span>
-                <span class="build-pill">v0.0.2</span>
-            </div>
-            <p class="eyebrow">Boundless Wilderness • Solo Expedition</p>
-            <h1>Step back into your evolving world</h1>
-            <p class="tagline">
-                One seamless landscape to explore and shape. Tinker with machines, raise shelters, and push deeper into the endless plains at your own pace.
-            </p>
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+    pointer-events: none; /* enable clicks only inside panel */
+    color: var(--text-main);
+}
 
-            <label class="input-label" for="name">Name</label>
-            <div class="input-row">
-                <input type="text" id="name" value="Player" maxlength="20" />
-                <button class="primary-btn">Enter World</button>
+#mainMenu .main-menu {
+    pointer-events: auto;
+    width: 100%;
+    display: flex;
+    justify-content: flex-start; /* menu left */
+    align-items: center;
+    padding: 40px;
+}
+
+#mainMenu .menu-panel {
+    width: 320px;
+    max-width: 90vw;
+    background: var(--panel);
+    border-radius: 20px;
+    padding: 20px 22px 18px;
+    box-shadow: var(--shadow-soft);
+    border: 1px solid var(--border-subtle);
+    backdrop-filter: blur(12px);
+}
+
+#mainMenu .menu-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 18px;
+}
+#mainMenu .menu-title {
+    font-size: 18px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+#mainMenu .menu-game-name {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+#mainMenu .menu-subtitle {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+#mainMenu .menu-items {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+}
+#mainMenu .menu-item {
+    padding: 9px 10px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-main);
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background 0.16s ease, border-color 0.16s ease, transform 0.08s ease;
+}
+#mainMenu .menu-item-label {
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+#mainMenu .menu-item-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+#mainMenu .menu-item-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+#mainMenu .menu-item-key {
+    font-size: 11px;
+    padding: 3px 6px;
+    border-radius: 999px;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+#mainMenu .menu-item.primary {
+    background: var(--accent-soft);
+    border-color: var(--accent-soft);
+}
+#mainMenu .menu-item:hover {
+    transform: translateY(-1px);
+    background: rgba(15, 23, 42, 0.92);
+    border-color: var(--border-subtle);
+}
+#mainMenu .menu-item.primary:hover {
+    background: rgba(56, 189, 248, 0.24);
+    border-color: var(--accent);
+}
+#mainMenu .menu-footer {
+    margin-top: 16px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(148, 163, 184, 0.25);
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+@media (max-width: 900px) {
+    #mainMenu .main-menu {
+        justify-content: center;
+        padding: 20px;
+    }
+}
+</style>
+
+<div class="main-menu">
+    <div class="menu-panel">
+        <div class="menu-header">
+            <div>
+                <div class="menu-title">Single Player</div>
+                <div class="menu-game-name">Another Try</div>
+                <div class="menu-subtitle">Press <strong>Enter</strong> to continue</div>
             </div>
-            <div id="maps" class="hidden" aria-hidden="true"></div>
-        </section>
-    </main>
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.12em;">v0.1.0</div>
+        </div>
+
+        <ul class="menu-items">
+            <li class="menu-item primary">
+                <button class="primary-btn" style="all:unset;display:block;width:100%;cursor:pointer;">
+                    <div class="menu-item-main">
+                        <span>Continue</span>
+                        <span class="menu-item-desc">Load latest checkpoint</span>
+                    </div>
+                </button>
+                <span class="menu-item-key">Enter</span>
+            </li>
+            <li class="menu-item">
+                <div class="menu-item-main">
+                    <span>New game</span>
+                    <span class="menu-item-desc">Start a new journey</span>
+                </div>
+                <span class="menu-item-key">N</span>
+            </li>
+            <li class="menu-item">
+                <div class="menu-item-main">
+                    <span>Settings</span>
+                    <span class="menu-item-desc">Video, audio, controls</span>
+                </div>
+                <span class="menu-item-key">F10</span>
+            </li>
+            <li class="menu-item">
+                <div class="menu-item-main">
+                    <span>Exit to desktop</span>
+                    <span class="menu-item-desc">Close the game</span>
+                </div>
+                <span class="menu-item-key">Esc</span>
+            </li>
+        </ul>
+
+        <div id="maps" class="hidden" aria-hidden="true" style="display:none"></div>
+
+        <div class="menu-footer">
+            <span>Profile: <strong>Traveler_01</strong></span>
+            <span>Autosave: <strong>Just now</strong></span>
+        </div>
+    </div>
 </div>

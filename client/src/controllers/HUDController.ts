@@ -29,6 +29,23 @@ export class HUDController {
     private side: HTMLDivElement|undefined;
     private readonly bus: EventBus;
 
+    // New HUD element refs
+    private playerNameEl: HTMLElement | null = null;
+    private playerLevelEl: HTMLElement | null = null;
+    private healthBarEl: HTMLElement | null = null;
+    private healthTextEl: HTMLElement | null = null;
+    private healthRateEl: HTMLElement | null = null;
+    private staminaBarEl: HTMLElement | null = null;
+    private staminaTextEl: HTMLElement | null = null;
+    private staminaRateEl: HTMLElement | null = null;
+    private energyEl: HTMLProgressElement | null = null;
+
+    // Simple health state
+    private healthCurrent: number = 100;
+    private healthMax: number = 100;
+    private lastEnergyValue: number = 0;
+    private lastEnergyStamp: number = performance.now();
+
     constructor(eventBus: EventBus) {
         this.bus = eventBus;
         const inGame = document.createElement('div');
@@ -61,6 +78,16 @@ export class HUDController {
         this.messageList = document.querySelector('#messageList') as HTMLElement;
         this.footer = document.querySelector('#HUD-footer') as HTMLElement;
         this.side = document.querySelector('.side-buttons') as HTMLDivElement;
+        // New element refs
+        this.playerNameEl = document.querySelector('#HUD-player-name');
+        this.playerLevelEl = document.querySelector('#HUD-player-level');
+        this.healthBarEl = document.querySelector('#HUD-health-bar');
+        this.healthTextEl = document.querySelector('#HUD-health-text');
+        this.healthRateEl = document.querySelector('#HUD-health-rate');
+        this.staminaBarEl = document.querySelector('#HUD-stamina-bar');
+        this.staminaTextEl = document.querySelector('#HUD-stamina-text');
+        this.staminaRateEl = document.querySelector('#HUD-stamina-rate');
+        this.energyEl = document.querySelector('#HUD-energy') as HTMLProgressElement | null;
 
 
         this.mainMenu.onclick = (event: MouseEvent) => {
@@ -161,6 +188,46 @@ export class HUDController {
         this.updateText(string.join('<br>'), target);
     }
 
+    setPlayerName(name: string) {
+        if (this.playerNameEl) this.playerNameEl.textContent = name;
+    }
+
+    setPlayerLevel(text: string) {
+        if (this.playerLevelEl) this.playerLevelEl.textContent = text;
+    }
+
+    setHealth(current: number, max: number, ratePerSec?: number) {
+        this.healthCurrent = Math.max(0, Math.min(current, max));
+        this.healthMax = Math.max(1, max);
+        const ratio = this.healthCurrent / this.healthMax;
+        if (this.healthBarEl) (this.healthBarEl as HTMLElement).style.transform = `scaleX(${ratio})`;
+        if (this.healthTextEl) this.healthTextEl.textContent = `${Math.round(this.healthCurrent)} / ${Math.round(this.healthMax)}`;
+        if (this.healthRateEl) this.healthRateEl.textContent = ratePerSec ? `${ratePerSec > 0 ? '+' : ''}${Math.round(ratePerSec)} / s` : '';
+    }
+
+    applyDamage(amount: number) {
+        this.setHealth(this.healthCurrent - amount, this.healthMax);
+    }
+
+    private updateStaminaFromEnergy() {
+        if (!this.energyEl) return;
+        const now = performance.now();
+        const energy = this.energyEl.value;
+        const max = this.energyEl.max || 1;
+        const ratio = max ? energy / max : 0;
+        if (this.staminaBarEl) (this.staminaBarEl as HTMLElement).style.transform = `scaleX(${ratio})`;
+        if (this.staminaTextEl) this.staminaTextEl.textContent = `${Math.round(energy)} / ${Math.round(max)}`;
+        // compute rate per second based on delta time
+        const dt = (now - this.lastEnergyStamp) / 1000;
+        if (dt > 0.2) {
+            const dE = energy - this.lastEnergyValue;
+            const rate = dE / dt;
+            if (this.staminaRateEl) this.staminaRateEl.textContent = `${rate >= 0 ? '+' : ''}${Math.round(rate)} / s`;
+            this.lastEnergyValue = energy;
+            this.lastEnergyStamp = now;
+        }
+    }
+
     update(delta: number|null, controller: CreatorController) {
         const d = delta || this._preDelta;
         this._elapsed += d;
@@ -168,6 +235,8 @@ export class HUDController {
             this._preDelta = delta;
         }
 
+        // Always reflect stamina from TerrainManager's energy progress
+        this.updateStaminaFromEnergy();
         if (this._elapsed >= this._updatePeriod || delta === null) {
             this._elapsed = 0;
 
@@ -286,18 +355,18 @@ export class HUDController {
 
     toggleChat() {
         if (this.messageInput && this.messageList && this.messageList.parentElement) {
-            if (this.messageInput.style.display !== 'none') {
+            const visible = window.getComputedStyle(this.messageInput).display !== 'none';
+            if (visible) {
                 this.messageInput.style.display = "none";
-                // this.messageList.parentElement.style.backgroundColor = '#4e4e4e4f';
             } else {
                 this.messageInput.style.display = "flex";
-                // this.messageList.parentElement.style.backgroundColor = '#808080';
             }
         }
     }
 
     isChatActive(): boolean {
-        return !!(this.messageInput && this.messageInput.style.display !== 'none');
+        if (!this.messageInput) return false;
+        return window.getComputedStyle(this.messageInput).display !== 'none';
     }
 
     getMessage(html = false): string {
