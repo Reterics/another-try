@@ -46,7 +46,7 @@ export function createMenuDom(): { root: HTMLDivElement; refs: MenuDomRefs } {
     version.style.color = 'var(--text-muted)';
     version.style.textTransform = 'uppercase';
     version.style.letterSpacing = '0.12em';
-    version.textContent = 'v0.1.0';
+    version.textContent = 'v0.0.2';
     header.appendChild(version);
 
     const body = document.createElement('div');
