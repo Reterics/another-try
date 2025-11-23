@@ -26,35 +26,66 @@ export interface MinimapDomBindingsHandle {
 
 /** Create and attach the minimap DOM tree. Returns the outer container. */
 export function createMinimapRoot(): HTMLDivElement {
-  const outer = document.createElement('div');
-  outer.classList.add('minimap-outer');
+  // Match the ingame HUD markup so CSS continues to apply.
+  // Structure:
+  // .minimap-wrapper
+  //   .minimap#HUD-minimap (also tagged as .map for compatibility)
+  //     canvas.minimap-canvas
+  //     .minimap-heading
+  //     .minimap-inner-border
+  //     .minimap-indicator
+  //   .minimap-controls
+  //     button.minimap-zoom.zoom-in
+  //     button.minimap-zoom.zoom-out
+  const wrapper = document.createElement('div');
+  wrapper.classList.add('minimap-wrapper');
 
   const map = document.createElement('div');
-  map.classList.add('map');
+  map.classList.add('minimap', 'map');
+  map.id = 'HUD-minimap';
 
   const canvas = document.createElement('canvas');
-  canvas.classList.add('minimap');
+  canvas.classList.add('minimap-canvas');
+  canvas.style.width = '100%';
+  canvas.style.height = '100%';
 
-  const controllers = document.createElement('div');
-  controllers.classList.add('controllers');
+  const heading = document.createElement('div');
+  heading.classList.add('minimap-heading');
+  heading.textContent = 'N';
 
-  const zoomIn = document.createElement('button');
-  zoomIn.textContent = '+';
-  zoomIn.classList.add('zoom', 'zoom-in');
+  const innerBorder = document.createElement('div');
+  innerBorder.classList.add('minimap-inner-border');
 
-  const zoomOut = document.createElement('button');
-  zoomOut.textContent = '-';
-  zoomOut.classList.add('zoom', 'zoom-out');
-
-  controllers.appendChild(zoomIn);
-  controllers.appendChild(zoomOut);
+  const indicator = document.createElement('div');
+  indicator.classList.add('minimap-indicator');
 
   map.appendChild(canvas);
-  map.appendChild(controllers);
-  outer.appendChild(map);
+  map.appendChild(heading);
+  map.appendChild(innerBorder);
+  map.appendChild(indicator);
 
-  document.body.appendChild(outer);
-  return outer;
+  const controls = document.createElement('div');
+  controls.classList.add('minimap-controls');
+
+  const zoomIn = document.createElement('button');
+  zoomIn.classList.add('minimap-zoom', 'zoom-in', 'zoom');
+  zoomIn.setAttribute('aria-label', 'Zoom in');
+  zoomIn.textContent = '+';
+
+  const zoomOut = document.createElement('button');
+  zoomOut.classList.add('minimap-zoom', 'zoom-out', 'zoom');
+  zoomOut.setAttribute('aria-label', 'Zoom out');
+  zoomOut.textContent = '-';
+
+  controls.appendChild(zoomIn);
+  controls.appendChild(zoomOut);
+
+  wrapper.appendChild(map);
+  wrapper.appendChild(controls);
+
+  const host = document.querySelector('#inGame .hud-right-stack') || document.body;
+  host.appendChild(wrapper);
+  return wrapper;
 }
 
 /** Snap the `.map` element to a perfect square size based on its rect. */
@@ -93,8 +124,8 @@ export function bindMinimapControls(options: MinimapDomBindOptions): MinimapDomB
     unbinders.push(() => el.removeEventListener('click', wrapped as EventListener, false));
   };
 
-  bindClick(options.zoomInSelector ?? '.zoom-in', () => options.onZoomChanged(+1));
-  bindClick(options.zoomOutSelector ?? '.zoom-out', () => options.onZoomChanged(-1));
+  bindClick(options.zoomInSelector ?? '.minimap-zoom.zoom-in', () => options.onZoomChanged(+1));
+  bindClick(options.zoomOutSelector ?? '.minimap-zoom.zoom-out', () => options.onZoomChanged(-1));
   if (options.toggleSelector) {
     bindClick(options.toggleSelector, () => {
       visibleState = !visibleState;
