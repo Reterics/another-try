@@ -59,6 +59,51 @@ const GRASS_WIND_INTENSITY = 0.35;
 
 let minimap: MinimapController;
 let minimapTextureCleanup: (() => void) | null = null;
+type SavedGame = { name: string; coords: { x: number; y: number; z: number }; date: string; mapId?: string };
+let savedGameState: SavedGame | null = null;
+savedGameState = readSavedGame();
+
+function readSavedGame(): SavedGame | null {
+    try {
+        const raw = localStorage.getItem('saveGame');
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (parsed?.name && parsed?.coords && parsed?.date) {
+            return parsed;
+        }
+    } catch (_) { /* ignore */ }
+    return null;
+}
+
+function saveGameState() {
+    if (!heroPlayer || !map) return;
+    const payload: SavedGame = {
+        name: hudController.getPlayerName() || 'Traveler',
+        coords: {
+            x: heroPlayer.position.x,
+            y: heroPlayer.position.y,
+            z: heroPlayer.position.z,
+        },
+        date: new Date().toISOString(),
+        mapId: map.getMap()?.id,
+    };
+    try {
+        localStorage.setItem('saveGame', JSON.stringify(payload));
+        savedGameState = payload;
+        hudController.updateSaveAvailability(payload);
+    } catch (_) { /* ignore */ }
+}
+
+function applySavedPosition() {
+    if (!savedGameState || !heroPlayer || !controls || !map) return;
+    const currentMapId = map.getMap()?.id;
+    if (savedGameState.mapId && currentMapId && savedGameState.mapId !== currentMapId) {
+        return;
+    }
+    heroPlayer.position.set(savedGameState.coords.x, savedGameState.coords.y, savedGameState.coords.z);
+    controls.target.copy(heroPlayer.position);
+    controls.update();
+}
 
 busSubscriptions.push(
     eventBus.subscribe(Topics.Creator.PointerClicked, ({ mode }) => {
@@ -112,6 +157,7 @@ busSubscriptions.push(
             animationRunning = true;
         }
         map.respawn(heroPlayer);
+        applySavedPosition();
         if (minimapTextureCleanup) {
             minimapTextureCleanup();
             minimapTextureCleanup = null;
@@ -142,6 +188,8 @@ init();
 
 async function init() {
     hudController.renderMenu();
+    savedGameState = readSavedGame();
+    hudController.updateSaveAvailability(savedGameState || undefined);
 
     camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 2000 );
     scene = new THREE.Scene();
@@ -205,6 +253,9 @@ async function init() {
         } else if(event.code == "KeyT") {
             hudController.toggleChat();
             isChatActive = !isChatActive;
+        } else if (event.key === 'Escape') {
+            saveGameState();
+            hudController.renderPauseMenu();
         }
     };
 
