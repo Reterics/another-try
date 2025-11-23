@@ -1,4 +1,3 @@
-import menuTemplate from '../pages/menu.html?raw';
 import { CreatorController } from "./CreatorController.ts";
 import { PlayerNames, PlayerScores } from "../types/main.ts";
 import { ATMap } from "../../../types/map.ts";
@@ -6,7 +5,8 @@ import { demoMap } from "../models/demoMap.ts";
 import * as THREE from 'three';
 import EventBus from "@shared/events/EventBus.ts";
 import { Topics } from "@shared/events/topics.ts";
-import {createHudDom, HudDomRefs} from '../features/hud/HudDom.ts';
+import { createHudDom, HudDomRefs } from '../features/hud/HudDom.ts';
+import { createMenuDom, MenuDomRefs } from '../features/hud/MenuDom.ts';
 
 export class HUDController {
     private readonly inGame: HTMLDivElement;
@@ -29,6 +29,7 @@ export class HUDController {
     private hasEnteredGame = false;
 
     private readonly hud: HudDomRefs;
+    private readonly menuRefs: MenuDomRefs;
 
     // Simple health state
     private healthCurrent: number = 100;
@@ -39,30 +40,26 @@ export class HUDController {
     constructor(eventBus: EventBus) {
         this.bus = eventBus;
         const { root: inGame, refs } = createHudDom();
-
-        const mainMenu = document.createElement('div');
-        mainMenu.id = 'mainMenu';
-        mainMenu.innerHTML = menuTemplate;
-        mainMenu.classList.add('has-bg');
+        const { root: menuRoot, refs: menuRefs } = createMenuDom();
 
         this.hud = refs;
+        this.menuRefs = menuRefs;
         this.inGame = inGame;
-        this.mainMenu = mainMenu;
+        this.mainMenu = menuRoot;
         document.body.appendChild(this.inGame);
         document.body.appendChild(this.mainMenu);
+        this.menuRefs.mapsContainer.addEventListener('click', (event: MouseEvent) => {
+            const target = event.target as HTMLElement;
+            if (target && target.id) {
+                this.renderGame(target.id);
+            }
+        });
 
         this._updatePeriod = 1;
         this._elapsed = 0;
         this._preDelta = 0;
 
         this.element = refs.info;
-        this.mainMenu.onclick = (event: MouseEvent) => {
-            const target: HTMLElement = event.target as HTMLElement;
-            if (target && target.parentElement && target.parentElement.id === 'maps' && target.id) {
-                const level = target.id;
-                this.renderGame(level);
-            }
-        };
         this.maps = [
             demoMap
         ];
@@ -75,17 +72,16 @@ export class HUDController {
     }
 
     private bindMainMenu() {
-        const enterButton = this.mainMenu.querySelector('.primary-btn') as HTMLElement | null;
-        const continueItem = this.mainMenu.querySelector('[data-action="continue"]') as HTMLElement | null;
-        const newGameItem = this.mainMenu.querySelector('[data-action="new-game"]') as HTMLElement | null;
-        const settingsItem = this.mainMenu.querySelector('[data-action="settings"]') as HTMLElement | null;
-        const newGameSection = this.mainMenu.querySelector('#new-game-section') as HTMLElement | null;
-        const settingsSection = this.mainMenu.querySelector('#settings-section') as HTMLElement | null;
-        const newNameInput = this.mainMenu.querySelector('#menu-player-name') as HTMLInputElement | null;
-        const startNewBtn = this.mainMenu.querySelector('#menu-start-new') as HTMLButtonElement | null;
-        const applySettingsBtn = this.mainMenu.querySelector('#menu-apply-settings') as HTMLButtonElement | null;
-        const hintSection = this.mainMenu.querySelector('#menu-hint') as HTMLElement | null;
-        const menuPanel = this.mainMenu.querySelector('.menu-panel') as HTMLElement | null;
+        const enterButton = this.menuRefs.continueItem.querySelector('.primary-btn') as HTMLElement | null;
+        const continueItem = this.menuRefs.continueItem;
+        const newGameItem = this.menuRefs.newGameItem;
+        const settingsItem = this.menuRefs.settingsItem;
+        const newGameSection = this.menuRefs.newGameSection;
+        const settingsSection = this.menuRefs.settingsSection;
+        const newNameInput = this.menuRefs.newNameInput;
+        const startNewBtn = this.menuRefs.startNewBtn;
+        const applySettingsBtn = this.menuRefs.applySettingsBtn;
+        const menuPanel = this.menuRefs.menuPanel;
         try {
             const storedName = localStorage.getItem('player:name');
             if (storedName && newNameInput) newNameInput.value = storedName;
@@ -97,9 +93,6 @@ export class HUDController {
             const showingNewGame = section === newGameSection;
             newGameSection.style.display = showingNewGame ? 'block' : 'none';
             settingsSection.style.display = showingSettings ? 'block' : 'none';
-            if (hintSection) {
-                hintSection.style.display = section ? 'none' : 'block';
-            }
             if (menuPanel) {
                 if (showingSettings || showingNewGame) {
                     menuPanel.classList.add('submenu-open');
@@ -541,18 +534,13 @@ export class HUDController {
     }
 
     renderMaps() {
-        let mapsParent = this.mainMenu.querySelector('#maps');
-        if (!mapsParent) {
-            mapsParent = document.createElement('div');
-            mapsParent.id = 'maps';
-            this.mainMenu.appendChild(mapsParent);
-        }
+        const mapsParent = this.menuRefs.mapsContainer;
         mapsParent.innerHTML = '';
         this.maps.forEach(map=>{
             const a = document.createElement('a');
             a.id = map.id;
             a.innerHTML = map.name || 'Play';
-            mapsParent?.appendChild(a);
+            mapsParent.appendChild(a);
         });
     }
 
