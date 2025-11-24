@@ -4,6 +4,7 @@ import { GrassManagerOptions } from "../../types/grass.ts";
 import { AdaptiveGrassPatch } from "./adaptiveGrassPatch.ts";
 import type { EarthParams } from "../../utils/terrain.ts";
 import { GrassImpostorField } from "./grassImpostorField.ts";
+import { WATER_LEVEL } from "../../utils/terrain.ts";
 
 interface PatchRecord {
     key: string;
@@ -100,6 +101,11 @@ export class GrassManager {
                 }
                 const cellCenterX = cx * this.chunkSize + this.chunkSize * 0.5;
                 const cellCenterZ = cz * this.chunkSize + this.chunkSize * 0.5;
+                // Skip patches whose centers are underwater (prevents watery rings at low LOD)
+                const centerHeight = this.heightSampler(cellCenterX, cellCenterZ);
+                if (centerHeight <= WATER_LEVEL + 2) {
+                    continue;
+                }
                 const dist = Math.hypot(cellCenterX - position.x, cellCenterZ - position.z);
                 const key = this.chunkKey(cx, cz);
                 const lodIndex = this.lodIndexForDistance(dist);
@@ -174,11 +180,11 @@ export class GrassManager {
             return null;
         }
         patch.setTerrainParams(this.terrainParams);
+        patch.setDensity(this.lodFactorByIndex(lodIndex));
         // Compute world-space origin for this cell center and place patch by origin, not terrain chunk
         const originX = chunkX * this.chunkSize + this.chunkSize * 0.5;
         const originZ = chunkZ * this.chunkSize + this.chunkSize * 0.5;
         patch.setOrigin(originX, originZ);
-        patch.setDensity(this.lodFactorByIndex(lodIndex));
         patch.setVisible(true);
         return { key, chunkX, chunkZ, ring: lodIndex, patch };
     }

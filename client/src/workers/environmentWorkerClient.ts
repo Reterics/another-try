@@ -4,7 +4,7 @@ type WorkerRequestType = 'grass-heights' | 'chunk-data' | 'impostor-heights';
 
 interface WorkerRequestPayloads {
     'grass-heights': {
-        seeds: Float32Array;
+        instanceCount: number;
         patchSize: number;
         origin: { x: number; z: number };
         terrainParams: EarthParams;
@@ -27,6 +27,7 @@ interface WorkerRequestPayloads {
 type WorkerResponsePayloads = {
     'grass-heights': {
         heights: Float32Array;
+        seeds: Float32Array;
     };
     'chunk-data': {
         heights: Float32Array;

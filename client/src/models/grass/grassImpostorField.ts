@@ -13,6 +13,7 @@ import {
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { EarthParams } from "../../utils/terrain.ts";
 import { environmentWorkerClient } from "../../workers/environmentWorkerClient.ts";
+import { sampleDefaultSplat, WATER_LEVEL } from "../../utils/terrain.ts";
 
 interface GrassImpostorFieldOptions {
     scene: Scene;
@@ -41,6 +42,12 @@ const jitter = (dx: number, dz: number) => {
         offsetZ: frac2 * 2.0 - 1.0,
         scale: 0.65 + (frac * 0.5),
     };
+};
+
+// Deterministic pseudo-random based on world coords/seed
+const hash2 = (x: number, z: number, seed = 0) => {
+    const h = Math.sin(x * 127.1 + z * 311.7 + seed * 17.23) * 43758.5453123;
+    return h - Math.floor(h);
 };
 
 export class GrassImpostorField {
@@ -180,6 +187,18 @@ export class GrassImpostorField {
                     if (radial <= innerExclusion || radial > this.impostorRadius) {
                         continue;
                     }
+                    // Splat-based density: no impostors on sand, rock, or snow; max on grass, moderate on dirt
+                    const w = sampleDefaultSplat(this.sampler, worldX, worldZ, undefined, 6);
+                    const snow = Math.max(0, 1 - (w.r + w.g + w.b + w.a));
+                    let density = (w.g * 1.0 + w.b * 0.5);
+                    density *= (1 - w.r) * (1 - w.a) * (1 - snow);
+                    if (density <= 0) {
+                        continue;
+                    }
+                    const rand = hash2(worldX, worldZ, this.terrainParams.seed ?? 0);
+                    if (rand > density) {
+                        continue;
+                    }
                     const heightScale = 0.8 + scale * 0.05;
                     const widthScale = 1.5 + scale * 0.6;
                     instances.push({ worldX, worldZ, widthScale, heightScale });
@@ -250,19 +269,23 @@ export class GrassImpostorField {
         if (!this.mesh) {
             return;
         }
-        const count = Math.min(instances.length, heights.length, this.maxInstances);
-        for (let i = 0; i < count; i++) {
+        const limit = Math.min(instances.length, heights.length, this.maxInstances);
+        let out = 0;
+        for (let i = 0; i < limit; i++) {
             const inst = instances[i];
             const height = heights[i];
+            // Skip underwater
+            if (height <= WATER_LEVEL) continue;
             this.dummy.position.set(inst.worldX, height, inst.worldZ);
             this.dummy.scale.set(inst.widthScale, inst.heightScale, inst.widthScale);
             this.dummy.lookAt(cameraPosition.x, height + inst.heightScale * 0.4, cameraPosition.z);
             this.dummy.updateMatrix();
-            this.mesh.setMatrixAt(i, this.dummy.matrix);
+            this.mesh.setMatrixAt(out, this.dummy.matrix);
+            out++;
         }
-        this.mesh.count = count;
+        this.mesh.count = out;
         this.mesh.instanceMatrix.needsUpdate = true;
-        this.mesh.visible = count > 0;
+        this.mesh.visible = out > 0;
     }
 
     private resetLayout() {
