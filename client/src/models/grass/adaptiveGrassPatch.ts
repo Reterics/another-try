@@ -16,7 +16,6 @@ import type { EarthParams } from "../../utils/terrain.ts";
 import { environmentWorkerClient } from "../../workers/environmentWorkerClient.ts";
 import vertexShader from "./shaders/field.vert?raw";
 import fragmentShader from "./shaders/field.frag?raw";
-import { WATER_LEVEL } from "../../utils/terrain.ts";
 
 const createCurvedBladeGeometry = () => {
     const bladeWidth = 0.12;
@@ -69,7 +68,6 @@ export interface AdaptiveGrassPatchOptions {
     patchSize: number;
     maxInstances: number;
     terrainParams: EarthParams;
-    heightSampler?: (x: number, z: number) => number;
     windIntensity?: number;
 }
 
@@ -85,7 +83,6 @@ export class AdaptiveGrassPatch {
     private readonly seedAttribute: InstancedBufferAttribute;
     private readonly seeds: Float32Array;
     private terrainParams: EarthParams;
-    private readonly sampler?: (x: number, z: number) => number;
     private chunkX = 0;
     private chunkZ = 0;
     private pendingJob = 0;
@@ -93,17 +90,13 @@ export class AdaptiveGrassPatch {
     private targetInstanceCount: number;
     private requestedInstanceCount = 0;
     private origin = new Vector2();
-    private waterCutoff: number;
     private lastRequestOrigin = new Vector2();
-    private validationThreshold = 0.5; // meters
 
     constructor(options: AdaptiveGrassPatchOptions) {
         this.scene = options.scene;
         this.patchSize = options.patchSize;
         this.maxInstances = options.maxInstances;
-        this.sampler = options.heightSampler;
         this.terrainParams = options.terrainParams;
-        this.waterCutoff = WATER_LEVEL + 0.05;
         this.geometry = new InstancedBufferGeometry();
         this.geometry.instanceCount = this.maxInstances;
         this.geometry.index = BASE_GEOMETRY.index;
@@ -213,7 +206,6 @@ export class AdaptiveGrassPatch {
 
     setTerrainParams(params: EarthParams) {
         this.terrainParams = params;
-        this.waterCutoff = WATER_LEVEL + 0.05;
     }
 
     private computeOrigin() {
@@ -247,56 +239,19 @@ export class AdaptiveGrassPatch {
             if (this.lastRequestOrigin.x !== this.origin.x || this.lastRequestOrigin.y !== this.origin.y) {
                 return;
             }
-            const accepted = Math.max(0, Math.min(heights.length, (seeds?.length || 0) / 2, this.maxInstances));
-            const target = this.targetInstanceCount;
-            let finalCount = 0;
-            if (accepted > 0 && seeds) {
-                for (let i = 0; i < accepted; i++) {
-                    const seedX = seeds[i * 2];
-                    const seedZ = seeds[i * 2 + 1];
-                    const h = heights[i];
-                    if (h <= this.waterCutoff) {
-                        continue;
-                    }
-                    this.seeds[finalCount * 2] = seedX;
-                    this.seeds[finalCount * 2 + 1] = seedZ;
-                    this.heightData[finalCount] = h;
-                    finalCount++;
-                    if (finalCount >= target) break;
-                }
-                // Optional validation: if the worker data looks off, recompute heights locally once
-                if (finalCount > 0 && this.sampler) {
-                    const sampleCount = Math.min(finalCount, 12);
-                    let diffSum = 0;
-                    for (let i = 0; i < sampleCount; i++) {
-                        const sx = this.seeds[i * 2];
-                        const sz = this.seeds[i * 2 + 1];
-                        const wx = origin.x + (sx - 0.5) * this.patchSize;
-                        const wz = origin.y + (sz - 0.5) * this.patchSize;
-                        const localH = this.sampler(wx, wz);
-                        diffSum += Math.abs(localH - this.heightData[i]);
-                    }
-                    const avgDiff = diffSum / sampleCount;
-                    if (avgDiff > this.validationThreshold) {
-                        // TODO: Investigate why we need this
-                        // Recompute all heights locally to ensure consistency with render terrain
-                        for (let i = 0; i < finalCount; i++) {
-                            const sx = this.seeds[i * 2];
-                            const sz = this.seeds[i * 2 + 1];
-                            const wx = origin.x + (sx - 0.5) * this.patchSize;
-                            const wz = origin.y + (sz - 0.5) * this.patchSize;
-                            this.heightData[i] = this.sampler(wx, wz);
-                        }
-                    }
-                }
-                if (finalCount > 0) {
-                    this.seedAttribute.needsUpdate = true;
-                    this.heightAttribute.needsUpdate = true;
-                }
+
+            this.geometry.instanceCount = Math.max(0, Math.min(heights.length, (seeds?.length || 0) / 2, this.maxInstances));
+            if (this.geometry.instanceCount) {
+                this.heightData.set(heights);
+                this.seeds.set(seeds);
+                this.mesh.visible = true;
+                this.heightsReady = true;
+                this.heightAttribute.needsUpdate = true;
+                this.seedAttribute.needsUpdate = true;
+            } else {
+                this.heightsReady = false;
+                this.mesh.visible = false;
             }
-            this.geometry.instanceCount = finalCount;
-            this.heightsReady = true;
-            this.mesh.visible = finalCount > 0;
         }).catch((err) => {
             console.error('[AdaptiveGrassPatch] Worker heights failed', err);
             // On failure, avoid CPU fallback to keep work off the main thread

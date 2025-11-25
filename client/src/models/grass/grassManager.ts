@@ -180,12 +180,11 @@ export class GrassManager {
             return null;
         }
         patch.setTerrainParams(this.terrainParams);
-        patch.setDensity(this.lodFactorByIndex(lodIndex));
         // Compute world-space origin for this cell center and place patch by origin, not terrain chunk
         const originX = chunkX * this.chunkSize + this.chunkSize * 0.5;
         const originZ = chunkZ * this.chunkSize + this.chunkSize * 0.5;
+        patch.setDensity(this.lodFactorByIndex(lodIndex));
         patch.setOrigin(originX, originZ);
-        patch.setVisible(true);
         return { key, chunkX, chunkZ, ring: lodIndex, patch };
     }
 
@@ -205,7 +204,6 @@ export class GrassManager {
             scene: this.scene,
             patchSize: this.chunkSize,
             maxInstances: this.instancesPerPatch,
-            heightSampler: this.heightSampler,
             terrainParams: this.terrainParams,
             windIntensity: this.windIntensity,
         });
