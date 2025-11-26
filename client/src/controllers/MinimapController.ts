@@ -1,11 +1,26 @@
-import { Euler, OrthographicCamera, Scene, Sprite, SpriteMaterial, Texture, TextureLoader, Vector3, WebGLRenderer } from "three";
-import { MinimapDimensions, MinimapInputArguments } from "../types/controller.ts";
-import { bindMinimapControls, MinimapDomBindingsHandle, createMinimapRoot, snapCircleSize } from "../features/minimap/MinimapDom.ts";
-import { prepareMapTexture, createFallbackTexture } from "../features/minimap/MinimapTextureService.ts";
-import { createMinimapCamera, MinimapCamera } from "../features/minimap/MinimapCamera.ts";
+﻿import {
+    Euler,
+    OrthographicCamera,
+    Scene,
+    Sprite,
+    SpriteMaterial,
+    Texture,
+    TextureLoader,
+    Vector3,
+    WebGLRenderer
+} from "three";
+import {MinimapDimensions, MinimapInputArguments} from "../types/controller.ts";
+import {
+    bindMinimapControls,
+    createMinimapRoot,
+    MinimapDomBindingsHandle,
+    snapCircleSize
+} from "../features/minimap/MinimapDom.ts";
+import {createFallbackTexture, prepareMapTexture} from "../features/minimap/MinimapTextureService.ts";
+import {createMinimapCamera, MinimapCamera} from "../features/minimap/MinimapCamera.ts";
 import ResourceTracker from "../engine/assets/ResourceTracker.ts";
-import EventBus, { Subscription } from "@shared/events/EventBus.ts";
-import { Topics } from "@shared/events/topics.ts";
+import EventBus, {Subscription} from "@shared/events/EventBus.ts";
+import {Topics} from "@shared/events/topics.ts";
 
 
 export class MinimapController {
@@ -235,10 +250,10 @@ export class MinimapController {
         const dx = this.lastPlayerPosition.x - this.currentCenter.x;
         const dz = this.lastPlayerPosition.z - this.currentCenter.z;
 
-        // The minimap texture is rotated by `spriteMaterial.rotation` which we set to `-heading + π`.
-        // To keep the player visually centered and move the map in the correct on-screen direction,
-        // translate the sprite in the same rotated space as the texture.
-        // That means rotate the world offset by the same angle used for texture alignment (without the π flip).
+        /*
+        * Rotation issue, but positions are good
+        *
+        *
         const angle = this.lastHeading - Math.PI / 2; // swapped to +heading to correct horizontal (E/W) inversion; π still excluded for translation
         const cos = Math.cos(angle);
         const sin = Math.sin(angle);
@@ -248,6 +263,19 @@ export class MinimapController {
         // Move the map opposite to the player's world movement (player stays centered)
         // Try axis-swap variant so that screen X corresponds to world +Z and screen Y to world +X in the rotated frame.
         this.sprite.position.set(rz, -rx, 0);
+
+        * */
+        // Keep rotation pivot locked to the player: sprite stays at the origin,
+        // and we scroll the texture itself to account for player offset.
+        const map = this.spriteMaterial.map;
+        if (map) {
+            const span = this.currentSpan || this.sprite.scale.x || 1;
+            // Sprite/material is rotated; keep UV scrolling independent of heading to avoid drift.
+            // E/W was reported inverted, so flip only X. Keep N/S as before.
+            map.offset.set(dx / span, -dz / span);
+            map.needsUpdate = true;
+        }
+        this.sprite.position.set(0, 0, 0);
     }
 
     private applyTexture(srcTexture: Texture) {
@@ -285,11 +313,11 @@ export class MinimapController {
             // Use provided yaw heading when movement is negligible
             this.lastHeading = rotation.y;
         }
-        const headingRotation = -this.lastHeading;
-        const mapRotation = headingRotation + Math.PI;
-        // Rotate sprite via material.rotation (Sprite uses material's rotation for 2D spin)
-        // Add PI to correct North/South inversion (texture/world alignment)
-        this.spriteMaterial.rotation = mapRotation;
+        // Compute final visual rotation that aligns map North with world North
+        this.spriteMaterial.rotation = -this.lastHeading + Math.PI;
+        // Ensure camera roll is reset so it doesn't influence screen-aligned sprites
+        this.camera.rotation.z = 0;
+
 
         // Update North label to orbit around the perimeter, anchored to world North
         if (this.headingEl) {
@@ -297,7 +325,8 @@ export class MinimapController {
             const size = Math.min(rect.width, rect.height);
             // Subtract borders/padding so the label sits inside the rim
             const r = Math.max(0, size * 0.5 - 10);
-            const theta = -mapRotation; // same direction as map rotation
+            // Keep label anchored to world North: rotate opposite to the map rotation
+            const theta = -this.spriteMaterial.rotation;
             // Place the label on a circle at radius r. Keep text upright for readability.
             this.headingEl.style.transform = `translate(-50%, -50%) rotate(${theta}rad) translate(0, ${-r}px) rotate(${-theta}rad)`;
         }

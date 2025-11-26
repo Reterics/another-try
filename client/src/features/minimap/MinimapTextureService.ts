@@ -11,11 +11,11 @@
  */
 
 import {
-  ClampToEdgeWrapping,
   DataTexture,
   LinearFilter,
   LinearMipmapLinearFilter,
   NearestFilter,
+  RepeatWrapping,
   SRGBColorSpace,
   Texture,
   WebGLRenderTarget,
@@ -91,9 +91,11 @@ export function prepareMapTexture(params: MinimapTextureParams): MinimapTextureR
     texture.minFilter = LinearFilter;
   }
 
-  // 4) Wrap modes - Clamp by default (safe for UI quads and NPOT)
-  texture.wrapS = ClampToEdgeWrapping;
-  texture.wrapT = ClampToEdgeWrapping;
+  // 4) Wrap modes - Use Repeat so UV offset scrolling can pan the map continuously
+  // Note: WebGL1 requires POT textures for repeat; our assets and fallback are POT by default.
+  // If a NPOT texture is supplied in WebGL1, Three.js will internally clamp; scrolling will still work within bounds.
+  texture.wrapS = RepeatWrapping;
+  texture.wrapT = RepeatWrapping;
 
   // 5) Anisotropy (only meaningful when mipmaps / minification occur)
   const caps = renderer.capabilities as { getMaxAnisotropy?: () => number };
