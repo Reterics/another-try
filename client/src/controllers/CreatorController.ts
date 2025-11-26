@@ -78,12 +78,22 @@ export class CreatorController {
             {
                 "type": "model",
                 "path": "assets/models/tree.gltf",
-                "name": "Tree"
+                "name": "Tree 1"
+            },
+            {
+                "type": "model",
+                "path": "assets/models/tree_1.glb",
+                "name": "Tree 2"
+            },
+            {
+                "type": "model",
+                "path": "assets/models/tree_2.glb",
+                "name": "Tree 3"
             },
             {
                 "type": "model",
                 "path": "assets/models/panel_house.glb",
-                "name": "Tree"
+                "name": "House"
             }
         ];
         this.shadowTypeIndex = 0;
