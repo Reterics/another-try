@@ -89,6 +89,14 @@ export class TerrainManager {
     energyMax = 20;
     drainSecondsToEmpty = 10; // sprinting from full to empty takes 10s
     regenPerSecond = 1.2; // matches previous ~0.02/frame at 60 FPS
+    // Grounded smoothing to avoid jitter on small terrain elevation changes
+    private groundGraceTime = 0.12; // seconds of "coyote time" after leaving ground
+    private groundGrace = 0; // remaining time of grace
+    // Gait switching hysteresis to prevent rapid Walk↔Run animation restarts
+    private gaitCurrent: 'Walk' | 'Run' | null = null;
+    private gaitPending: 'Walk' | 'Run' | null = null;
+    private gaitSwitchHold = 0.18; // seconds the new gait must be stable before switching
+    private gaitHoldTimer = 0;
     fwdPressed = false; bkdPressed = false; lftPressed = false; rgtPressed = false;
     private readonly energyNode: HTMLProgressElement | null;
     private map: ATMap;
@@ -939,7 +947,9 @@ diffuseColor = vec4(blended, 1.0);
 
             // Sprint energy handling (hold Shift to sprint)
             const anyMoveKey = this.fwdPressed || this.bkdPressed || this.lftPressed || this.rgtPressed;
-            const sprintingNow = this.sprinting && anyMoveKey && this.playerIsOnGround && this.energy > 0;
+            // Use grounded grace to avoid flicker on small elevation changes
+            const groundedStable = this.playerIsOnGround || this.groundGrace > 0;
+            const sprintingNow = this.sprinting && anyMoveKey && groundedStable && this.energy > 0;
             const drainPerSecond = this.energyMax / Math.max(0.0001, this.drainSecondsToEmpty);
             if (sprintingNow) {
                 // Drain energy time-based so full bar depletes in exactly drainSecondsToEmpty seconds
@@ -995,18 +1005,45 @@ diffuseColor = vec4(blended, 1.0);
             tempVector.applyAxisAngle(upVector, angle);
 
             if (this.fwdPressed || this.bkdPressed || this.lftPressed || this.rgtPressed) {
-                const speedMultiplier = (this.sprinting && this.playerIsOnGround && this.energy > 0) ? 2.0 : 1.0;
+                const speedMultiplier = (this.sprinting && groundedStable && this.energy > 0) ? 2.0 : 1.0;
                 const moveSpeed = this.params.playerSpeed * speedMultiplier;
                 player.position.addScaledVector( tempVector, moveSpeed * delta );
                 player.lookAt(player.position.clone().add(tempVector));
-                if (speedMultiplier > 1.0) {
-                    hero.changeAnimation('Run');
+
+                // Determine desired gait and apply with small hysteresis to avoid flicker
+                const desiredGait: 'Walk'|'Run' = speedMultiplier > 1.0 ? 'Run' : 'Walk';
+                if (this.gaitCurrent === null) {
+                    // Entering locomotion: apply immediately
+                    this.gaitCurrent = desiredGait;
+                    this.gaitPending = null;
+                    this.gaitHoldTimer = 0;
+                    hero.changeAnimation(desiredGait);
+                } else if (this.gaitCurrent !== desiredGait) {
+                    if (this.gaitPending !== desiredGait) {
+                        this.gaitPending = desiredGait;
+                        this.gaitHoldTimer = 0;
+                    } else {
+                        this.gaitHoldTimer += delta;
+                        if (this.gaitHoldTimer >= this.gaitSwitchHold) {
+                            this.gaitCurrent = desiredGait;
+                            this.gaitPending = null;
+                            this.gaitHoldTimer = 0;
+                            hero.changeAnimation(desiredGait);
+                        }
+                    }
                 } else {
-                    hero.changeAnimation('Walk');
+                    // Stable gait
+                    this.gaitPending = null;
+                    this.gaitHoldTimer = 0;
                 }
+
                 moving = true;
                 // console.log(getCoordNeighbours([player.position.x, player.position.z, player.position.y], 100));
             } else {
+                // Reset gait state and switch to idle/jump
+                this.gaitCurrent = null;
+                this.gaitPending = null;
+                this.gaitHoldTimer = 0;
                 hero.changeAnimation(this.playerIsOnGround ? 'Idle' : 'Jump');
             }
 
@@ -1070,6 +1107,12 @@ diffuseColor = vec4(blended, 1.0);
 
             // if the player was primarily adjusted vertically we assume it's on something we should consider ground
             this.playerIsOnGround = deltaVector.y > Math.abs( delta * velocity.y * 0.25 );
+            // Update grounded grace window
+            if (this.playerIsOnGround) {
+                this.groundGrace = this.groundGraceTime;
+            } else {
+                this.groundGrace = Math.max(0, this.groundGrace - delta);
+            }
 
             const offset = Math.max( 0.0, deltaVector.length() - 1e-5 );
             deltaVector.normalize().multiplyScalar( offset );

@@ -147,25 +147,40 @@ export class Hero {
     }
 
     changeAnimation(name: string) {
-        if (this.currentAnimation === name) {
+        // Prevent redundant restarts
+        if (this.currentAnimation === name) return;
+
+        const clip = THREE.AnimationClip.findByName(this.root.animations, name) ||
+            this.root.animations.find(animation => animation && animation.name.toLowerCase().includes(name.toLowerCase()));
+
+        if (!clip) {
+            console.warn('No clip found for ' + name);
             return;
         }
 
-        const clip = THREE.AnimationClip.findByName( this.root.animations, name ) ||
-            this.root.animations.find(animation => animation && animation.name.toLowerCase().includes(name.toLowerCase()));
-        if (clip) {
-            //this.action.stop();
-            this.mixer.stopAllAction();
-
-            const action = this.mixer.clipAction( clip );
-            if (action) {
-                this.currentAnimation = name;
-                action.play();
-            } else {
-                console.warn('No clip found for ', clip);
-            }
-        } else {
-            console.warn('No clip found for ' + name);
+        const nextAction = this.mixer.clipAction(clip);
+        if (!nextAction) {
+            console.warn('No clip action for ', clip);
+            return;
         }
+
+        // Choose a short cross-fade for locomotion; slightly longer for state changes
+        const isLocomotion = (a: string) => a === 'Walk' || a === 'Run';
+        const from = this.action;
+        const duration = from && (isLocomotion(this.currentAnimation) && isLocomotion(name)) ? 0.18 : 0.12;
+
+        nextAction.reset();
+        nextAction.enabled = true;
+        nextAction.play();
+
+        if (from) {
+            // Smoothly blend from current to next to avoid visible restarts
+            nextAction.crossFadeFrom(from, duration, true);
+            // Optionally fade out the previous action to zero
+            from.enabled = true;
+        }
+
+        this.currentAnimation = name;
+        this.action = nextAction;
     }
 }
