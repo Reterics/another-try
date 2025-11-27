@@ -39,6 +39,7 @@ import {
 import { environmentWorkerClient } from "../workers/environmentWorkerClient.ts";
 import { Water } from "three/examples/jsm/objects/Water2";
 import {CreatorController} from "../controllers/CreatorController.ts";
+import { buildSplatData, chunkKey } from "../utils/terrainHelpers.ts";
 type TerrainTextureKey = 'sand' | 'grass' | 'dirt' | 'rock' | 'snow';
 
 const TERRAIN_TEXTURE_PATHS: Record<TerrainTextureKey, string> = {
@@ -319,12 +320,8 @@ export class TerrainManager {
         };
     }
 
-    private chunkKey(x: number, z: number) {
-        return `${x}:${z}`;
-    }
-
     private queueChunkBuild(cx: number, cz: number) {
-        const key = this.chunkKey(cx, cz);
+        const key = chunkKey(cx, cz);
         if (this.chunkRequests.has(key)) {
             return;
         }
@@ -369,25 +366,15 @@ export class TerrainManager {
         if (precomputed) {
             return this.createSplatTextureFromData(precomputed.data, precomputed.resolution);
         }
-        const resolution = 48;
-        const data = new Uint8Array(resolution * resolution * 4);
         const sampler = this.getHeightSampler();
-        const minX = cx * this.chunkSize;
-        const minZ = cz * this.chunkSize;
-        const step = this.chunkSize / Math.max(1, resolution - 1);
-        for (let j = 0; j < resolution; j++) {
-            for (let i = 0; i < resolution; i++) {
-                const wx = minX + i * step;
-                const wz = minZ + j * step;
-                const weights = sampleDefaultSplat(sampler, wx, wz, undefined, 6);
-                const idx = (j * resolution + i) * 4;
-                data[idx] = Math.min(255, Math.round(weights.r * 255));
-                data[idx + 1] = Math.min(255, Math.round(weights.g * 255));
-                data[idx + 2] = Math.min(255, Math.round(weights.b * 255));
-                data[idx + 3] = Math.min(255, Math.round(weights.a * 255));
-            }
-        }
-        return this.createSplatTextureFromData(data, resolution)
+        const { data, resolution } = buildSplatData({
+            sampler,
+            chunkX: cx,
+            chunkZ: cz,
+            chunkSize: this.chunkSize,
+            resolution: 48
+        });
+        return this.createSplatTextureFromData(data, resolution);
     }
 
     private createSplatTextureFromData(data: Uint8Array, resolution: number) {
@@ -549,12 +536,12 @@ diffuseColor = vec4(blended, 1.0);
             for (let dx = -this.chunkRadius; dx <= this.chunkRadius; dx++) {
                 const cx = chunkX + dx;
                 const cz = chunkZ + dz;
-                const key = this.chunkKey(cx, cz);
-                required.add(key);
-                if (!this.chunkMeshes.has(key)) {
-                    this.queueChunkBuild(cx, cz);
-                }
-            }
+        const key = chunkKey(cx, cz);
+        required.add(key);
+        if (!this.chunkMeshes.has(key)) {
+            this.queueChunkBuild(cx, cz);
+        }
+    }
         }
 
         for (const [key, mesh] of this.chunkMeshes) {
@@ -626,7 +613,7 @@ diffuseColor = vec4(blended, 1.0);
         }
     }
 
-    async importEnvironment(map: ATMap, position?: Vector3): Promise<TerrainEnvironment> {
+    async importEnvironment(map: ATMap): Promise<TerrainEnvironment> {
         const loadedTerrain = map.name ? this.environments.find(e => e.name === map.name) : undefined;
         if (map.name && loadedTerrain) {
             return loadedTerrain;
@@ -658,8 +645,6 @@ diffuseColor = vec4(blended, 1.0);
                         }
                         c.position.y = WATER_LEVEL;
                         this.updateWaterPlaneTransform();
-                    } else if (position) {
-                        c.position.add(position);
                     }
                     terrainEnv.shaders.push(c);
                 } else if (c.material instanceof MeshStandardMaterial) {
@@ -704,21 +689,13 @@ diffuseColor = vec4(blended, 1.0);
                 if (element) {
                     const mesh = element as Mesh;
                     const material = mesh.material as MeshStandardMaterial;
-                    if (position) {
-                        mesh.position.add(position);
-                    }
                     if ( material.emissive &&  material.emissive.r !== 0 ) {
                         terrainEnv.environment.attach( mesh );
                     } else if(material.map) {
                         const geom = mesh.geometry.clone();
                         geom.applyMatrix4( mesh.matrixWorld );
                         if (mesh.name === "plane") {
-                            // If an environment offset is provided later, include it in sampling to ensure seamless tiling
-                            const sampler = (x: number, z: number) => {
-                                const ox = position ? position.x : 0;
-                                const oz = position ? position.z : 0;
-                                return this.earthTerrain.sampleHeight(x + ox, z + oz);
-                            };
+                            const sampler = (x: number, z: number) => this.earthTerrain.sampleHeight(x, z);
                             applyProceduralHeightsWorld(geom, sampler);
                         }
                         const newMesh = new THREE.Mesh( geom, material );
@@ -727,9 +704,6 @@ diffuseColor = vec4(blended, 1.0);
                         newMesh.material.shadowSide = 2;
                         newMesh.material.side = THREE.DoubleSide;
                         newMesh.name = mesh.name;
-                        if (position) {
-                            newMesh.position.add(position);
-                        }
                         terrainEnv.environment.add( newMesh );
 
                     } else {
@@ -758,9 +732,6 @@ diffuseColor = vec4(blended, 1.0);
                     newMesh.receiveShadow = true;
                     newMesh.material.shadowSide = 2;
                     newMesh.material.side = THREE.DoubleSide;
-                    if (position) {
-                        newMesh.position.add(position);
-                    }
                     terrainEnv.environment.add( newMesh );
                 } else {
                     console.error('Merging visual geometries failed');
@@ -856,30 +827,6 @@ diffuseColor = vec4(blended, 1.0);
         velocity.set(0,0,0);
 
         this.controls.update();
-    }
-
-    // Better UX helpers
-    // 1) Set spawn without re-centering by default via setSpawnCoordinates(x,y,z)
-    // 2) Explicitly re-center and teleport when desired using the methods below
-    async setSpawnAndTeleport(player: Mesh|Object3D, x: number, y: number, z: number, options?: { preload?: boolean }) {
-        // Explicitly re-center to the new spawn and teleport player there
-        this.setSpawnCoordinates(x, y, z, { recenter: true });
-        this.respawn(player);
-        if (options?.preload) {
-            await this.preloadAroundSpawn();
-        }
-    }
-
-    async teleportToSpawn(player: Mesh|Object3D, options?: { preload?: boolean; recenter?: boolean }) {
-        const [x, y, z] = this.params.spawnCoordinates;
-        // Optionally re-center to current spawn before teleport
-        if (options?.recenter) {
-            this.setSpawnCoordinates(x, y, z, { recenter: true });
-        }
-        this.respawn(player);
-        if (options?.preload) {
-            await this.preloadAroundSpawn();
-        }
     }
 
     initPlayerEvents() {

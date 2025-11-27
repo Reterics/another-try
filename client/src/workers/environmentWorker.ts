@@ -1,5 +1,12 @@
 /// <reference lib="webworker" />
-import { EarthParams, EarthTerrain, sampleDefaultSplat, WATER_LEVEL } from "../utils/terrain.ts";
+import { EarthParams, sampleDefaultSplat, WATER_LEVEL } from "../utils/terrain.ts";
+import {
+    buildSplatData,
+    createTerrainCache,
+    hash2,
+    sampleHeightsForPositions,
+    toFloat32Array
+} from "../utils/terrainHelpers.ts";
 
 type WorkerRequestType = 'grass-heights' | 'chunk-data' | 'impostor-heights';
 
@@ -45,31 +52,12 @@ interface WorkerResponse {
 }
 
 const ctx: DedicatedWorkerGlobalScope = self as unknown as DedicatedWorkerGlobalScope;
-
-let cachedParamsKey = '';
-let cachedTerrain: EarthTerrain | null = null;
-
-// Deterministic hash-based pseudo-random in [0,1)
-const hash2 = (x: number, z: number, seed = 0) => {
-    const h = Math.sin(x * 127.1 + z * 311.7 + seed * 17.23) * 43758.5453123;
-    return h - Math.floor(h);
-};
-
-const serializeParams = (params: EarthParams) => JSON.stringify(params);
-
-const ensureTerrain = (params: EarthParams) => {
-    const key = serializeParams(params);
-    if (!cachedTerrain || cachedParamsKey !== key) {
-        cachedTerrain = new EarthTerrain(params);
-        cachedParamsKey = key;
-    }
-    return cachedTerrain;
-};
+const getTerrain = createTerrainCache();
 
 const handleGrassHeights = (
     payload: GrassHeightPayload
 ) => {
-    const terrain = ensureTerrain(payload.terrainParams);
+    const terrain = getTerrain(payload.terrainParams);
     const originX = payload.origin.x;
     const originZ = payload.origin.z;
 
@@ -125,35 +113,17 @@ const handleGrassHeights = (
 const handleChunkData = (
     payload: ChunkDataPayload
 ) => {
-    const positions = payload.positions instanceof Float32Array
-        ? payload.positions
-        : new Float32Array(payload.positions);
-    const heights = new Float32Array(positions.length / 3);
-    const terrain = ensureTerrain(payload.terrainParams);
-    for (let i = 0, v = 0; i < positions.length; i += 3, v++) {
-        const wx = positions[i];
-        const wz = positions[i + 2];
-        heights[v] = terrain.sampleHeight(wx, wz);
-    }
-
-    const resolution = payload.splatResolution;
-    const data = new Uint8Array(resolution * resolution * 4);
-    const step = payload.chunkSize / Math.max(1, resolution - 1);
-    const minX = payload.chunkX * payload.chunkSize;
-    const minZ = payload.chunkZ * payload.chunkSize;
+    const positions = toFloat32Array(payload.positions);
+    const terrain = getTerrain(payload.terrainParams);
     const sampler = (x: number, z: number) => terrain.sampleHeight(x, z);
-    for (let j = 0; j < resolution; j++) {
-        for (let i = 0; i < resolution; i++) {
-            const wx = minX + i * step;
-            const wz = minZ + j * step;
-            const weights = sampleDefaultSplat(sampler, wx, wz, undefined, 6);
-            const idx = (j * resolution + i) * 4;
-            data[idx] = Math.min(255, Math.round(weights.r * 255));
-            data[idx + 1] = Math.min(255, Math.round(weights.g * 255));
-            data[idx + 2] = Math.min(255, Math.round(weights.b * 255));
-            data[idx + 3] = Math.min(255, Math.round(weights.a * 255));
-        }
-    }
+    const heights = sampleHeightsForPositions(positions, sampler);
+    const { data, resolution } = buildSplatData({
+        sampler,
+        chunkX: payload.chunkX,
+        chunkZ: payload.chunkZ,
+        chunkSize: payload.chunkSize,
+        resolution: payload.splatResolution
+    });
 
     return {
         heights,
@@ -165,17 +135,10 @@ const handleChunkData = (
 const handleImpostorHeights = (
     payload: ImpostorHeightsPayload
 ) => {
-    const positions = payload.positions instanceof Float32Array
-        ? payload.positions
-        : new Float32Array(payload.positions);
-    const terrain = ensureTerrain(payload.terrainParams);
-    const count = positions.length / 2;
-    const heights = new Float32Array(count);
-    for (let i = 0, j = 0; i < positions.length; i += 2, j++) {
-        const wx = positions[i];
-        const wz = positions[i + 1];
-        heights[j] = terrain.sampleHeight(wx, wz);
-    }
+    const positions = toFloat32Array(payload.positions);
+    const terrain = getTerrain(payload.terrainParams);
+    const sampler = (x: number, z: number) => terrain.sampleHeight(x, z);
+    const heights = sampleHeightsForPositions(positions, sampler, 2, 0, 1);
     return { heights };
 };
 

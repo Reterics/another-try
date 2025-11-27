@@ -5,6 +5,7 @@ import { AdaptiveGrassPatch } from "./adaptiveGrassPatch.ts";
 import type { EarthParams } from "../../utils/terrain.ts";
 import { GrassImpostorField } from "./grassImpostorField.ts";
 import { WATER_LEVEL } from "../../utils/terrain.ts";
+import { chunkCenter, chunkKey } from "../../utils/terrainHelpers.ts";
 
 interface PatchRecord {
     key: string;
@@ -37,6 +38,7 @@ export class GrassManager {
     private impostorField?: GrassImpostorField;
     private createQueue: Array<{ key: string; cx: number; cz: number; lodIndex: number }>;
     private maxPatchCreatesPerFrame: number;
+    private impostorAnchor?: { x: number; z: number };
 
     constructor(scene: Scene, terrain: TerrainManager, options?: GrassManagerOptions) {
         this.scene = scene;
@@ -57,7 +59,7 @@ export class GrassManager {
         for (const record of this.patches.values()) {
             record.patch.update(timeSeconds);
         }
-        this.impostorField?.update(playerPosition, cameraPosition);
+        this.updateImpostors(playerPosition, cameraPosition);
     }
 
     setTerrain(terrain: TerrainManager) {
@@ -79,6 +81,7 @@ export class GrassManager {
         this.impostorField?.dispose();
         this.impostorField = undefined;
         this.createQueue.length = 0;
+        this.impostorAnchor = undefined;
     }
 
     private ensurePatches(position: Vector3) {
@@ -99,15 +102,14 @@ export class GrassManager {
                 if (!this.cellIntersectsCircle(cx, cz, position.x, position.z, this.patchRadius)) {
                     continue;
                 }
-                const cellCenterX = cx * this.chunkSize + this.chunkSize * 0.5;
-                const cellCenterZ = cz * this.chunkSize + this.chunkSize * 0.5;
+                const cellCenter = chunkCenter(cx, cz, this.chunkSize);
                 // Skip patches whose centers are underwater (prevents watery rings at low LOD)
-                const centerHeight = this.heightSampler(cellCenterX, cellCenterZ);
+                const centerHeight = this.heightSampler(cellCenter.x, cellCenter.z);
                 if (centerHeight <= WATER_LEVEL + 2) {
                     continue;
                 }
-                const dist = Math.hypot(cellCenterX - position.x, cellCenterZ - position.z);
-                const key = this.chunkKey(cx, cz);
+                const dist = Math.hypot(cellCenter.x - position.x, cellCenter.z - position.z);
+                const key = chunkKey(cx, cz);
                 const lodIndex = this.lodIndexForDistance(dist);
                 wanted.set(key, lodIndex);
                 const existing = this.patches.get(key);
@@ -126,7 +128,7 @@ export class GrassManager {
 
         // Always include the player's current chunk if selection is empty (tiny radius edge case)
         if (wanted.size === 0) {
-            const key = this.chunkKey(chunkX, chunkZ);
+            const key = chunkKey(chunkX, chunkZ);
             const lodIndex = 0;
             wanted.set(key, lodIndex);
             toCreate.push({ key, cx: chunkX, cz: chunkZ, lodIndex });
@@ -144,12 +146,21 @@ export class GrassManager {
         });
 
         // Reconcile patches every update based on wanted set (safe, minimal churn)
+        const toRecycle: string[] = [];
         for (const [key, record] of this.patches) {
-            if (!wanted.has(key)) {
-                record.patch.setVisible(false);
-                this.pool.push(record.patch);
-                this.patches.delete(key);
+            const center = chunkCenter(record.chunkX, record.chunkZ, this.chunkSize);
+            const dist = Math.hypot(center.x - position.x, center.z - position.z);
+            const outsideRadius = dist > (this.patchRadius + this.chunkSize * 0.5);
+            if (!wanted.has(key) || outsideRadius) {
+                toRecycle.push(key);
             }
+        }
+        for (const key of toRecycle) {
+            const record = this.patches.get(key);
+            if (!record) continue;
+            record.patch.setVisible(false);
+            this.pool.push(record.patch);
+            this.patches.delete(key);
         }
         for (const entry of toCreate) {
             this.enqueuePatchCreation(entry);
@@ -181,10 +192,9 @@ export class GrassManager {
         }
         patch.setTerrainParams(this.terrainParams);
         // Compute world-space origin for this cell center and place patch by origin, not terrain chunk
-        const originX = chunkX * this.chunkSize + this.chunkSize * 0.5;
-        const originZ = chunkZ * this.chunkSize + this.chunkSize * 0.5;
+        const origin = chunkCenter(chunkX, chunkZ, this.chunkSize);
         patch.setDensity(this.lodFactorByIndex(lodIndex));
-        patch.setOrigin(originX, originZ);
+        patch.setOrigin(origin.x, origin.z);
         return { key, chunkX, chunkZ, ring: lodIndex, patch };
     }
 
@@ -276,10 +286,6 @@ export class GrassManager {
         this.createQueue.length = 0;
     }
 
-    private chunkKey(x: number, z: number) {
-        return `${x}:${z}`;
-    }
-
     // @ts-ignore
     private lodFactor(ring: number) {
         const index = Math.min(ring, this.lodSteps.length - 1);
@@ -326,5 +332,18 @@ export class GrassManager {
                 created++;
             }
         }
+    }
+
+    private updateImpostors(playerPosition: Vector3, cameraPosition: Vector3) {
+        if (!this.impostorField) {
+            return;
+        }
+        const anchor = this.impostorAnchor;
+        const rebuildRadius = Math.max(this.impostorRadius * 0.5, this.patchRadius);
+        if (!anchor || Math.hypot(playerPosition.x - anchor.x, playerPosition.z - anchor.z) >= rebuildRadius) {
+            this.impostorField.markLayoutDirty();
+            this.impostorAnchor = { x: playerPosition.x, z: playerPosition.z };
+        }
+        this.impostorField.update(playerPosition, cameraPosition);
     }
 }

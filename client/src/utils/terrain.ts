@@ -1,4 +1,4 @@
-import {BufferGeometry, Vector3} from 'three';
+import {BufferGeometry} from 'three';
 import {fbm2D, Perlin2D, ridged2D, smoothRidgedFbm2D} from './noise';
 
 export const WORLD_MIN_HEIGHT = -35;
@@ -327,24 +327,6 @@ export class EarthTerrain {
   }
 }
 
-export const applyProceduralHeightsToGeometry = (
-  geom: BufferGeometry,
-  worldOffset: Vector3,
-  sampler: (x: number, z: number) => number
-) => {
-  const pos = geom.attributes.position.array as Float32Array;
-  for (let i = 0; i < pos.length; i += 3) {
-    // Local horizontal axes for PlaneGeometry before rotation are X (pos[i]) and Y (pos[i+1]).
-    // Mesh is rotated -PI/2 around X to lie flat; height is stored in Z component (pos[i+2]).
-    const wx = pos[i] + worldOffset.x;      // world X including offset
-    const wz = pos[i + 1] + worldOffset.z;  // world Z corresponds to local Y before rotation
-    const wy = sampler(wx, wz);
-    pos[i + 2] = wy; // write height into Z component (before rotation), which becomes world Y after rotation
-  }
-  geom.attributes.position.needsUpdate = true;
-  geom.computeVertexNormals();
-  geom.computeBoundingBox();
-};
 
 export const applyProceduralHeightsWorld = (
   geom: BufferGeometry,

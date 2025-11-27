@@ -412,6 +412,11 @@ export class GrassImpostorField {
         return { diffuse: diffuseTexture, alpha: alphaTexture };
     }
 
+    // Expose a safe way to force the next update to rebuild the impostor layout (e.g., after large teleports).
+    markLayoutDirty() {
+        this.resetLayout();
+    }
+
     private calculateMaxInstances() {
         // Approximate number of chunk cells in the circular annulus
         const cellArea = this.chunkSize * this.chunkSize;
