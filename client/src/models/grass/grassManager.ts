@@ -22,7 +22,6 @@ export class GrassManager {
     private maxPatches!: number;
     private readonly overrides: GrassManagerOptions;
     private readonly patches: Map<string, PatchRecord>;
-    private readonly pool: AdaptiveGrassPatch[];
     private chunkSize!: number;
     private heightSampler!: (x: number, z: number) => number;
     private instancesPerPatch!: number;
@@ -45,7 +44,6 @@ export class GrassManager {
         this.terrain = terrain;
         this.overrides = options || {};
         this.patches = new Map();
-        this.pool = [];
         this.createQueue = [];
         this.maxPatchCreatesPerFrame = Math.max(1, this.overrides.maxPatchCreatesPerFrame ?? 2);
         this.configureFromTerrain();
@@ -65,8 +63,6 @@ export class GrassManager {
     setTerrain(terrain: TerrainManager) {
         this.terrain = terrain;
         this.disposeAllPatches();
-        this.pool.forEach(patch => patch.dispose());
-        this.pool.length = 0;
         this.impostorField?.dispose();
         this.impostorField = undefined;
         this.lastChunk = undefined;
@@ -76,8 +72,6 @@ export class GrassManager {
 
     dispose() {
         this.disposeAllPatches();
-        this.pool.forEach(patch => patch.dispose());
-        this.pool.length = 0;
         this.impostorField?.dispose();
         this.impostorField = undefined;
         this.createQueue.length = 0;
@@ -145,26 +139,11 @@ export class GrassManager {
             return true;
         });
 
-        // Reconcile patches every update based on wanted set (safe, minimal churn)
-        const toRecycle: string[] = [];
-        for (const [key, record] of this.patches) {
-            const center = chunkCenter(record.chunkX, record.chunkZ, this.chunkSize);
-            const dist = Math.hypot(center.x - position.x, center.z - position.z);
-            const outsideRadius = dist > (this.patchRadius + this.chunkSize * 0.5);
-            if (!wanted.has(key) || outsideRadius) {
-                toRecycle.push(key);
-            }
-        }
-        for (const key of toRecycle) {
-            const record = this.patches.get(key);
-            if (!record) continue;
-            record.patch.setVisible(false);
-            this.pool.push(record.patch);
-            this.patches.delete(key);
-        }
         for (const entry of toCreate) {
             this.enqueuePatchCreation(entry);
         }
+        // Sort creation queue so that closest (lowest lodIndex) grass patches are created first
+        this.createQueue.sort((a, b) => a.lodIndex - b.lodIndex);
         this.processPatchQueue();
 
         // Track last chunk for potential optimization elsewhere
@@ -199,13 +178,6 @@ export class GrassManager {
     }
 
     private obtainPatch(): AdaptiveGrassPatch | null {
-        if (this.pool.length > 0) {
-            const reused = this.pool.pop() || null;
-            if (reused) {
-                reused.setTerrainParams(this.terrainParams);
-            }
-            return reused;
-        }
         if (this.patches.size >= this.maxPatches) {
             console.warn('[GrassManager] Grass patch limit reached.');
             return null;
