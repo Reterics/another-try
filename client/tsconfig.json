@@ -28,7 +28,8 @@
       "@app/*": ["src/*"],
       "@engine/*": ["src/engine/*"],
       "@features/*": ["src/features/*"],
-      "@shared/*": ["src/shared/*"]
+      "@shared/*": ["src/shared/*"],
+      "@game/shared": ["../packages/shared/src/index.ts"]
     }
   }
 }

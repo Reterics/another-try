@@ -11,8 +11,8 @@ import {MinimapController} from "./controllers/MinimapController.ts";
 import Clouds from "./models/cloud";
 import ATSky from "./models/sky.ts";
 import {GrassManager} from "./models/grass/grassManager.ts";
-import EventBus, { Subscription } from '@shared/events/EventBus.ts';
-import { Topics } from '@shared/events/topics.ts';
+import {EventBus, Topics, type Subscription, VideoSettingsPayload} from '@game/shared';
+import { createGameUI, type GameUI } from '@game/ui';
 import { FrameLoop } from '@engine/render/FrameLoop.ts';
 import ResizeSystem from '@engine/render/ResizeSystem.ts';
 import createRenderer from '@engine/render/RendererFactory.ts';
@@ -21,6 +21,41 @@ import createRenderer from '@engine/render/RendererFactory.ts';
 const eventBus = new EventBus();
 FrameLoop.setEventBus(eventBus);
 const busSubscriptions: Subscription[] = [];
+
+// Initialize new UI system
+let gameUI: GameUI | null = null;
+function initializeUI() {
+    // Create UI root container
+    const uiRoot = document.createElement('div');
+    uiRoot.id = 'game-ui-root';
+    uiRoot.style.position = 'fixed';
+    uiRoot.style.inset = '0';
+    uiRoot.style.pointerEvents = 'none';
+    uiRoot.style.zIndex = '1000';
+    document.body.appendChild(uiRoot);
+
+    // Initialize game UI with EventBus
+    gameUI = createGameUI(eventBus, uiRoot);
+
+    // Connect bridge to HUDController
+    const bridge = gameUI.getBridge();
+    bridge.setHUDController(hudController);
+
+    // Pass available maps to UI
+    const maps = hudController.getMaps();
+    bridge.setMaps(maps);
+
+    // Update save game display
+    bridge.updateSaveGameDisplay();
+
+    // Connect HUDController refs to Preact DOM
+    bridge.updateHUDControllerRefs();
+
+    // Override HUDController's UI methods (renderMenu, renderPauseMenu, renderGame)
+    bridge.overrideHUDControllerMethods();
+
+    return gameUI;
+}
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
@@ -62,6 +97,7 @@ let minimapTextureCleanup: (() => void) | null = null;
 type SavedGame = { name: string; coords: { x: number; y: number; z: number }; date: string; mapId?: string };
 let savedGameState: SavedGame | null = null;
 savedGameState = readSavedGame();
+let currentVideoSettings: VideoSettingsPayload | null = null;
 
 function readSavedGame(): SavedGame | null {
     try {
@@ -73,6 +109,53 @@ function readSavedGame(): SavedGame | null {
         }
     } catch (_) { /* ignore */ }
     return null;
+}
+
+function readVideoSettings(): VideoSettingsPayload | null {
+    try {
+        const raw = localStorage.getItem('video:settings');
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+        return {
+            lod: parsed.lod || 'medium',
+            textureQuality: parsed.textureQuality || 'high',
+            postfx: parsed.postfx || 'medium',
+            maxFps: typeof parsed.maxFps === 'number' ? parsed.maxFps : 0,
+        };
+    } catch (_) {
+        return null;
+    }
+}
+
+function applyVideoSettings(settings: Partial<VideoSettingsPayload>) {
+    // FPS cap
+    if (settings.maxFps !== undefined) {
+        FrameLoop.setMaxFPS(settings.maxFps);
+    }
+
+    // Coarse render quality knob via pixel ratio
+    if (renderer) {
+        const base = (window.devicePixelRatio || 1);
+        const ratio =
+            settings.textureQuality === 'low'
+                ? Math.max(1, Math.min(1.0, base * 0.75))
+                : settings.textureQuality === 'medium'
+                    ? Math.max(1, Math.min(1.25, base))
+                    : Math.max(1, Math.min(1.75, base)); // high/default
+        renderer.setPixelRatio(ratio);
+    }
+
+    // Persist for next launch
+    currentVideoSettings = {
+        lod: settings.lod || currentVideoSettings?.lod || 'medium',
+        textureQuality: settings.textureQuality || currentVideoSettings?.textureQuality || 'high',
+        postfx: settings.postfx || currentVideoSettings?.postfx || 'medium',
+        maxFps: typeof settings.maxFps === 'number' ? settings.maxFps : currentVideoSettings?.maxFps || 0,
+    };
+    try {
+        localStorage.setItem('video:settings', JSON.stringify(currentVideoSettings));
+    } catch (_) { /* ignore */ }
 }
 
 function saveGameState() {
@@ -90,7 +173,10 @@ function saveGameState() {
     try {
         localStorage.setItem('saveGame', JSON.stringify(payload));
         savedGameState = payload;
-        hudController.updateSaveAvailability(payload);
+        // Update save game display in new UI
+        if (gameUI) {
+            gameUI.getBridge().updateSaveGameDisplay();
+        }
     } catch (_) { /* ignore */ }
 }
 
@@ -104,6 +190,12 @@ function applySavedPosition() {
     controls.target.copy(heroPlayer.position);
     controls.update();
 }
+
+busSubscriptions.push(
+    eventBus.subscribe(Topics.UI.SettingsApplied, ({ settings }) => {
+        applyVideoSettings(settings || {});
+    })
+);
 
 busSubscriptions.push(
     eventBus.subscribe(Topics.Creator.PointerClicked, ({ mode }) => {
@@ -123,14 +215,14 @@ busSubscriptions.push(
 
 busSubscriptions.push(
     eventBus.subscribe(Topics.UI.HUD.MapSelected, async ({ map: selected }) => {
-        hudController.openDialog('Loading', 'Create Map...');
+        eventBus.publish(Topics.UI.Dialog, { visible: true, title: 'Loading', body: 'Preparing scene...' });
+
         if (!map) {
-            map = await TerrainManager.CreateMap(selected, scene, controls, creatorController);
+            map = await TerrainManager.CreateMap(selected, scene, controls, creatorController, eventBus);
             map.initPlayerEvents();
         } else {
             await map.updateScene(selected);
         }
-        hudController.openDialog('Loading', 'Add to scene');
         await map.addToScene();
 
         if (!grassManager) {
@@ -179,7 +271,9 @@ busSubscriptions.push(
             minimap.setTexture(texture || selected.texture || '');
         });
 
-        hudController.closeDialog();
+        // Notify new UI system that game is now playing (shows HUD, hides menu)
+        eventBus.publish(Topics.Game.StateChanged, { state: 'playing' });
+        eventBus.publish(Topics.UI.Dialog, { visible: false });
     })
 );
 
@@ -187,9 +281,11 @@ busSubscriptions.push(
 init();
 
 async function init() {
+    // Initialize new Preact-based UI system
+    initializeUI();
+
     hudController.renderMenu();
     savedGameState = readSavedGame();
-    hudController.updateSaveAvailability(savedGameState || undefined);
 
     camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 2000 );
     scene = new THREE.Scene();
@@ -228,7 +324,7 @@ async function init() {
          isChatActive = hudController.isChatActive();
          if(isChatActive) {
             if(event.key == "Enter") {
-                const text = hudController.getMessage(true);
+                const text = hudController.getMessage();
                 if (text) {
                     if (!serverManager.isActive()) {
                         hudController.bufferMessage(text);
@@ -265,6 +361,12 @@ async function init() {
     const resizer = new ResizeSystem({ renderer, camera, eventBus });
     resizer.start();
 
+    // Apply persisted video settings now that renderer exists
+    const storedVideo = readVideoSettings();
+    if (storedVideo) {
+        applyVideoSettings(storedVideo);
+    }
+
     const sky = new ATSky(scene);
     sky.addToScene();
     clouds = new Clouds(scene);
@@ -272,7 +374,6 @@ async function init() {
     creatorController = new CreatorController(scene, hudController, hero, controls, eventBus);
     await creatorController.updateShadowObject();
     serverManager = new ServerManager(scene, hudController, eventBus);
-    hudController.renderMaps();
 
     // Initialize HUD with persisted player name and default health
     try {
@@ -281,25 +382,24 @@ async function init() {
     } catch (e) { /* ignore */ }
     hudController.setHealth(100, 100);
 
+    // Publish initial state to new UI system
+    eventBus.publish(Topics.Player.HealthChanged, {
+        current: 100,
+        max: 100,
+        regenRate: 2.5
+    });
+    eventBus.publish(Topics.Player.StaminaChanged, {
+        current: 100,
+        max: 100,
+        regenRate: 5.0
+    });
+
     busSubscriptions.push(
         eventBus.subscribe(Topics.Server.Connected, async () => {
-            const maps = await serverManager.get('maps');
-            if (maps && Array.isArray(maps)) {
-                const filteredMaps = hudController.getMaps().filter(map=>map.id === 'fallback');
-                maps.forEach(map => {
-                    if(map.id !== 'fallback'){
-                        filteredMaps.push(map)
-                    }
-                });
-
-                hudController.setMaps(filteredMaps);
-                hudController.renderMaps();
-            }
             const assets = await serverManager.get('assets');
             if (Array.isArray(assets)) {
                 creatorController.updateAssets(assets);
             }
-
         })
     );
     busSubscriptions.push(

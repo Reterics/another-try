@@ -8,8 +8,7 @@ import {HUDController} from "./HUDController.ts";
 import {Hero} from "../models/hero.ts";
 import {AssetObject} from "../../../types/assets";
 import {MouseEventLike, ShadowType} from "../types/controller.ts";
-import EventBus from "@shared/events/EventBus.ts";
-import { Topics } from "@shared/events/topics.ts";
+import { EventBus, Topics } from "@game/shared";
 import type { ObjectPositionMessage } from "../../../types/messages.ts";
 
 let prevTime = performance.now();
@@ -195,8 +194,6 @@ export class CreatorController {
                 void this.updateShadowObject();
 
                 break;
-            case 'Escape':
-                this.hud.switchPauseMenu();
         }
     }
 

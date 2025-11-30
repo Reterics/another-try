@@ -22,35 +22,6 @@ html, body {
     color: #6c727f;
 }
 
-/* App loading modal used by HUDController.openDialog */
-.modal {
-    position: fixed;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    min-width: 260px;
-    min-height: 120px;
-    background: rgba(15, 23, 42, 0.92);
-    border: 1px solid rgba(148, 163, 184, 0.28);
-    border-radius: 12px;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-    color: #e5e7eb;
-    display: flex;
-    flex-direction: column;
-}
-
-.modal > .header > .title {
-    margin: 0;
-    padding: 10px 12px;
-    font-size: 14px;
-}
-
-.modal > .body {
-    padding: 12px;
-    font-size: 13px;
-    color: #cbd5e1;
-}
-
 /* Tables (optional generic) */
 table {
     border-collapse: collapse;
@@ -744,4 +715,3 @@ tr:nth-child(even) {
     align-self: end;
     text-align-last: end;
 }
-

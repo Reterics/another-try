@@ -21,6 +21,9 @@ export default defineConfig({
             process: "process/browser",
             stream: "stream-browserify",
             util: "util",
+            // Workspace packages (use source during development for hot reload)
+            "@game/shared": fileURLToPath(new URL("../packages/shared/src/index.ts", import.meta.url)),
+            "@game/ui": fileURLToPath(new URL("../packages/ui/src/index.tsx", import.meta.url)),
             // Project path aliases
             "@app": fileURLToPath(new URL("./src", import.meta.url)),
             "@engine": fileURLToPath(new URL("./src/engine", import.meta.url)),

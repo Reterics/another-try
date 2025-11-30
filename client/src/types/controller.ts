@@ -1,5 +1,5 @@
 import {Box3, Mesh} from "three";
-import type EventBus from "../shared/events/EventBus.ts";
+import type { EventBus } from "@game/shared";
 
 export interface ShadowType extends Mesh {
     refType?: string

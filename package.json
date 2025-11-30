@@ -1,0 +1,23 @@
+{
+  "name": "another-try",
+  "version": "0.0.2",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "client",
+    "server",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:client": "npm run dev --workspace=client",
+    "dev:server": "npm run start --workspace=server",
+    "build:client": "npm run build --workspace=client",
+    "build:server": "npm run build --workspace=server",
+    "build:ui": "npm run build --workspace=@game/ui",
+    "build:shared": "npm run build --workspace=@game/shared",
+    "build": "npm run build:shared && npm run build:ui && npm run build:client && npm run build:server"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

@@ -13,8 +13,7 @@
  */
 
 import * as THREE from 'three';
-import { Topics } from '@shared/events/topics';
-import type EventBus from '@shared/events/EventBus';
+import { Topics, type EventBus } from '@game/shared';
 
 export interface ResizeSystemOptions {
   renderer: THREE.WebGLRenderer;

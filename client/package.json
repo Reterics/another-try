@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@game/shared": "*",
+    "@game/ui": "*",
     "buffer": "^6.0.3",
     "events": "^3.3.0",
     "process": "^0.11.10",

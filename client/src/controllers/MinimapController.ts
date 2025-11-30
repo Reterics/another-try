@@ -19,8 +19,7 @@ import {
 import {createFallbackTexture, prepareMapTexture} from "../features/minimap/MinimapTextureService.ts";
 import {createMinimapCamera, MinimapCamera} from "../features/minimap/MinimapCamera.ts";
 import ResourceTracker from "../engine/assets/ResourceTracker.ts";
-import EventBus, {Subscription} from "@shared/events/EventBus.ts";
-import {Topics} from "@shared/events/topics.ts";
+import { EventBus, Topics, type Subscription } from "@game/shared";
 
 
 export class MinimapController {

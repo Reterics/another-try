@@ -13,8 +13,7 @@
  *   via setEventBus(). Until then, it functions as a standalone loop.
  */
 
-import { Topics } from '@shared/events/topics.ts';
-import type EventBus from '../../shared/events/EventBus';
+import { Topics, type EventBus } from '@game/shared';
 
 export type FrameCallback = (dt: number, elapsed: number) => void;
 export type Unsubscribe = () => void;

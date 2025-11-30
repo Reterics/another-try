@@ -40,6 +40,7 @@ import { environmentWorkerClient } from "../workers/environmentWorkerClient.ts";
 import { Water } from "three/examples/jsm/objects/Water2";
 import {CreatorController} from "../controllers/CreatorController.ts";
 import { buildSplatData, chunkKey } from "../utils/terrainHelpers.ts";
+import { EventBus, Topics } from '@game/shared';
 type TerrainTextureKey = 'sand' | 'grass' | 'dirt' | 'rock' | 'snow';
 
 const TERRAIN_TEXTURE_PATHS: Record<TerrainTextureKey, string> = {
@@ -99,7 +100,7 @@ export class TerrainManager {
     private gaitSwitchHold = 0.18; // seconds the new gait must be stable before switching
     private gaitHoldTimer = 0;
     fwdPressed = false; bkdPressed = false; lftPressed = false; rgtPressed = false;
-    private readonly energyNode: HTMLProgressElement | null;
+    private lastEnergyPublished: number;
     private map: ATMap;
     private chunkEnvironment: TerrainEnvironment;
     private chunkMeshes: Map<string, Mesh>;
@@ -121,7 +122,7 @@ export class TerrainManager {
     private readonly minimapUpdateThreshold = 0.45;
     private minimapTextureListeners = new Set<(payload: { texture?: string; center: { x: number; z: number }; span: number }) => void>();
 
-    constructor(model: ATMap, scene: Scene, controls:OrbitControls, callback: Function, creatorController: CreatorController) {
+    constructor(model: ATMap, scene: Scene, controls:OrbitControls, callback: Function, creatorController: CreatorController, private readonly bus?: EventBus) {
         this.scene = scene;
         this.controls = controls;
         this.creatorController = creatorController;
@@ -143,8 +144,7 @@ export class TerrainManager {
         const spawnX = 413;
         const spawnZ = 296;
         const spawnY = this.earthTerrain.sampleHeight(spawnX, spawnZ) + 10;
-
-        this.energyNode = document.getElementById("HUD-energy") as HTMLProgressElement;
+        this.lastEnergyPublished = this.energy;
 
         this.params = {
             displayCollider: false,
@@ -161,9 +161,9 @@ export class TerrainManager {
         return this;
     }
 
-    static CreateMap(map: ATMap, scene: Scene, controls:OrbitControls, creatorController: CreatorController): Promise<TerrainManager> {
+    static CreateMap(map: ATMap, scene: Scene, controls:OrbitControls, creatorController: CreatorController, bus?: EventBus): Promise<TerrainManager> {
         return new Promise(resolve => {
-            new TerrainManager(map, scene, controls, resolve, creatorController);
+            new TerrainManager(map, scene, controls, resolve, creatorController, bus);
         })
     }
     setSpawnCoordinates (x: number, y: number, z: number, options?: { recenter?: boolean }) {
@@ -913,10 +913,14 @@ diffuseColor = vec4(blended, 1.0);
                 this.energy = this.energyMax;
             }
 
-            if (this.energyNode) {
-                this.energyNode.innerHTML = Math.round(this.energy).toString();
-                this.energyNode.value = this.energy;
-            }
+            // Publish stamina updates to UI via EventBus (decouples from DOM)
+            const regenRate = (this.energy - this.lastEnergyPublished) / Math.max(delta, 1e-3);
+            this.lastEnergyPublished = this.energy;
+            this.bus?.publish(Topics.Player.StaminaChanged, {
+                current: this.energy,
+                max: this.energyMax,
+                regenRate,
+            });
 
             if ( this.playerIsOnGround ) {
                 velocity.y = delta * this.params.gravity;

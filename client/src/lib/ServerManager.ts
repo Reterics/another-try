@@ -6,8 +6,7 @@ import {ObjectPositionMessage, PositionMessage} from "../../../types/messages.ts
 import {HUDController} from "../controllers/HUDController.ts";
 import {Sphere} from "../models/sphere.ts";
 import {serverURL} from "../utils/model.ts";
-import EventBus from "@shared/events/EventBus.ts";
-import { Topics } from "@shared/events/topics.ts";
+import { EventBus, Topics } from "@game/shared";
 
 export class ServerManager {
     private socket: Socket|undefined;
