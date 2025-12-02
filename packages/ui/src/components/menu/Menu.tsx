@@ -1,17 +1,15 @@
 /**
  * Main Menu component - matches MenuDom.ts structure exactly
  */
-import { showMainMenu } from '../../store/ui';
+import { showMainMenu } from '../../store';
 import {
     currentMenuSection,
     hasSavedGame,
     savedGameInfo,
     showMenuSection,
-} from '../../store/menu';
-import type { ATMap } from '@game/shared';
+} from '../../store';
 import { NewGameSection } from './NewGameSection';
 import { SettingsSection } from './SettingsSection';
-import { MapSelector } from './MapSelector';
 
 export function Menu() {
     if (!showMainMenu.value) {
@@ -96,10 +94,6 @@ export function Menu() {
                                     action="settings"
                                 />
                             </ul>
-
-
-                            <MapSelector />
-
 
                             <div class="menu-footer">
                                 <span>
