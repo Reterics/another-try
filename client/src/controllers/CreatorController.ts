@@ -10,6 +10,12 @@ import {AssetObject} from "../../../types/assets";
 import {MouseEventLike, ShadowType} from "../types/controller.ts";
 import { EventBus, Topics } from "@game/shared";
 import type { ObjectPositionMessage } from "../../../types/messages.ts";
+import {
+    TPS_CAMERA_DISTANCE,
+    TPS_CAMERA_FALLBACK_DIR,
+    TPS_CAMERA_MAX_DISTANCE,
+    TPS_CAMERA_MIN_DISTANCE
+} from "../config/camera.ts";
 
 let prevTime = performance.now();
 
@@ -82,6 +88,7 @@ export class CreatorController {
             {
                 "type": "model",
                 "path": "assets/models/tree_1.glb",
+                "heightMeters": 4,
                 "name": "Tree 2"
             },
             {
@@ -414,19 +421,24 @@ export class CreatorController {
         const heroObject = this.hero.getObject();
         if (this.view === 'tps') {
             this.controls.maxPolarAngle = Math.PI / 2;
-            this.controls.minDistance = 1;
-            this.controls.maxDistance = 40;
-            const targetDistance = 30;
+            // Allow the target distance without being clamped by min/max.
+            this.controls.minDistance = Math.min(TPS_CAMERA_MIN_DISTANCE, TPS_CAMERA_DISTANCE);
+            this.controls.maxDistance = Math.max(TPS_CAMERA_MAX_DISTANCE, TPS_CAMERA_DISTANCE);
+            const targetDistance = TPS_CAMERA_DISTANCE;
 
             if (!heroObject.visible) {
                 heroObject.visible = true;
             }
 
             const camera = this.controls.object as THREE.PerspectiveCamera;
+            this.controls.target.copy(heroObject.position);
 
-            const dir = new THREE.Vector3()
-                .subVectors(camera.position, this.controls.target)
-                .normalize();
+            const dir = new THREE.Vector3().subVectors(camera.position, this.controls.target);
+            if (dir.lengthSq() < 1e-6) {
+                dir.set(TPS_CAMERA_FALLBACK_DIR[0], TPS_CAMERA_FALLBACK_DIR[1], TPS_CAMERA_FALLBACK_DIR[2]).normalize();
+            } else {
+                dir.normalize();
+            }
 
             camera.position.copy(this.controls.target).addScaledVector(dir, targetDistance);
         } else if (this.view === 'fps') {

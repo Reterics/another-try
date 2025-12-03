@@ -41,6 +41,12 @@ import { Water } from "three/examples/jsm/objects/Water2";
 import {CreatorController} from "../controllers/CreatorController.ts";
 import { buildSplatData, chunkKey } from "../utils/terrainHelpers.ts";
 import { EventBus, Topics } from '@game/shared';
+import {
+    TPS_CAMERA_DISTANCE,
+    TPS_CAMERA_FALLBACK_DIR,
+    TPS_CAMERA_MAX_DISTANCE,
+    TPS_CAMERA_MIN_DISTANCE
+} from "../config/camera.ts";
 type TerrainTextureKey = 'sand' | 'grass' | 'dirt' | 'rock' | 'snow';
 
 const TERRAIN_TEXTURE_PATHS: Record<TerrainTextureKey, string> = {
@@ -60,7 +66,6 @@ let tempSegment = new THREE.Line3();
 const upVector = new THREE.Vector3( 0, 1, 0 );
 //const direction = new THREE.Vector3();
 const velocity = new THREE.Vector3();
-
 
 interface toMergeType {
     [key: number]: (Mesh|Light|undefined)[]
@@ -150,7 +155,8 @@ export class TerrainManager {
             displayCollider: false,
             visualizeDepth: 10,
             gravity: - 30,
-            playerSpeed: 10,
+            // 1 unit = 1 meter; 1.5 m/s is an average walking speed, sprint doubles to ~3 m/s
+            playerSpeed: 1.5,
             physicsSteps: 5,  //5
             spawnCoordinates: [spawnX, spawnY, spawnZ] // X Y Z
         };
@@ -817,12 +823,22 @@ diffuseColor = vec4(blended, 1.0);
             safeY,
             spawnZ);
 
-        this.controls.object
-            .position
-            .sub( player.position )
-            .normalize()
-            .multiplyScalar( 100)
-            .add( player.position );
+        // Ensure orbit constraints won't immediately clamp the desired distance
+        this.controls.minDistance = Math.min(TPS_CAMERA_MIN_DISTANCE, TPS_CAMERA_DISTANCE);
+        this.controls.maxDistance = Math.max(TPS_CAMERA_MAX_DISTANCE, TPS_CAMERA_DISTANCE);
+
+        this.controls.target.copy(player.position);
+
+        // If camera is co-located with the target, pick a default third-person offset.
+        const cam = this.controls.object;
+        const target = player.position;
+        const dir = cam.position.clone().sub(target);
+        if (dir.lengthSq() < 1e-6) {
+            dir.set(TPS_CAMERA_FALLBACK_DIR[0], TPS_CAMERA_FALLBACK_DIR[1], TPS_CAMERA_FALLBACK_DIR[2]).normalize();
+        } else {
+            dir.normalize();
+        }
+        cam.position.copy(target).addScaledVector(dir, TPS_CAMERA_DISTANCE);
 
         velocity.set(0,0,0);
 

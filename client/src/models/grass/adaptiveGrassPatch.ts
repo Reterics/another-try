@@ -16,9 +16,10 @@ import type { EarthParams } from "../../utils/terrain.ts";
 import { environmentWorkerClient } from "../../workers/environmentWorkerClient.ts";
 import vertexShader from "./shaders/field.vert?raw";
 import fragmentShader from "./shaders/field.frag?raw";
+import { GRASS_HEIGHT_RANGE } from "./grassConfig.ts";
 
 const createCurvedBladeGeometry = () => {
-    const bladeWidth = 0.12;
+    const bladeWidth = 0.07;
     const bladeHeight = 1;
     const heightSegments = 6;
     const geometry = new PlaneGeometry(bladeWidth, bladeHeight, 1, heightSegments);
@@ -123,7 +124,7 @@ export class AdaptiveGrassPatch {
                 time: { value: 0 },
                 patchOrigin: { value: new Vector2() },
                 patchSize: { value: this.patchSize },
-                bladeHeightRange: { value: new Vector2(0.9, 2.7) },
+                bladeHeightRange: { value: new Vector2(GRASS_HEIGHT_RANGE.min, GRASS_HEIGHT_RANGE.max) },
                 windIntensity: { value: options.windIntensity ?? 0.2 },
                 windDirection: { value: new Vector2(0.75, 0.5) },
                 gustFrequency: { value: 0.35 },
@@ -144,7 +145,10 @@ export class AdaptiveGrassPatch {
         this.mesh = new Mesh(this.geometry, this.material);
         this.mesh.frustumCulled = false;
         const bounding = new Box3();
-        bounding.setFromCenterAndSize(new Vector3(0, 0, 0), new Vector3(this.patchSize, 50, this.patchSize));
+        bounding.setFromCenterAndSize(
+            new Vector3(0, 0, 0),
+            new Vector3(this.patchSize, GRASS_HEIGHT_RANGE.max * 2, this.patchSize)
+        );
         this.geometry.boundingBox = bounding;
         this.scene.add(this.mesh);
     }

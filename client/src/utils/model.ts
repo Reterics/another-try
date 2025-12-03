@@ -24,7 +24,7 @@ import {FBXLoader} from "three/examples/jsm/loaders/FBXLoader";
 import {OBJLoader} from "three/examples/jsm/loaders/OBJLoader";
 import {ColladaLoader} from "three/examples/jsm/loaders/ColladaLoader";
 import {STLLoader} from "three/examples/jsm/loaders/STLLoader";
-import {AssetObject, Circle, Line, PlaneConfig, Rectangle, WaterConfig} from "../../../types/assets.ts";
+import {Asset, AssetObject, Circle, Line, PlaneConfig, Rectangle, WaterConfig} from "../../../types/assets.ts";
 import {ShadowType} from "../types/controller.ts";
 import {MeshOrGroup, RenderedPlane, RenderedWater} from "../types/three.ts";
 import {Water} from "three/examples/jsm/objects/Water2";
@@ -86,6 +86,31 @@ export const loadModel = {
             return object as GLTF;
         }
         return null;
+    },
+    /**
+     * Load a GLB/GLTF and uniformly scale it so its world-space height matches heightMeters.
+     * Use when you want real-world sizing (1 unit = 1 meter) for characters, trees, props, etc.
+     */
+    gltfAtHeight: async (file: File|string, heightMeters: number, assetId?:string): Promise<GLTF | null> => {
+        const gltf = await loadModel.gltf(file, assetId);
+        if (!gltf || !heightMeters || !isFinite(heightMeters) || heightMeters <= 0) {
+            return gltf;
+        }
+
+        // Measure current height
+        gltf.scene.updateMatrixWorld(true);
+        const bounds = new THREE.Box3().setFromObject(gltf.scene);
+        const size = new THREE.Vector3();
+        bounds.getSize(size);
+        const currentHeight = size.y;
+        if (!currentHeight || !isFinite(currentHeight) || currentHeight <= 0) {
+            return gltf;
+        }
+
+        const scale = heightMeters / currentHeight;
+        gltf.scene.scale.multiplyScalar(scale);
+        gltf.scene.updateMatrixWorld(true);
+        return gltf;
     },
     fbx: async (file: File|string, assetId?:string): Promise<Group<Object3DEventMap>|null> => {
         const object = await genericLoader(file, new FBXLoader(), assetId);
@@ -251,8 +276,11 @@ export const getMeshForItem = async (item: AssetObject): Promise<Mesh|Group|null
             if(!item.path) {
                 return null;
             }
+            const targetHeight = (item as Asset).heightMeters;
             if (item.path.endsWith(".gltf") || item.path.endsWith(".glb")) {
-                const group = await loadModel.gltf(item.path, item.id);
+                const group = targetHeight
+                    ? await loadModel.gltfAtHeight(item.path, targetHeight, item.id)
+                    : await loadModel.gltf(item.path, item.id);
                 if (group) {
                     const model = group.scene;
                     const rect = item as Rectangle;

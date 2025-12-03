@@ -16,6 +16,12 @@ import { createGameUI, type GameUI } from '@game/ui';
 import { FrameLoop } from '@engine/render/FrameLoop.ts';
 import ResizeSystem from '@engine/render/ResizeSystem.ts';
 import createRenderer from '@engine/render/RendererFactory.ts';
+import {
+    TPS_CAMERA_DISTANCE,
+    TPS_CAMERA_FALLBACK_DIR,
+    TPS_CAMERA_MAX_DISTANCE,
+    TPS_CAMERA_MIN_DISTANCE
+} from "./config/camera.ts";
 
 // Typed EventBus (non-destructive wiring): instantiated here and passed to FrameLoop only.
 const eventBus = new EventBus();
@@ -84,8 +90,8 @@ let serverManager: ServerManager;
 let clouds: Clouds;
 // Grass configuration (world units; 1 unit = 1 meter)
 const GRASS_PATCH_INSTANCES = 10000;
-const GRASS_PATCH_SIZE = 12;
-const GRASS_PATCH_RADIUS = 128; // circle radius for real blades (units)
+const GRASS_PATCH_SIZE = 6;
+const GRASS_PATCH_RADIUS = 64; // circle radius for real blades (units)
 const GRASS_IMPOSTOR_RADIUS = 300 + GRASS_PATCH_SIZE + GRASS_PATCH_RADIUS; // outer ring radius for impostors (units)
 const GRASS_IMPOSTOR_DENSITY = 3; // impostors per chunk cell in the annulus
 const GRASS_LOD_STEPS = [ 0.5, 0.45, 0.1];
@@ -180,6 +186,21 @@ function saveGameState() {
     } catch (_) { /* ignore */ }
 }
 
+function snapCameraToPlayer() {
+    if (!heroPlayer || !controls || !camera) return;
+    controls.minDistance = Math.min(TPS_CAMERA_MIN_DISTANCE, TPS_CAMERA_DISTANCE);
+    controls.maxDistance = Math.max(TPS_CAMERA_MAX_DISTANCE, TPS_CAMERA_DISTANCE);
+    controls.target.copy(heroPlayer.position);
+    const dir = camera.position.clone().sub(controls.target);
+    if (dir.lengthSq() < 1e-6) {
+        dir.set(TPS_CAMERA_FALLBACK_DIR[0], TPS_CAMERA_FALLBACK_DIR[1], TPS_CAMERA_FALLBACK_DIR[2]).normalize();
+    } else {
+        dir.normalize();
+    }
+    camera.position.copy(controls.target).addScaledVector(dir, TPS_CAMERA_DISTANCE);
+    controls.update();
+}
+
 function applySavedPosition() {
     if (!savedGameState || !heroPlayer || !controls || !map) return;
     const currentMapId = map.getMap()?.id;
@@ -188,7 +209,7 @@ function applySavedPosition() {
     }
     heroPlayer.position.set(savedGameState.coords.x, savedGameState.coords.y, savedGameState.coords.z);
     controls.target.copy(heroPlayer.position);
-    controls.update();
+    snapCameraToPlayer();
 }
 
 busSubscriptions.push(
@@ -249,6 +270,7 @@ busSubscriptions.push(
             animationRunning = true;
         }
         map.respawn(heroPlayer);
+        snapCameraToPlayer();
         applySavedPosition();
         if (minimapTextureCleanup) {
             minimapTextureCleanup();
@@ -294,6 +316,9 @@ async function init() {
     heroPlayer = hero.getObject();
     //heroPlayer.position.copy(camera.position);
     hero.addToScene();
+
+    // Snap camera once right after creation to desired TPS distance
+    snapCameraToPlayer();
 
     const { renderer: createdRenderer, canvas } = createRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer = createdRenderer;

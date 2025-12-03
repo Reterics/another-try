@@ -5,6 +5,7 @@ import { CapsuleInfo } from "../types/main";
 import {loadModel} from "../utils/model.ts";
 import {ObjectDimensions} from "../../../types/assets.ts";
 
+const DESIRED_PLAYER_HEIGHT_METERS = 1.7;
 
 export class Hero {
     private root: Object3D;
@@ -73,8 +74,8 @@ export class Hero {
         return this;
     }
 
-    async reloadFromGltf(file = './assets/characters/player_1.glb') {
-        const group = await loadModel.gltf(file);
+    async reloadFromGltf(file = './assets/characters/player_1.glb', heightMeters = DESIRED_PLAYER_HEIGHT_METERS) {
+        const group = await loadModel.gltfAtHeight(file, heightMeters);
 
         if (group) {
             this.mixer.stopAllAction();
@@ -95,7 +96,7 @@ export class Hero {
     }
 
     static async Create(scene: Scene) {
-        const group = await loadModel.gltf('./assets/characters/player_1.glb');
+        const group = await loadModel.gltfAtHeight('./assets/characters/player_1.glb', DESIRED_PLAYER_HEIGHT_METERS);
         let player = null;
         if (group) {
             player = group.scene;
@@ -111,7 +112,6 @@ export class Hero {
                 }
             });
             player.children[0].position.set(0,-1.5,0);
-            player.children[0].scale.set(0.05,0.05,0.05);
         }
 
         return new Hero(scene, player);

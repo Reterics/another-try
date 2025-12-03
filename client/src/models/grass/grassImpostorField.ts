@@ -14,6 +14,9 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import type { EarthParams } from "../../utils/terrain.ts";
 import { environmentWorkerClient } from "../../workers/environmentWorkerClient.ts";
 import { sampleDefaultSplat, WATER_LEVEL } from "../../utils/terrain.ts";
+import {
+    GRASS_BILLBOARD_BASE_SIZE,
+} from "./grassConfig.ts";
 
 interface GrassImpostorFieldOptions {
     scene: Scene;
@@ -318,8 +321,10 @@ export class GrassImpostorField {
             return;
         }
         const planes = [];
-        const basePlane = new PlaneGeometry(18, 14, 1, 1);
-        basePlane.translate(0, 7, 0);
+        const baseWidth = GRASS_BILLBOARD_BASE_SIZE.width;
+        const baseHeight = GRASS_BILLBOARD_BASE_SIZE.height;
+        const basePlane = new PlaneGeometry(baseWidth, baseHeight, 1, 1);
+        basePlane.translate(0, baseHeight / 2, 0);
         planes.push(basePlane);
         const second = basePlane.clone();
         second.rotateY(Math.PI / 3);

@@ -37,8 +37,11 @@ void main() {
     float terrainY = terrainHeight;
 
     float heightFactor = mix(bladeHeightRange.x, bladeHeightRange.y, randomPair.x);
+    float heightNorm = clamp(heightFactor / bladeHeightRange.y, 0.0, 1.0);
+    float widthFactor = mix(0.35, 1.0, heightNorm); // shorter blades are slimmer
     vec3 blade = position;
     blade.y *= heightFactor;
+    blade.x *= widthFactor;
 
     float heightT = clamp(blade.y / bladeHeightRange.y, 0.0, 1.0);
     vec2 windDir = normalize(vec2(windDirection.x, windDirection.y));

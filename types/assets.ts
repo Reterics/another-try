@@ -8,6 +8,11 @@ export interface Asset {
     x?: number,
     y?: number,
     z?: number,
+    /**
+     * Optional target height in meters for 3D models (1 unit = 1 meter).
+     * If provided for a model asset, the loader will uniformly scale the scene to match this height.
+     */
+    heightMeters?: number,
     color?: string,
     selected?:boolean,
     texture?:string,
