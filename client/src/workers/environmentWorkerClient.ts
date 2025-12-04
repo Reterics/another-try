@@ -1,6 +1,6 @@
 import type { EarthParams } from "../utils/terrain.ts";
 
-type WorkerRequestType = 'grass-heights' | 'chunk-data' | 'impostor-heights';
+type WorkerRequestType = 'grass-heights' | 'grass-instances' | 'chunk-data' | 'impostor-heights';
 
 interface WorkerRequestPayloads {
     'grass-heights': {
@@ -8,6 +8,13 @@ interface WorkerRequestPayloads {
         patchSize: number;
         origin: { x: number; z: number };
         terrainParams: EarthParams;
+    };
+    'grass-instances': {
+        instanceCount: number;
+        patchSize: number;
+        origin: { x: number; z: number };
+        terrainParams: EarthParams;
+        seed: number;
     };
     'chunk-data': {
         positions: Float32Array;
@@ -28,6 +35,11 @@ type WorkerResponsePayloads = {
     'grass-heights': {
         heights: Float32Array;
         seeds: Float32Array;
+    };
+    'grass-instances': {
+        positions: Float32Array;
+        instanceData: Float32Array;
+        count: number;
     };
     'chunk-data': {
         heights: Float32Array;
@@ -93,6 +105,14 @@ class EnvironmentWorkerClient {
 
     computeGrassHeights(params: WorkerRequestPayloads['grass-heights']) {
         return this.postMessage('grass-heights', params);
+    }
+
+    /**
+     * Compute grass instance data for the new foliage system
+     * Returns positions and per-instance data (rotation, scale, variant, random)
+     */
+    computeGrassInstances(params: WorkerRequestPayloads['grass-instances']) {
+        return this.postMessage('grass-instances', params);
     }
 
     computeChunkData(params: WorkerRequestPayloads['chunk-data']) {

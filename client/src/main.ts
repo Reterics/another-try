@@ -10,7 +10,7 @@ import {ServerManager} from "./lib/ServerManager.ts";
 import {MinimapController} from "./controllers/MinimapController.ts";
 import Clouds from "./models/cloud";
 import ATSky from "./models/sky.ts";
-import {GrassManager} from "./models/grass/grassManager.ts";
+import { GrassSystem } from "./foliage";
 import {EventBus, Topics, type Subscription, VideoSettingsPayload} from '@game/shared';
 import { createGameUI, type GameUI } from '@game/ui';
 import { FrameLoop } from '@engine/render/FrameLoop.ts';
@@ -83,20 +83,23 @@ let camera: PerspectiveCamera;
 let renderer: WebGLRenderer;
 let scene: Scene;
 let hero: Hero;
-let grassManager: GrassManager | null = null;
+let grassSystem: GrassSystem | null = null;
 let controls: OrbitControls;
 let creatorController: CreatorController;
 let serverManager: ServerManager;
 let clouds: Clouds;
 // Grass configuration (world units; 1 unit = 1 meter)
-const GRASS_PATCH_INSTANCES = 10000;
-const GRASS_PATCH_SIZE = 6;
-const GRASS_PATCH_RADIUS = 64; // circle radius for real blades (units)
-const GRASS_IMPOSTOR_RADIUS = 300 + GRASS_PATCH_SIZE + GRASS_PATCH_RADIUS; // outer ring radius for impostors (units)
-const GRASS_IMPOSTOR_DENSITY = 3; // impostors per chunk cell in the annulus
-const GRASS_LOD_STEPS = [ 0.5, 0.45, 0.1];
-const GRASS_LOD_RADII = [1, 64, GRASS_PATCH_RADIUS]; // must match GRASS_LOD_STEPS length; last equals GRASS_PATCH_RADIUS
-const GRASS_WIND_INTENSITY = 0.35;
+// New foliage system configuration
+const GRASS_CONFIG = {
+    patchSize: 16,           // Size of each grass patch in meters
+    densityPerSqM: 400,      // Blades per square meter (200-600 recommended)
+    maxDistance: 60,         // Maximum render distance in meters
+    windStrength: 0.3,       // Wind intensity (0-1)
+    windSpeed: 1.0,          // Wind animation speed
+    windDirection: [0.7, 0.7] as [number, number], // Normalized XZ direction
+    lodDistances: [20, 40, 60] as [number, number, number], // LOD tier boundaries
+    enabled: true,
+};
 
 let minimap: MinimapController;
 let minimapTextureCleanup: (() => void) | null = null;
@@ -246,19 +249,26 @@ busSubscriptions.push(
         }
         await map.addToScene();
 
-        if (!grassManager) {
-            grassManager = new GrassManager(scene, map, {
-                patchRadius: GRASS_PATCH_RADIUS,
-                impostorRadius: GRASS_IMPOSTOR_RADIUS,
-                lodRadii: GRASS_LOD_RADII,
-                instancesPerPatch: GRASS_PATCH_INSTANCES,
-                lodSteps: GRASS_LOD_STEPS,
-                windIntensity: GRASS_WIND_INTENSITY,
-                impostorDensity: GRASS_IMPOSTOR_DENSITY,
-                patchSize: GRASS_PATCH_SIZE,
+        if (!grassSystem) {
+            // Initialize new foliage system
+            grassSystem = new GrassSystem({
+                patchSize: GRASS_CONFIG.patchSize,
+                densityPerSqM: GRASS_CONFIG.densityPerSqM,
+                maxDistance: GRASS_CONFIG.maxDistance,
+                windStrength: GRASS_CONFIG.windStrength,
+                windSpeed: GRASS_CONFIG.windSpeed,
+                windDirection: GRASS_CONFIG.windDirection,
+                lodDistances: GRASS_CONFIG.lodDistances,
+                seed: map.getTerrainParams().seed ?? 12345,
+                enabled: GRASS_CONFIG.enabled,
             });
+            grassSystem.setTerrainSampler(map.getHeightSampler());
+            grassSystem.setTerrainParams(map.getTerrainParams());
+            grassSystem.attach(scene);
         } else {
-            grassManager.setTerrain(map);
+            // Update terrain reference when map changes
+            grassSystem.setTerrainSampler(map.getHeightSampler());
+            grassSystem.setTerrainParams(map.getTerrainParams());
         }
 
         await map.preloadAroundSpawn();
@@ -502,7 +512,7 @@ function animate(dt: number, elapsed: number) {
 
         hero.update(delta);
         serverManager.update(delta);
-        grassManager?.update(heroPlayer.position, camera.position, elapsedSeconds);
+        grassSystem?.update(delta, heroPlayer.position, camera.position);
     }
 
     if (heroPlayer) {
