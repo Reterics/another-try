@@ -36,6 +36,7 @@ import {
 } from './types';
 import { environmentWorkerClient } from '../workers/environmentWorkerClient';
 import type { EarthParams } from '../utils/terrain';
+import { hash2 } from '../utils/terrainHelpers';
 
 /**
  * Patch record for internal tracking
@@ -746,52 +747,87 @@ export class GrassSystem {
         const instanceData: number[] = [];
         const seed = this.params.seed;
 
-        // Simple hash function for deterministic placement
-        const hash = (x: number, z: number, s: number = 0): number => {
-            const h = Math.sin(x * 127.1 + z * 311.7 + s * 17.23) * 43758.5453;
-            return h - Math.floor(h);
-        };
+        const clusterSizeRange = { min: 6, max: 18 };
+        const radiusMin = GRASS_CONSTANTS.CLUMP_RADIUS_MIN;
+        const radiusMax = GRASS_CONSTANTS.CLUMP_RADIUS_MAX * 1.35;
+        const maxInstances = Math.max(
+            0,
+            Math.min(Math.floor(targetCount * 1.05), GRASS_CONSTANTS.MAX_INSTANCES_PER_PATCH)
+        );
+        const averageClusterSize = (clusterSizeRange.min + clusterSizeRange.max) * 0.5;
+        const clusterCount = Math.max(1, Math.ceil(maxInstances / averageClusterSize));
+        const maxClusterAttempts = Math.max(clusterCount, Math.ceil(maxInstances / clusterSizeRange.min));
 
         let count = 0;
-        for (let i = 0; i < targetCount && count < targetCount; i++) {
-            // Deterministic position within patch
-            const sx = hash(i + 1 + originX * 0.031, originZ * 0.017 + seed * 0.001, seed);
-            const sz = hash(i + 7 + originZ * 0.029, originX * 0.013 + seed * 0.002, seed + 13.37);
+        for (let clusterIndex = 0; clusterIndex < maxClusterAttempts && count < maxInstances; clusterIndex++) {
+            const centerNoiseX = hash2(
+                originX * 0.013 + clusterIndex * 19.17,
+                originZ * 0.071 + clusterIndex * 23.71,
+                seed
+            );
+            const centerNoiseZ = hash2(
+                originZ * 0.017 + clusterIndex * 21.37,
+                originX * 0.067 + clusterIndex * 27.19,
+                seed + 7.13
+            );
+            const centerX = originX + (centerNoiseX - 0.5) * patchSize;
+            const centerZ = originZ + (centerNoiseZ - 0.5) * patchSize;
 
-            const localX = (sx - 0.5) * patchSize;
-            const localZ = (sz - 0.5) * patchSize;
-            const worldX = originX + localX;
-            const worldZ = originZ + localZ;
-
-            // Get terrain height if sampler available
-            let height = 0;
-            if (this.terrainSampler) {
-                height = this.terrainSampler(worldX, worldZ);
-                // Skip underwater (assuming water level ~0)
-                if (height <= 0) continue;
+            const clusterSizeNoise = hash2(clusterIndex * 3.11, clusterIndex * 5.19, seed);
+            let bladesInCluster = Math.floor(
+                clusterSizeRange.min + clusterSizeNoise * (clusterSizeRange.max - clusterSizeRange.min + 1)
+            );
+            bladesInCluster = Math.min(bladesInCluster, maxInstances - count);
+            if (bladesInCluster <= 0) {
+                break;
             }
 
-            // Simple density check
-            const densityRand = hash(worldX, worldZ, seed);
-            if (densityRand > 0.8) continue; // 80% base density
+            const radiusNoise = hash2(clusterIndex * 7.13, clusterIndex * 11.17, seed);
+            const clusterRadius = radiusMin + radiusNoise * (radiusMax - radiusMin);
 
-            // Position
-            positions.push(worldX, height, worldZ);
+            for (let i = 0; i < bladesInCluster && count < maxInstances; i++) {
+                const angle = hash2(clusterIndex * 13.37 + i * 0.37, clusterIndex * 17.23 + i * 0.71, seed) * Math.PI * 2;
+                const radiusRand = Math.sqrt(
+                    hash2(clusterIndex * 19.97 + i * 0.53, clusterIndex * 23.11 + i * 0.91, seed)
+                );
+                const anisot = 0.65 + hash2(clusterIndex * 29.71 + i * 0.21, clusterIndex * 31.19 + i * 0.33, seed) * 0.6;
+                const offsetR = radiusRand * clusterRadius;
+                const worldX = centerX + Math.cos(angle) * offsetR * anisot;
+                const worldZ = centerZ + Math.sin(angle) * offsetR / anisot;
 
-            // Instance data: rotation, scale, variant, random
-            const rotation = hash(worldX + 100, worldZ + 100, seed) * Math.PI * 2;
-            const scale = 0.8 + hash(worldX + 200, worldZ + 200, seed) * 0.4;
-            const variant = Math.floor(hash(worldX + 300, worldZ + 300, seed) * 3);
-            const random = hash(worldX + 400, worldZ + 400, seed);
+                let height = 0;
+                if (this.terrainSampler) {
+                    height = this.terrainSampler(worldX, worldZ);
+                    if (height <= 0) {
+                        continue;
+                    }
+                }
 
-            instanceData.push(rotation, scale, variant, random);
-            count++;
+                // Keep near-camera density high while allowing slight thinning noise
+                const densityNoise = 0.8 + hash2(worldX * 0.11, worldZ * 0.13, seed) * 0.2;
+                if (hash2(worldX, worldZ, seed + 17.1) > densityNoise) {
+                    continue;
+                }
+
+                positions.push(worldX, height, worldZ);
+
+                const rotation = hash2(worldX + 100, worldZ + 100, seed) * Math.PI * 2;
+                const scaleRand = hash2(worldX + 200, worldZ + 200, seed);
+                const scale = 0.72 + Math.pow(scaleRand, 0.65) * 0.58;
+                const variantRand = hash2(worldX + 300, worldZ + 300, seed);
+                const variant = variantRand < 0.4 ? 0 : variantRand < 0.8 ? 1 : 2;
+                const random = hash2(worldX + 400, worldZ + 400, seed);
+
+                instanceData.push(rotation, scale, variant, random);
+                count++;
+            }
         }
 
+        const finalCount = Math.min(count, targetCount);
         return {
-            positions: new Float32Array(positions),
-            instanceData: new Float32Array(instanceData),
-            count,
+            positions: new Float32Array(positions.slice(0, finalCount * 3)),
+            instanceData: new Float32Array(instanceData.slice(0, finalCount * 4)),
+            count: finalCount,
         };
     }
 

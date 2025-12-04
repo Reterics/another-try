@@ -7,6 +7,7 @@ import {
     sampleHeightsForPositions,
     toFloat32Array
 } from "../utils/terrainHelpers.ts";
+import { GRASS_CONSTANTS } from "../foliage/types";
 
 type WorkerRequestType = 'grass-heights' | 'grass-instances' | 'chunk-data' | 'impostor-heights';
 
@@ -154,6 +155,30 @@ const handleImpostorHeights = (
     return { heights };
 };
 
+// Cluster distribution tuning
+const CLUSTER_SIZE_RANGE = { min: 6, max: 18 };
+const CLUSTER_OVERSAMPLE = 1.1;
+const CLUSTER_RADIUS_MIN = GRASS_CONSTANTS.CLUMP_RADIUS_MIN;
+const CLUSTER_RADIUS_MAX = GRASS_CONSTANTS.CLUMP_RADIUS_MAX * 1.35;
+
+const computeDensityWeight = (weights: { r: number; g: number; b: number; a: number }) => {
+    const snow = Math.max(0, 1 - (weights.r + weights.g + weights.b + weights.a));
+    const biome = weights.g * 1.0 + weights.b * 0.5;
+    const blockers = (1 - weights.r) * (1 - weights.a) * (1 - snow);
+    const boosted = biome * blockers * 1.35;
+    return Math.min(1, Math.max(0, boosted));
+};
+
+const pickVariant = (weights: { r: number; g: number; b: number; a: number }, variantRand: number) => {
+    if (weights.g > weights.b) {
+        if (variantRand < 0.4) return 0;
+        if (variantRand < 0.8) return 1;
+        return 2;
+    }
+    if (variantRand < 0.7) return 0;
+    return 1;
+};
+
 /**
  * Handle new grass instances request
  * Returns full instance data: positions (x,y,z) and instanceData (rotation, scale, variant, random)
@@ -167,93 +192,109 @@ const handleGrassInstances = (
     const patchSize = payload.patchSize;
     const seedBase = payload.seed ?? payload.terrainParams.seed ?? 0;
 
-    // Max instances capped at 1M for safety
-    const maxInstances = Math.max(0, Math.min(payload.instanceCount, 1_000_000));
+    const requestedCount = Math.max(0, Math.min(payload.instanceCount, GRASS_CONSTANTS.MAX_INSTANCES_PER_PATCH));
+    const maxInstances = Math.max(
+        0,
+        Math.min(
+            Math.floor(requestedCount * CLUSTER_OVERSAMPLE),
+            GRASS_CONSTANTS.MAX_INSTANCES_PER_PATCH,
+            1_000_000
+        )
+    );
 
-    // Temporary buffers
-    const tmpPositions = new Float32Array(maxInstances * 3); // x, y, z
-    const tmpInstanceData = new Float32Array(maxInstances * 4); // rotation, scale, variant, random
+    const tmpPositions = new Float32Array(maxInstances * 3);
+    const tmpInstanceData = new Float32Array(maxInstances * 4);
     let outCount = 0;
 
     const sampler = (x: number, z: number) => terrain.sampleHeight(x, z);
+    const averageClusterSize = (CLUSTER_SIZE_RANGE.min + CLUSTER_SIZE_RANGE.max) * 0.5;
+    const clusterCount = Math.max(1, Math.ceil(maxInstances / averageClusterSize));
+    const maxClusterAttempts = Math.max(clusterCount, Math.ceil(maxInstances / CLUSTER_SIZE_RANGE.min));
 
-    for (let i = 0; i < maxInstances; i++) {
-        // Deterministic position within patch using hash
-        const sx = hash2(i + 1 + originX * 0.031, originZ * 0.017 + seedBase * 0.001, seedBase);
-        const sz = hash2(i + 7 + originZ * 0.029, originX * 0.013 + seedBase * 0.002, seedBase + 13.37);
+    for (let clusterIndex = 0; clusterIndex < maxClusterAttempts && outCount < maxInstances; clusterIndex++) {
+        const centerNoiseX = hash2(
+            originX * 0.013 + clusterIndex * 19.17,
+            originZ * 0.071 + clusterIndex * 23.71,
+            seedBase
+        );
+        const centerNoiseZ = hash2(
+            originZ * 0.017 + clusterIndex * 21.37,
+            originX * 0.067 + clusterIndex * 27.19,
+            seedBase + 7.13
+        );
+        const centerX = originX + (centerNoiseX - 0.5) * patchSize;
+        const centerZ = originZ + (centerNoiseZ - 0.5) * patchSize;
 
-        const localX = (sx - 0.5) * patchSize;
-        const localZ = (sz - 0.5) * patchSize;
-        const wx = originX + localX;
-        const wz = originZ + localZ;
-
-        // Sample terrain height
-        const height = terrain.sampleHeight(wx, wz);
-
-        // Skip underwater
-        if (height <= WATER_LEVEL) continue;
-
-        // Splat-based density calculation
-        // r=sand, g=grass, b=dirt, a=rock; snow = remaining
-        const w = sampleDefaultSplat(sampler, wx, wz, undefined, 6);
-        const snow = Math.max(0, 1 - (w.r + w.g + w.b + w.a));
-
-        // Density: full on grass, half on dirt, none on sand/rock/snow
-        let density = (w.g * 1.0 + w.b * 0.5);
-        density *= (1 - w.r) * (1 - w.a) * (1 - snow);
-
-        if (density <= 0) continue;
-
-        // Deterministic acceptance based on world position
-        const acceptRand = hash2(wx, wz, seedBase);
-        if (acceptRand > density) continue;
-
-        // Calculate per-instance data
-        const rotation = hash2(wx + 100, wz + 100, seedBase) * Math.PI * 2; // 0 to 2π
-        const scale = 0.8 + hash2(wx + 200, wz + 200, seedBase) * 0.4; // 0.8 to 1.2
-        const random = hash2(wx + 400, wz + 400, seedBase); // 0 to 1
-
-        // Variant selection based on biome
-        // Grass-heavy: mix of all (40% short, 40% medium, 20% tall)
-        // Dirt-heavy: mostly short (70% short, 30% medium)
-        let variant: number;
-        const variantRand = hash2(wx + 300, wz + 300, seedBase);
-
-        if (w.g > w.b) {
-            // Grass-dominant: all variants
-            if (variantRand < 0.4) variant = 0;      // short
-            else if (variantRand < 0.8) variant = 1; // medium
-            else variant = 2;                         // tall
-        } else {
-            // Dirt-dominant: mostly short
-            if (variantRand < 0.7) variant = 0;      // short
-            else variant = 1;                         // medium (no tall)
+        const centerWeights = sampleDefaultSplat(sampler, centerX, centerZ, undefined, 6);
+        const centerDensity = computeDensityWeight(centerWeights);
+        if (centerDensity <= 0.05) {
+            continue;
         }
 
-        // Store position (world coordinates)
-        tmpPositions[outCount * 3] = wx;
-        tmpPositions[outCount * 3 + 1] = height;
-        tmpPositions[outCount * 3 + 2] = wz;
+        const clusterSizeNoise = hash2(clusterIndex * 3.11, clusterIndex * 5.19, seedBase);
+        let bladesInCluster = Math.floor(CLUSTER_SIZE_RANGE.min + clusterSizeNoise * (CLUSTER_SIZE_RANGE.max - CLUSTER_SIZE_RANGE.min + 1));
+        bladesInCluster = Math.min(bladesInCluster, maxInstances - outCount);
+        if (bladesInCluster <= 0) {
+            break;
+        }
 
-        // Store instance data
-        tmpInstanceData[outCount * 4] = rotation;
-        tmpInstanceData[outCount * 4 + 1] = scale;
-        tmpInstanceData[outCount * 4 + 2] = variant;
-        tmpInstanceData[outCount * 4 + 3] = random;
+        const radiusNoise = hash2(clusterIndex * 7.13, clusterIndex * 11.17, seedBase);
+        const clusterRadius = CLUSTER_RADIUS_MIN + radiusNoise * (CLUSTER_RADIUS_MAX - CLUSTER_RADIUS_MIN);
 
-        outCount++;
+        for (let i = 0; i < bladesInCluster && outCount < maxInstances; i++) {
+            const angle = hash2(clusterIndex * 13.37 + i * 0.37, clusterIndex * 17.23 + i * 0.71, seedBase) * Math.PI * 2;
+            const radiusRand = Math.sqrt(hash2(clusterIndex * 19.97 + i * 0.53, clusterIndex * 23.11 + i * 0.91, seedBase));
+            const anisot = 0.65 + hash2(clusterIndex * 29.71 + i * 0.21, clusterIndex * 31.19 + i * 0.33, seedBase) * 0.6;
+            const offsetR = radiusRand * clusterRadius;
+            const wx = centerX + Math.cos(angle) * offsetR * anisot;
+            const wz = centerZ + Math.sin(angle) * offsetR / anisot;
+
+            const height = sampler(wx, wz);
+            if (height <= WATER_LEVEL) {
+                continue;
+            }
+
+            const weights = sampleDefaultSplat(sampler, wx, wz, undefined, 6);
+            const density = computeDensityWeight(weights) * (0.75 + centerDensity * 0.25);
+            if (density <= 0.05) {
+                continue;
+            }
+
+            const acceptRand = hash2(wx, wz, seedBase);
+            if (acceptRand > density) {
+                continue;
+            }
+
+            const rotation = hash2(wx + 100, wz + 100, seedBase) * Math.PI * 2;
+            const scaleRand = hash2(wx + 200, wz + 200, seedBase);
+            const scale = 0.72 + Math.pow(scaleRand, 0.65) * 0.58; // smoother height/scale spread
+            const random = hash2(wx + 400, wz + 400, seedBase);
+            const variantRand = hash2(wx + 300, wz + 300, seedBase);
+            const variant = pickVariant(weights, variantRand);
+
+            tmpPositions[outCount * 3] = wx;
+            tmpPositions[outCount * 3 + 1] = height;
+            tmpPositions[outCount * 3 + 2] = wz;
+
+            tmpInstanceData[outCount * 4] = rotation;
+            tmpInstanceData[outCount * 4 + 1] = scale;
+            tmpInstanceData[outCount * 4 + 2] = variant;
+            tmpInstanceData[outCount * 4 + 3] = random;
+
+            outCount++;
+        }
     }
 
-    // Create trimmed output arrays
-    const positions = new Float32Array(outCount * 3);
-    const instanceData = new Float32Array(outCount * 4);
+    const finalCount = Math.min(outCount, requestedCount);
+    const positions = new Float32Array(finalCount * 3);
+    const instanceData = new Float32Array(finalCount * 4);
 
-    if (outCount > 0) {
-        positions.set(tmpPositions.subarray(0, outCount * 3));
-        instanceData.set(tmpInstanceData.subarray(0, outCount * 4));
+    if (finalCount > 0) {
+        positions.set(tmpPositions.subarray(0, finalCount * 3));
+        instanceData.set(tmpInstanceData.subarray(0, finalCount * 4));
     }
 
-    return { positions, instanceData, count: outCount };
+    return { positions, instanceData, count: finalCount };
 };
 
 ctx.onmessage = (event: MessageEvent<WorkerRequest>) => {
@@ -302,3 +343,4 @@ ctx.onmessage = (event: MessageEvent<WorkerRequest>) => {
         });
     }
 };
+

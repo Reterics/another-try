@@ -113,8 +113,8 @@ void main() {
 
     // Calculate blade dimensions with per-instance variation
     vec2 posHash = aInstancePosition.xz;
-    float heightVar = hash(posHash);
-    float widthVar = hash(posHash + 100.0);
+    float heightVar = pow(hash(posHash), 0.7);
+    float widthVar = pow(hash(posHash + 100.0), 0.85);
 
     float bladeHeight = mix(uHeightRange.x, uHeightRange.y, heightVar) * scale;
     float bladeWidth = mix(uWidthRange.x, uWidthRange.y, widthVar);
@@ -136,6 +136,22 @@ void main() {
     vec2 rotatedXZ = mat2(cosR, -sinR, sinR, cosR) * pos.xz;
     pos.x = rotatedXZ.x;
     pos.z = rotatedXZ.y;
+
+    // Static lean and micro-bend per blade to break vertical uniformity
+    vec2 leanDir = normalize(vec2(hash(posHash + 17.7) - 0.5, hash(posHash + 27.3) - 0.5) + vec2(0.01, 0.02));
+    float leanStrength = mix(0.04, 0.22, hash(posHash + 91.31)) * (0.6 + vRandom * 0.4);
+    float heightT = smoothstep(0.0, 1.0, aTaper);
+    float leanBend = heightT * heightT;
+    pos.xz += leanDir * leanStrength * bladeHeight * leanBend;
+
+    // Subtle S-curve around a perpendicular axis for tuft softness
+    vec2 perpDir = vec2(-leanDir.y, leanDir.x);
+    float sCurvePhase = hash(posHash + 141.7) * 6.28318530718;
+    float sCurve = sin(heightT * 2.2 + sCurvePhase) * 0.05;
+    pos.xz += perpDir * sCurve * bladeHeight * heightT * 0.35;
+
+    // Slight vertical wobble for non-uniform spike heights
+    pos.y *= 0.98 + (hash(posHash + 211.3) - 0.5) * 0.06;
 
     // Calculate wind displacement
     // Wind affects mostly the tip (aTaper squared for natural falloff)
