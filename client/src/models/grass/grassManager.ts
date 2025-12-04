@@ -3,7 +3,6 @@ import { TerrainManager } from "../../lib/terrainManager.ts";
 import { GrassManagerOptions } from "../../types/grass.ts";
 import { AdaptiveGrassPatch } from "./adaptiveGrassPatch.ts";
 import type { EarthParams } from "../../utils/terrain.ts";
-import { GrassImpostorField } from "./grassImpostorField.ts";
 import { WATER_LEVEL } from "../../utils/terrain.ts";
 import { chunkCenter, chunkKey } from "../../utils/terrainHelpers.ts";
 
@@ -32,12 +31,8 @@ export class GrassManager {
     // @ts-ignore
     private lastChunk?: { x: number; z: number };
     private terrainParams!: EarthParams;
-    private impostorRadius!: number; // world units
-    private impostorDensity!: number;
-    private impostorField?: GrassImpostorField;
     private createQueue: Array<{ key: string; cx: number; cz: number; lodIndex: number }>;
     private maxPatchCreatesPerFrame: number;
-    private impostorAnchor?: { x: number; z: number };
 
     constructor(scene: Scene, terrain: TerrainManager, options?: GrassManagerOptions) {
         this.scene = scene;
@@ -57,14 +52,11 @@ export class GrassManager {
         for (const record of this.patches.values()) {
             record.patch.update(timeSeconds);
         }
-        this.updateImpostors(playerPosition, cameraPosition);
     }
 
     setTerrain(terrain: TerrainManager) {
         this.terrain = terrain;
         this.disposeAllPatches();
-        this.impostorField?.dispose();
-        this.impostorField = undefined;
         this.lastChunk = undefined;
         this.createQueue.length = 0;
         this.configureFromTerrain();
@@ -72,10 +64,8 @@ export class GrassManager {
 
     dispose() {
         this.disposeAllPatches();
-        this.impostorField?.dispose();
-        this.impostorField = undefined;
         this.createQueue.length = 0;
-        this.impostorAnchor = undefined;
+
     }
 
     private ensurePatches(position: Vector3) {
@@ -198,10 +188,7 @@ export class GrassManager {
 
         // World-space radii (units == meters in your coord system)
         const providedPatch = this.overrides.patchRadius;
-        const providedImpostor = this.overrides.impostorRadius;
-        // Sensible defaults if not provided: half a cell for blades; impostors at least one cell beyond
         this.patchRadius = Math.max(0, providedPatch ?? this.chunkSize * 0.5);
-        this.impostorRadius = Math.max(this.patchRadius + this.chunkSize, providedImpostor ?? (this.patchRadius + this.chunkSize));
 
         this.instancesPerPatch = this.overrides.instancesPerPatch ?? 60000;
         // Estimate number of patches by circle area / cell area
@@ -230,24 +217,6 @@ export class GrassManager {
         this.enabled = this.overrides.enabled ?? true;
         this.heightSampler = this.terrain.getHeightSampler();
         this.terrainParams = this.terrain.getTerrainParams();
-        this.impostorDensity = Math.max(1, this.overrides.impostorDensity ?? 4);
-        const impostorChunkSize = this.chunkSize * 2;
-        if (this.impostorField) {
-            this.impostorField.setSampler(this.heightSampler);
-            this.impostorField.setTerrainParams(this.terrainParams);
-            this.impostorField.setConfig(this.patchRadius, this.impostorRadius, impostorChunkSize);
-            this.impostorField.setDensity(this.impostorDensity);
-        } else {
-            this.impostorField = new GrassImpostorField({
-                scene: this.scene,
-                sampler: this.heightSampler,
-                chunkSize: impostorChunkSize,
-                patchRadius: this.patchRadius,
-                impostorRadius: this.impostorRadius,
-                terrainParams: this.terrainParams,
-                densityPerCell: this.impostorDensity
-            });
-        }
     }
 
     private disposeAllPatches() {
@@ -306,16 +275,4 @@ export class GrassManager {
         }
     }
 
-    private updateImpostors(playerPosition: Vector3, cameraPosition: Vector3) {
-        if (!this.impostorField) {
-            return;
-        }
-        const anchor = this.impostorAnchor;
-        const rebuildRadius = Math.max(this.impostorRadius * 0.5, this.patchRadius);
-        if (!anchor || Math.hypot(playerPosition.x - anchor.x, playerPosition.z - anchor.z) >= rebuildRadius) {
-            this.impostorField.markLayoutDirty();
-            this.impostorAnchor = { x: playerPosition.x, z: playerPosition.z };
-        }
-        this.impostorField.update(playerPosition, cameraPosition);
-    }
 }
