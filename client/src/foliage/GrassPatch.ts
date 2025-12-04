@@ -114,8 +114,9 @@ export class GrassPatch {
         this.mesh.count = 0;
         this.mesh.visible = false;
 
-        // Enable frustum culling (we'll set proper bounds)
-        this.mesh.frustumCulled = true;
+        // Disable Three.js frustum culling – distance/LOD checks handle visibility and
+        // mesh-level culling can misfire with world-space instance attributes.
+        this.mesh.frustumCulled = false;
 
         // Initialize state
         this.state = {
