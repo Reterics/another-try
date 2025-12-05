@@ -258,3 +258,171 @@ export interface GrassWorkerResponse {
     /** Actual number of instances generated (may be less due to culling) */
     count: number;
 }
+
+// ========================================
+// Tree System Types and Constants
+// ========================================
+
+/**
+ * Configuration parameters for the tree system
+ */
+export interface TreeParams {
+    /** Size of each tree patch in meters (default: 64) */
+    patchSize: number;
+    /** Trees per square meter (0.001-0.05 recommended) */
+    densityPerSqM: number;
+    /** Maximum render distance in meters (default: 200) */
+    maxDistance: number;
+    /** Minimum tree height in meters */
+    minHeight: number;
+    /** Maximum tree height in meters */
+    maxHeight: number;
+    /** Global seed for deterministic placement */
+    seed: number;
+    /** Minimum grass splat weight to place trees (0-1) */
+    grassThreshold: number;
+    /** LOD tier boundaries in meters [tier0, tier1, tier2] */
+    lodDistances: [number, number, number];
+    /** Whether the tree system is enabled */
+    enabled: boolean;
+    /** Collision cylinder radius in meters */
+    collisionRadius: number;
+}
+
+/**
+ * Default tree parameters
+ */
+export const DEFAULT_TREE_PARAMS: TreeParams = {
+    patchSize: 64,
+    densityPerSqM: 0.008,       // ~0.5 trees per 64m² patch area = ~8 trees per patch
+    maxDistance: 200,
+    minHeight: 3,
+    maxHeight: 5,
+    seed: 54321,
+    grassThreshold: 0.3,        // Only place on areas with 30%+ grass
+    lodDistances: [50, 100, 200],
+    enabled: true,
+    collisionRadius: 0.4,       // 40cm trunk radius for collision
+};
+
+/**
+ * Tree model variants
+ */
+export interface TreeVariant {
+    /** Unique identifier */
+    id: number;
+    /** Path to GLB model */
+    modelPath: string;
+    /** Display name */
+    name: string;
+}
+
+/**
+ * Pre-defined tree variants
+ */
+export const TREE_VARIANTS: readonly TreeVariant[] = [
+    {
+        id: 0,
+        modelPath: '/assets/models/tree_1.glb',
+        name: 'tree_1',
+    },
+    {
+        id: 1,
+        modelPath: '/assets/models/tree_2.glb',
+        name: 'tree_2',
+    },
+] as const;
+
+/**
+ * Tree system constants
+ */
+export const TREE_CONSTANTS = {
+    /** Maximum instances per patch */
+    MAX_INSTANCES_PER_PATCH: 1024,
+    /** Minimum density (trees per m²) */
+    DENSITY_MIN: 0.001,
+    /** Maximum density (trees per m²) */
+    DENSITY_MAX: 0.05,
+    /** Minimum tree height in meters */
+    HEIGHT_MIN: 2,
+    /** Maximum tree height in meters */
+    HEIGHT_MAX: 8,
+    /** Default collision radius */
+    COLLISION_RADIUS: 0.4,
+} as const;
+
+/**
+ * Tree LOD density factors
+ */
+export const TREE_LOD_DENSITY_FACTORS = {
+    /** 0-50m: Full density */
+    TIER_0: 1.0,
+    /** 50-100m: Reduced density */
+    TIER_1: 0.7,
+    /** 100-200m: Sparse */
+    TIER_2: 0.4,
+} as const;
+
+/**
+ * Tree instance data for a single tree
+ */
+export interface TreeInstanceData {
+    /** World X position */
+    x: number;
+    /** World Y position (terrain height) */
+    y: number;
+    /** World Z position */
+    z: number;
+    /** Y-axis rotation in radians */
+    rotation: number;
+    /** Uniform scale factor (affects height) */
+    scale: number;
+    /** Tree variant index (0 or 1) */
+    variant: number;
+}
+
+/**
+ * Worker request for tree instance generation
+ */
+export interface TreeWorkerRequest {
+    /** Patch origin X in world units */
+    originX: number;
+    /** Patch origin Z in world units */
+    originZ: number;
+    /** Patch size in meters */
+    patchSize: number;
+    /** Target instance count */
+    instanceCount: number;
+    /** Terrain parameters for height sampling */
+    terrainParams: unknown;
+    /** Global seed */
+    seed: number;
+    /** Minimum grass weight threshold */
+    grassThreshold: number;
+}
+
+/**
+ * Worker response with generated tree instances
+ */
+export interface TreeWorkerResponse {
+    /** World positions (x, y, z) per instance */
+    positions: Float32Array;
+    /** Instance data (rotation, scale, variant) per instance - 3 floats each */
+    instanceData: Float32Array;
+    /** Actual number of instances generated */
+    count: number;
+}
+
+/**
+ * Stats returned by the tree system for debugging
+ */
+export interface TreeStats {
+    /** Total visible tree instances */
+    instanceCount: number;
+    /** Number of active patches */
+    patchCount: number;
+    /** Number of draw calls */
+    drawCalls: number;
+    /** Instances per LOD tier */
+    instancesByLod: [number, number, number];
+}

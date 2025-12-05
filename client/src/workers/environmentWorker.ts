@@ -7,9 +7,9 @@ import {
     sampleHeightsForPositions,
     toFloat32Array
 } from "../utils/terrainHelpers.ts";
-import { GRASS_CONSTANTS } from "../foliage/types";
+import { GRASS_CONSTANTS, TREE_CONSTANTS } from "@app/foliage";
 
-type WorkerRequestType = 'grass-heights' | 'grass-instances' | 'chunk-data' | 'impostor-heights';
+type WorkerRequestType = 'grass-heights' | 'grass-instances' | 'chunk-data' | 'impostor-heights' | 'tree-instances';
 
 type GrassHeightPayload = {
     instanceCount: number;
@@ -41,10 +41,21 @@ type ImpostorHeightsPayload = {
     terrainParams: EarthParams;
 };
 
+type TreeInstancesPayload = {
+    instanceCount: number;
+    patchSize: number;
+    origin: { x: number; z: number };
+    terrainParams: EarthParams;
+    seed: number;
+    grassThreshold: number;
+    minHeight: number;
+    maxHeight: number;
+};
+
 interface WorkerRequest {
     id: number;
     type: WorkerRequestType;
-    payload: GrassHeightPayload | GrassInstancesPayload | ChunkDataPayload | ImpostorHeightsPayload;
+    payload: GrassHeightPayload | GrassInstancesPayload | ChunkDataPayload | ImpostorHeightsPayload | TreeInstancesPayload;
 }
 
 interface WorkerResponse {
@@ -297,6 +308,130 @@ const handleGrassInstances = (
     return { positions, instanceData, count: finalCount };
 };
 
+/**
+ * Handle tree instances request
+ * Returns tree positions and instance data (rotation, scale, variant)
+ * Only places trees in grass areas (green splat channel >= threshold)
+ */
+const handleTreeInstances = (
+    payload: TreeInstancesPayload
+) => {
+    const terrain = getTerrain(payload.terrainParams);
+    const originX = payload.origin.x;
+    const originZ = payload.origin.z;
+    const patchSize = payload.patchSize;
+    const seedBase = payload.seed ?? payload.terrainParams.seed ?? 0;
+    const grassThreshold = payload.grassThreshold ?? 0.3;
+    const minHeight = payload.minHeight ?? 3;
+    const maxHeight = payload.maxHeight ?? 5;
+
+    const requestedCount = Math.max(0, Math.min(payload.instanceCount, TREE_CONSTANTS.MAX_INSTANCES_PER_PATCH));
+    const maxAttempts = requestedCount * 5; // More attempts since trees are sparser
+
+    const tmpPositions = new Float32Array(requestedCount * 3);
+    const tmpInstanceData = new Float32Array(requestedCount * 3); // rotation, scale, variant
+    let outCount = 0;
+
+    const sampler = (x: number, z: number) => terrain.sampleHeight(x, z);
+
+    // Use Poisson-disk-like distribution with minimum spacing
+    const minSpacing = 4.0; // Minimum 4m between trees
+    const placedPositions: { x: number; z: number }[] = [];
+
+    for (let attempt = 0; attempt < maxAttempts && outCount < requestedCount; attempt++) {
+        // Deterministic position within patch
+        const sx = hash2(
+            attempt + 1 + originX * 0.023,
+            originZ * 0.019 + seedBase * 0.003,
+            seedBase + 1000
+        );
+        const sz = hash2(
+            attempt + 7 + originZ * 0.031,
+            originX * 0.027 + seedBase * 0.005,
+            seedBase + 2000
+        );
+        const localX = (sx - 0.5) * patchSize;
+        const localZ = (sz - 0.5) * patchSize;
+        const wx = originX + localX;
+        const wz = originZ + localZ;
+
+        // Sample terrain height
+        const height = sampler(wx, wz);
+        if (height <= WATER_LEVEL) {
+            continue; // Skip underwater
+        }
+
+        // Check splat weights - only place in grass areas
+        const weights = sampleDefaultSplat(sampler, wx, wz, undefined, 6);
+        const snow = Math.max(0, 1 - (weights.r + weights.g + weights.b + weights.a));
+
+        // Trees only on grass (green channel)
+        if (weights.g < grassThreshold) {
+            continue; // Not enough grass
+        }
+
+        // Avoid rocky, sandy, and snowy areas
+        if (weights.r > 0.3 || weights.a > 0.3 || snow > 0.2) {
+            continue;
+        }
+
+        // Check minimum spacing from other trees
+        let tooClose = false;
+        for (const placed of placedPositions) {
+            const dx = wx - placed.x;
+            const dz = wz - placed.z;
+            if (dx * dx + dz * dz < minSpacing * minSpacing) {
+                tooClose = true;
+                break;
+            }
+        }
+        if (tooClose) {
+            continue;
+        }
+
+        // Additional density modulation based on grass amount
+        const densityFactor = (weights.g - grassThreshold) / (1 - grassThreshold);
+        const acceptRand = hash2(wx * 0.07, wz * 0.11, seedBase + 3000);
+        if (acceptRand > densityFactor * 0.5 + 0.2) {
+            continue;
+        }
+
+        // Accept tree at this position
+        placedPositions.push({ x: wx, z: wz });
+
+        tmpPositions[outCount * 3] = wx;
+        tmpPositions[outCount * 3 + 1] = height;
+        tmpPositions[outCount * 3 + 2] = wz;
+
+        // Random Y rotation
+        const rotation = hash2(wx + 500, wz + 500, seedBase) * Math.PI * 2;
+
+        // Scale based on height range (3-5m)
+        const scaleRand = hash2(wx + 600, wz + 600, seedBase);
+        const scale = minHeight + scaleRand * (maxHeight - minHeight);
+
+        // Variant (0 or 1)
+        const variantRand = hash2(wx + 700, wz + 700, seedBase);
+        const variant = variantRand < 0.5 ? 0 : 1;
+
+        tmpInstanceData[outCount * 3] = rotation;
+        tmpInstanceData[outCount * 3 + 1] = scale;
+        tmpInstanceData[outCount * 3 + 2] = variant;
+
+        outCount++;
+    }
+
+    const positions = new Float32Array(outCount * 3);
+    const instanceData = new Float32Array(outCount * 3);
+
+    if (outCount > 0) {
+        positions.set(tmpPositions.subarray(0, outCount * 3));
+        instanceData.set(tmpInstanceData.subarray(0, outCount * 3));
+    }
+
+    return { positions, instanceData, count: outCount };
+};
+
 ctx.onmessage = (event: MessageEvent<WorkerRequest>) => {
     const { id, type, payload } = event.data;
     const sendResponse = (message: WorkerResponse) => {
@@ -330,6 +465,9 @@ ctx.onmessage = (event: MessageEvent<WorkerRequest>) => {
             sendResponse({ id, type, success: true, payload: payloadResult });
         } else if (type === 'impostor-heights') {
             const payloadResult = handleImpostorHeights(payload as ImpostorHeightsPayload);
+            sendResponse({ id, type, success: true, payload: payloadResult });
+        } else if (type === 'tree-instances') {
+            const payloadResult = handleTreeInstances(payload as TreeInstancesPayload);
             sendResponse({ id, type, success: true, payload: payloadResult });
         } else {
             sendResponse({ id, type, success: false, error: `Unknown worker task: ${type}` });

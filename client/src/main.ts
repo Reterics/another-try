@@ -10,7 +10,7 @@ import {ServerManager} from "./lib/ServerManager.ts";
 import {MinimapController} from "./controllers/MinimapController.ts";
 import Clouds from "./models/cloud";
 import ATSky from "./models/sky.ts";
-import { GrassSystem } from "./foliage";
+import { GrassSystem, TreeSystem } from "./foliage";
 import {EventBus, Topics, type Subscription, VideoSettingsPayload} from '@game/shared';
 import { createGameUI, type GameUI } from '@game/ui';
 import { FrameLoop } from '@engine/render/FrameLoop.ts';
@@ -84,6 +84,7 @@ let renderer: WebGLRenderer;
 let scene: Scene;
 let hero: Hero;
 let grassSystem: GrassSystem | null = null;
+let treeSystem: TreeSystem | null = null;
 let controls: OrbitControls;
 let creatorController: CreatorController;
 let serverManager: ServerManager;
@@ -99,6 +100,19 @@ const GRASS_CONFIG = {
     windDirection: [0.7, 0.7] as [number, number], // Normalized XZ direction
     lodDistances: [20, 40, 60] as [number, number, number], // LOD tier boundaries
     enabled: true,
+};
+
+// Tree system configuration
+const TREE_CONFIG = {
+    patchSize: 64,            // Size of each tree patch in meters
+    densityPerSqM: 0.008,     // Trees per square meter (~32 trees per 64x64m patch)
+    maxDistance: 200,         // Maximum render distance in meters
+    minHeight: 6,             // Minimum tree height in meters
+    maxHeight: 10,            // Maximum tree height in meters
+    grassThreshold: 0.3,      // Minimum grass splat weight to place trees
+    lodDistances: [50, 100, 200] as [number, number, number], // LOD tier boundaries
+    enabled: true,
+    collisionRadius: 0.8,     // Tree trunk collision radius in meters
 };
 
 let minimap: MinimapController;
@@ -269,6 +283,34 @@ busSubscriptions.push(
             // Update terrain reference when map changes
             grassSystem.setTerrainSampler(map.getHeightSampler());
             grassSystem.setTerrainParams(map.getTerrainParams());
+        }
+
+        // Initialize tree system
+        if (!treeSystem) {
+            treeSystem = new TreeSystem({
+                patchSize: TREE_CONFIG.patchSize,
+                densityPerSqM: TREE_CONFIG.densityPerSqM,
+                maxDistance: TREE_CONFIG.maxDistance,
+                minHeight: TREE_CONFIG.minHeight,
+                maxHeight: TREE_CONFIG.maxHeight,
+                grassThreshold: TREE_CONFIG.grassThreshold,
+                lodDistances: TREE_CONFIG.lodDistances,
+                seed: map.getTerrainParams().seed ?? 54321,
+                enabled: TREE_CONFIG.enabled,
+                collisionRadius: TREE_CONFIG.collisionRadius,
+            });
+            await treeSystem.loadModels();
+            treeSystem.setTerrainSampler(map.getHeightSampler());
+            treeSystem.setTerrainParams(map.getTerrainParams());
+            treeSystem.attach(scene);
+            // Set callback to rebuild collider when trees change
+            treeSystem.setCollidersChangedCallback(() => {
+                map.addTreeColliders(treeSystem!.getColliderGroup());
+            });
+        } else {
+            // Update terrain reference when map changes
+            treeSystem.setTerrainSampler(map.getHeightSampler());
+            treeSystem.setTerrainParams(map.getTerrainParams());
         }
 
         await map.preloadAroundSpawn();
@@ -463,7 +505,7 @@ function round(num: number) {
     return Math.round(num * 100) / 100
 }
 
-function animate(dt: number, elapsed: number) {
+function animate(dt: number) {
     // If tab is hidden or inactive, skip updates and ensure next visible frame uses zero delta
     if (document.hidden || !isTabActive) {
         lastVisibleFrame = true;
@@ -472,7 +514,6 @@ function animate(dt: number, elapsed: number) {
 
     const cameFromHidden = lastVisibleFrame;
     const delta = cameFromHidden ? 0 : dt;
-    const elapsedSeconds = elapsed;
     if (cameFromHidden) {
         lastVisibleFrame = false;
     }
@@ -513,6 +554,7 @@ function animate(dt: number, elapsed: number) {
         hero.update(delta);
         serverManager.update(delta);
         grassSystem?.update(delta, heroPlayer.position, camera.position);
+        treeSystem?.update(delta, heroPlayer.position);
     }
 
     if (heroPlayer) {

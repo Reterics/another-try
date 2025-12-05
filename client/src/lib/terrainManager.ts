@@ -121,6 +121,7 @@ export class TerrainManager {
     private pendingColliderRefresh = false;
     private waterPlane?: Water;
     private waterBaseSize?: number;
+    private treeColliderGroup?: Group;
     private minimapCenter: Vector3;
     private minimapSpan = 0;
     private readonly minimapSpanMultiplier = 3;
@@ -760,6 +761,14 @@ diffuseColor = vec4(blended, 1.0);
                 this.environment.children.push(object);
             });
         });
+
+        // Add tree colliders if available
+        if (this.treeColliderGroup) {
+            this.treeColliderGroup.children.forEach(collider => {
+                this.environment.children.push(collider);
+            });
+        }
+
         this.environment.updateMatrixWorld( true );
 
         const staticGenerator = new StaticGeometryGenerator( this.environment );
@@ -778,6 +787,16 @@ diffuseColor = vec4(blended, 1.0);
         colliderMaterial.transparent = true;
         this.pendingColliderRefresh = false;
         return this.collider;
+    }
+
+    /**
+     * Add tree colliders to the collision system
+     * Called when tree system generates/updates trees
+     */
+    addTreeColliders(treeColliderGroup: Group): void {
+        this.treeColliderGroup = treeColliderGroup;
+        // Queue a collider refresh on next update cycle
+        this.pendingColliderRefresh = true;
     }
 
     async _loadMapItems(callback: Function|undefined): Promise<TerrainManager> {

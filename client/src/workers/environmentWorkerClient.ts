@@ -1,6 +1,6 @@
 import type { EarthParams } from "../utils/terrain.ts";
 
-type WorkerRequestType = 'grass-heights' | 'grass-instances' | 'chunk-data' | 'impostor-heights';
+type WorkerRequestType = 'grass-heights' | 'grass-instances' | 'chunk-data' | 'impostor-heights' | 'tree-instances';
 
 interface WorkerRequestPayloads {
     'grass-heights': {
@@ -29,6 +29,16 @@ interface WorkerRequestPayloads {
         positions: Float32Array;
         terrainParams: EarthParams;
     };
+    'tree-instances': {
+        instanceCount: number;
+        patchSize: number;
+        origin: { x: number; z: number };
+        terrainParams: EarthParams;
+        seed: number;
+        grassThreshold: number;
+        minHeight: number;
+        maxHeight: number;
+    };
 }
 
 type WorkerResponsePayloads = {
@@ -48,6 +58,11 @@ type WorkerResponsePayloads = {
     };
     'impostor-heights': {
         heights: Float32Array;
+    };
+    'tree-instances': {
+        positions: Float32Array;
+        instanceData: Float32Array;
+        count: number;
     };
 }
 
@@ -129,6 +144,14 @@ class EnvironmentWorkerClient {
             transfers.push(params.positions.buffer);
         }
         return this.postMessage('impostor-heights', params, transfers);
+    }
+
+    /**
+     * Compute tree instance data for the tree system
+     * Returns positions and per-instance data (rotation, scale, variant)
+     */
+    computeTreeInstances(params: WorkerRequestPayloads['tree-instances']) {
+        return this.postMessage('tree-instances', params);
     }
 }
 

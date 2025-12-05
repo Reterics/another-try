@@ -2,10 +2,12 @@
  * Foliage System - Public API
  *
  * Fortnite-style stylized grass rendering system
+ * Procedural tree placement system
  */
 
-// Main system
+// Main systems
 export { GrassSystem } from './GrassSystem';
+export { TreeSystem } from './TreeSystem';
 
 // Patch (for advanced usage)
 export { GrassPatch, type GrassPatchOptions } from './GrassPatch';
@@ -61,4 +63,16 @@ export {
     // Stats
     type GrassStats,
     type PatchState,
+
+    // Tree types
+    type TreeParams,
+    DEFAULT_TREE_PARAMS,
+    type TreeVariant,
+    TREE_VARIANTS,
+    TREE_CONSTANTS,
+    TREE_LOD_DENSITY_FACTORS,
+    type TreeInstanceData,
+    type TreeWorkerRequest,
+    type TreeWorkerResponse,
+    type TreeStats,
 } from './types';
