@@ -279,10 +279,9 @@ export class TreeSystem {
             tempScene = new Scene();
             tempScene.background = null; // Transparent background for billboards
 
-            // Add lighting - CRITICAL for visible rendering
-            const ambientLight = new AmbientLight(0xffffff, 0.6);
+            const ambientLight = new AmbientLight(0xffffff, 0.05);
             tempScene.add(ambientLight);
-            const directionalLight = new DirectionalLight(0xffffff, 0.8);
+            const directionalLight = new DirectionalLight(0xffffff, 0.1);
             directionalLight.position.set(1, 2, 1);
             tempScene.add(directionalLight);
 
@@ -1227,21 +1226,10 @@ export class TreeSystem {
         const treeHeight = instance.scale; // Desired tree height (6-10m)
         const spriteScale = treeHeight * this.billboardFrustumSize;
 
-        // Position sprite base at terrain height
-        // Since sprite is anchored at bottom, position.y = base height
-        sprite.position.set(instance.x, instance.y, instance.z);
+        sprite.position.set(instance.x, instance.y - 1, instance.z);
 
         // Scale sprite to compensate for frustum size
         sprite.scale.set(spriteScale, spriteScale, 1);
-
-        // Debug logging - sample 5% of billboards
-        if (Math.random() < 0.05) {
-            console.log(
-                `[TreeSystem] Billboard: pos=(${instance.x.toFixed(1)}, ${instance.y.toFixed(1)}, ${instance.z.toFixed(1)}) ` +
-                `treeHeight=${treeHeight.toFixed(1)}m spriteScale=${spriteScale.toFixed(2)} ` +
-                `frustum=${this.billboardFrustumSize}m anchor=bottom`
-            );
-        }
 
         return sprite;
     }

@@ -7,7 +7,8 @@ import {
     sampleHeightsForPositions,
     toFloat32Array
 } from "../utils/terrainHelpers.ts";
-import { GRASS_CONSTANTS, TREE_CONSTANTS } from "@app/foliage";
+// DO not refactor this to @app/foliage
+import { GRASS_CONSTANTS, TREE_CONSTANTS } from "../foliage/types.ts";
 
 type WorkerRequestType = 'grass-heights' | 'grass-instances' | 'chunk-data' | 'impostor-heights' | 'tree-instances';
 
