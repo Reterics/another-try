@@ -6,7 +6,9 @@
  * - Height range 3-5 meters (configurable)
  * - Always upright (Y-up) regardless of terrain
  * - Collision cylinders for player blocking
- * - LOD-based culling
+ * - LOD-based culling with billboard/impostor system
+ *   - LOD 0 (closest): Full 3D models
+ *   - LOD 1-2 (distant): Billboard impostors for performance
  */
 
 import {
@@ -18,6 +20,18 @@ import {
     MeshBasicMaterial,
     Mesh,
     Box3,
+    Sprite,
+    SpriteMaterial,
+    Camera,
+    OrthographicCamera,
+    WebGLRenderer,
+    WebGLRenderTarget,
+    Texture,
+    CanvasTexture,
+    LinearFilter,
+    RGBAFormat,
+    AmbientLight,
+    DirectionalLight,
 } from 'three';
 import {
     type TreeParams,
@@ -56,6 +70,7 @@ interface TreePatchRecord {
     meshes: Object3D[];
     colliders: Mesh[];
     lodTier: number;
+    activeLodTier: number; // The LOD tier for which meshes are currently loaded
     distanceToPlayer: number;
     pendingWorker: boolean;
     workerGeneration: number;
@@ -79,8 +94,9 @@ interface WorkerQueueItem {
  * Usage:
  * ```ts
  * const trees = new TreeSystem({ densityPerSqM: 0.01, maxDistance: 150 });
- * await trees.loadModels();
+ * await trees.loadModels(); // Also generates billboard textures
  * trees.setTerrainSampler(terrain.getHeightSampler());
+ * trees.setCamera(camera); // For billboard orientation
  * trees.attach(scene);
  *
  * // In render loop:
@@ -106,6 +122,14 @@ export class TreeSystem {
     private treeModels: Group[] = [];
     private treeModelScales: number[] = []; // Scale factor to normalize each model to 1m height
     private modelsLoaded: boolean = false;
+
+    // ========================================
+    // Billboard/Impostor System
+    // ========================================
+
+    private billboardTextures: Texture[] = []; // One texture per tree variant
+    private billboardFrustumSize: number = 1.2; // Orthographic frustum size used for rendering
+    private _camera: Camera | null = null; // Reserved for future billboard enhancements (Sprites auto-face camera)
 
     // ========================================
     // Patch Management
@@ -138,6 +162,7 @@ export class TreeSystem {
     private lastPlayerChunk: { x: number; z: number } | null = null;
     private framesSinceFullUpdate: number = 0;
     private readonly fullUpdateInterval: number = 60;
+    private readonly maxLODSwitchesPerFrame: number = 5; // Limit LOD transitions to prevent frame drops
 
     // ========================================
     // Collision callback
@@ -148,6 +173,12 @@ export class TreeSystem {
     constructor(params: Partial<TreeParams> = {}) {
         this.params = { ...DEFAULT_TREE_PARAMS, ...params };
         this.enabled = this.params.enabled;
+
+
+        const lastLodDistance = this.params.lodDistances[this.params.lodDistances.length - 1];
+        if (lastLodDistance !== this.params.maxDistance) {
+            this.params.maxDistance = lastLodDistance;
+        }
 
         this.treeGroup = new Group();
         this.treeGroup.name = 'tree-system';
@@ -206,6 +237,207 @@ export class TreeSystem {
         }
 
         this.modelsLoaded = true;
+        this.generateBillboardTextures();
+    }
+
+    /**
+     * Generate billboard textures from tree models for LOD 1 and 2
+     * Renders actual 3D models to textures using WebGL for production quality
+     */
+    private generateBillboardTextures(): void {
+        if (this.treeModels.length === 0) {
+            console.warn('[TreeSystem] No tree models loaded for billboard generation');
+            return;
+        }
+
+        const billboardSize = 512; // Texture resolution
+        let renderer: WebGLRenderer | null = null;
+        let renderTarget: WebGLRenderTarget | null = null;
+        let tempScene: Scene | null = null;
+
+        try {
+            // Create temporary renderer for billboard generation
+            const canvas = document.createElement('canvas');
+            renderer = new WebGLRenderer({
+                canvas,
+                alpha: true,
+                antialias: true,
+                preserveDrawingBuffer: true,
+                premultipliedAlpha: false // Better alpha handling
+            });
+            renderer.setSize(billboardSize, billboardSize);
+            renderer.setClearColor(0x000000, 0); // Transparent clear color (alpha = 0)
+
+            // Create render target
+            renderTarget = new WebGLRenderTarget(billboardSize, billboardSize, {
+                minFilter: LinearFilter,
+                magFilter: LinearFilter,
+                format: RGBAFormat,
+            });
+
+            // Create temporary scene and camera for rendering
+            tempScene = new Scene();
+            tempScene.background = null; // Transparent background for billboards
+
+            // Add lighting - CRITICAL for visible rendering
+            const ambientLight = new AmbientLight(0xffffff, 0.6);
+            tempScene.add(ambientLight);
+            const directionalLight = new DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 2, 1);
+            tempScene.add(directionalLight);
+
+            // Use ORTHOGRAPHIC camera for exact 1:1 scaling
+            // Tree is 1m tall after normalization (y: 0 to 1)
+            // Set frustum to exactly match: 0.6m wide, 1.2m tall (to include some margin)
+            const frustumSize = 1.2;
+            const aspect = 1; // Square texture
+            const orthoCamera = new OrthographicCamera(
+                -frustumSize * aspect / 2,  // left
+                frustumSize * aspect / 2,   // right
+                frustumSize / 2,             // top
+                -frustumSize / 2,            // bottom
+                0.1,                         // near
+                100                          // far
+            );
+
+            for (let i = 0; i < this.treeModels.length; i++) {
+                try {
+                    const model = this.treeModels[i].clone(true);
+                    const normalizeScale = this.treeModelScales[i] || 1.0;
+
+                    // Normalize and position model for rendering
+                    // Scale to 1m height, position base at y=0
+                    model.scale.set(normalizeScale, normalizeScale, normalizeScale);
+                    model.position.set(0, 0, 0);
+                    model.rotation.set(0, 0, 0);
+
+                    // Add to temp scene
+                    tempScene.add(model);
+
+                    // Position orthographic camera
+                    // Tree is at y: 0 to 1, look at center (0.5)
+                    orthoCamera.position.set(0, 0.5, 5);
+                    orthoCamera.lookAt(0, 0.5, 0);
+                    orthoCamera.updateProjectionMatrix();
+
+                    console.log(`[TreeSystem] Rendering billboard ${i} with orthographic camera (frustum=${frustumSize}m)`);
+
+                    // Render to canvas
+                    renderer.setRenderTarget(null);
+                    renderer.clear();
+                    renderer.render(tempScene, orthoCamera);
+
+                    // Create texture from canvas
+                    const canvas = renderer.domElement;
+                    const canvasCopy = document.createElement('canvas');
+                    canvasCopy.width = billboardSize;
+                    canvasCopy.height = billboardSize;
+                    const ctx = canvasCopy.getContext('2d');
+                    if (ctx) {
+                        ctx.drawImage(canvas, 0, 0);
+                    }
+
+                    const texture = new CanvasTexture(canvasCopy);
+                    texture.minFilter = LinearFilter;
+                    texture.magFilter = LinearFilter;
+                    texture.needsUpdate = true;
+
+                    this.billboardTextures.push(texture);
+
+                    console.log(`[TreeSystem] Generated billboard ${i} - size: ${billboardSize}x${billboardSize}`);
+
+                    // Clean up temp scene
+                    tempScene.remove(model);
+                    this.disposeObject3D(model);
+
+                } catch (error) {
+                    console.error(`[TreeSystem] Failed to generate billboard for variant ${i}:`, error);
+                    // Create fallback texture on error
+                    this.billboardTextures.push(this.createFallbackBillboardTexture(billboardSize));
+                }
+            }
+
+            console.log(`[TreeSystem] Generated ${this.billboardTextures.length} billboard textures`);
+
+        } catch (error) {
+            console.error('[TreeSystem] Billboard generation failed:', error);
+            // Fallback: create simple placeholder textures
+            for (let i = 0; i < this.treeModels.length; i++) {
+                this.billboardTextures.push(this.createFallbackBillboardTexture(billboardSize));
+            }
+        } finally {
+            // Clean up temporary resources
+            if (renderTarget) {
+                renderTarget.dispose();
+            }
+            if (renderer) {
+                renderer.dispose();
+            }
+            tempScene = null;
+        }
+    }
+
+    /**
+     * Create a fallback billboard texture when rendering fails
+     */
+    private createFallbackBillboardTexture(size: number): Texture {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        if (ctx) {
+            // Simple tree-like gradient
+            const gradient = ctx.createRadialGradient(
+                size / 2, size / 2, 0,
+                size / 2, size / 2, size / 2
+            );
+            gradient.addColorStop(0, 'rgba(60, 120, 40, 0.9)');
+            gradient.addColorStop(0.7, 'rgba(40, 80, 30, 0.7)');
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+
+            // Trunk
+            ctx.fillStyle = 'rgba(101, 67, 33, 0.8)';
+            ctx.fillRect(size / 2 - 10, size * 0.6, 20, size * 0.4);
+        }
+
+        const texture = new CanvasTexture(canvas);
+        texture.minFilter = LinearFilter;
+        texture.magFilter = LinearFilter;
+        texture.format = RGBAFormat;
+        texture.needsUpdate = true;
+
+        return texture;
+    }
+
+    /**
+     * Recursively dispose of Object3D and its resources
+     */
+    private disposeObject3D(obj: Object3D): void {
+        if ('geometry' in obj) {
+            const mesh = obj as Mesh;
+            if (mesh.geometry) {
+                mesh.geometry.dispose();
+            }
+        }
+
+        if ('material' in obj) {
+            const mesh = obj as Mesh;
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            for (const material of materials) {
+                if (material && 'dispose' in material) {
+                    material.dispose();
+                }
+            }
+        }
+
+        // Recurse through children
+        for (const child of obj.children) {
+            this.disposeObject3D(child);
+        }
     }
 
     /**
@@ -270,6 +502,12 @@ export class TreeSystem {
         this.modelsLoaded = false;
         this.workerQueue = [];
         this.workerGeneration++;
+
+        // Dispose billboard textures
+        for (const texture of this.billboardTextures) {
+            texture.dispose();
+        }
+        this.billboardTextures = [];
     }
 
     // ========================================
@@ -325,6 +563,21 @@ export class TreeSystem {
      */
     setCollidersChangedCallback(callback: () => void): void {
         this.onCollidersChanged = callback;
+    }
+
+    /**
+     * Set the camera for billboard orientation
+     * Billboards (Sprites) automatically face the camera in Three.js
+     */
+    setCamera(camera: Camera): void {
+        this._camera = camera;
+    }
+
+    /**
+     * Get current camera reference
+     */
+    getCamera(): Camera | null {
+        return this._camera;
     }
 
     // ========================================
@@ -478,6 +731,7 @@ export class TreeSystem {
             meshes: [],
             colliders: [],
             lodTier,
+            activeLodTier: -1, // No meshes loaded yet
             distanceToPlayer: distance,
             pendingWorker: false,
             workerGeneration: 0,
@@ -497,15 +751,41 @@ export class TreeSystem {
     }
 
     /**
-     * Remove meshes from a patch
+     * Remove meshes from a patch with proper resource disposal
      */
     private removePatchMeshes(record: TreePatchRecord): void {
+        // Dispose tree meshes
         for (const mesh of record.meshes) {
             this.treeGroup.remove(mesh);
+
+            // Dispose sprites (billboards)
+            if (mesh instanceof Sprite) {
+                const sprite = mesh as Sprite;
+                if (sprite.material) {
+                    // Don't dispose the shared billboard texture, only the material
+                    sprite.material.map = null;
+                    sprite.material.dispose();
+                }
+            } else {
+                // Dispose 3D models
+                this.disposeObject3D(mesh);
+            }
         }
+
+        // Dispose colliders
         for (const collider of record.colliders) {
             this.colliderGroup.remove(collider);
+            if (collider.geometry) {
+                collider.geometry.dispose();
+            }
+            if (collider.material) {
+                const materials = Array.isArray(collider.material) ? collider.material : [collider.material];
+                for (const material of materials) {
+                    material.dispose();
+                }
+            }
         }
+
         record.meshes = [];
         record.colliders = [];
     }
@@ -521,9 +801,13 @@ export class TreeSystem {
     }
 
     /**
-     * Update LOD for all patches
+     * Update LOD for all patches with performance throttling
      */
     private updateLOD(playerPosition: Vector3): void {
+        let lodSwitchesThisFrame = 0;
+        const patchesNeedingLODSwitch: TreePatchRecord[] = [];
+
+        // First pass: calculate distances and identify patches needing LOD switch
         for (const record of this.patches.values()) {
             const center = this.chunkCenter(record.chunkX, record.chunkZ);
             const dist = Math.hypot(
@@ -536,8 +820,11 @@ export class TreeSystem {
 
             if (newLodTier !== record.lodTier) {
                 record.lodTier = newLodTier;
-                // For trees, LOD mainly affects visibility culling
-                // Could add billboard/impostor system later
+
+                // Check if this patch needs mesh switching
+                if (record.instances.length > 0 && newLodTier !== record.activeLodTier) {
+                    patchesNeedingLODSwitch.push(record);
+                }
             }
 
             // Hide patches beyond max distance
@@ -545,6 +832,32 @@ export class TreeSystem {
             if (record.visible !== shouldBeVisible) {
                 this.setPatchVisible(record, shouldBeVisible);
             }
+        }
+
+        // Second pass: perform LOD switches with throttling
+        // Prioritize closest patches first
+        patchesNeedingLODSwitch.sort((a, b) => a.distanceToPlayer - b.distanceToPlayer);
+
+        for (const record of patchesNeedingLODSwitch) {
+            if (lodSwitchesThisFrame >= this.maxLODSwitchesPerFrame) {
+                // Defer remaining switches to next frame
+                break;
+            }
+
+            try {
+                const oldTier = record.activeLodTier;
+                const newTier = record.lodTier;
+                console.log(`[TreeSystem] LOD switch: ${record.key} from tier ${oldTier} to ${newTier} (${newTier >= 1 ? 'BILLBOARD' : 'MODEL'})`);
+                this.createTreeMeshesForLOD(record, record.lodTier);
+                lodSwitchesThisFrame++;
+            } catch (error) {
+                console.error('[TreeSystem] LOD switch failed:', error);
+            }
+        }
+
+        // Notify colliders changed if any switches occurred
+        if (lodSwitchesThisFrame > 0) {
+            this.notifyCollidersChanged();
         }
     }
 
@@ -765,35 +1078,172 @@ export class TreeSystem {
         }
         record.instances = instances;
 
-        // Create tree meshes
-        for (const instance of instances) {
-            const variantIndex = Math.min(instance.variant, this.treeModels.length - 1);
-            if (variantIndex < 0 || this.treeModels.length === 0) continue;
+        // Create meshes for the current LOD tier
+        this.createTreeMeshesForLOD(record, record.lodTier);
+    }
 
-            const model = this.treeModels[variantIndex];
-            const normalizeScale = this.treeModelScales[variantIndex] || 1.0;
-            const tree = model.clone(true); // Deep clone
-
-            // Position at terrain height
-            tree.position.set(instance.x, instance.y, instance.z);
-
-            // Always upright - only Y rotation
-            tree.rotation.set(0, instance.rotation, 0);
-
-            // Scale = normalization factor * desired height in meters
-            // normalizeScale converts model to 1m, instance.scale is desired height (3-5m)
-            const finalScale = normalizeScale * instance.scale;
-            tree.scale.set(finalScale, finalScale, finalScale);
-
-            tree.updateMatrixWorld(true);
-            record.meshes.push(tree);
-            this.treeGroup.add(tree);
-
-            // Create collision cylinder
-            const collider = this.createCollider(instance);
-            record.colliders.push(collider);
-            this.colliderGroup.add(collider);
+    /**
+     * Create tree meshes for a specific LOD tier
+     * LOD 0: Full 3D models
+     * LOD 1-2: Billboards/Impostors
+     */
+    private createTreeMeshesForLOD(record: TreePatchRecord, lodTier: number): void {
+        // Validation
+        if (!record || !record.instances) {
+            console.error('[TreeSystem] Invalid record in createTreeMeshesForLOD');
+            return;
         }
+
+        if (this.treeModels.length === 0) {
+            console.warn('[TreeSystem] No tree models loaded, skipping mesh creation');
+            return;
+        }
+
+        // Clear existing meshes
+        this.removePatchMeshes(record);
+
+        const useBillboards = lodTier >= 1; // LOD 1 and 2 use billboards
+
+        for (const instance of record.instances) {
+            try {
+                const variantIndex = Math.min(instance.variant, this.treeModels.length - 1);
+                if (variantIndex < 0 || this.treeModels.length === 0) continue;
+
+                let treeMesh: Object3D;
+
+                if (useBillboards && this.billboardTextures.length > variantIndex) {
+                    // CRITICAL: Re-sample terrain height for billboards
+                    // Ensures billboards don't float if terrain changed or wasn't loaded when tree was generated
+                    if (this.terrainSampler) {
+                        const currentHeight = this.terrainSampler(instance.x, instance.z);
+
+                        // Skip billboard if terrain isn't loaded (height <= 0)
+                        if (currentHeight <= 0) {
+                            console.warn(
+                                `[TreeSystem] Skipping billboard at (${instance.x.toFixed(1)}, ${instance.z.toFixed(1)}) - ` +
+                                `terrain not loaded (height=${currentHeight.toFixed(1)}m)`
+                            );
+                            continue;
+                        }
+
+                        // Update height if terrain has changed significantly
+                        if (Math.abs(currentHeight - instance.y) > 0.5) {
+                            if (Math.random() < 0.1) { // Log 10% of updates
+                                console.log(
+                                    `[TreeSystem] Updating billboard height at (${instance.x.toFixed(1)}, ${instance.z.toFixed(1)}): ` +
+                                    `${instance.y.toFixed(1)}m → ${currentHeight.toFixed(1)}m`
+                                );
+                            }
+                            instance.y = currentHeight;
+                        }
+                    }
+
+                    // Create billboard sprite for LOD 1 and 2
+                    treeMesh = this.createBillboardSprite(instance, variantIndex);
+                    if (record.meshes.length === 0) {
+                        console.log(`[TreeSystem] Creating billboards for patch ${record.key} (LOD ${lodTier})`);
+                    }
+                } else {
+                    // Create full 3D model for LOD 0 (or fallback if billboards unavailable)
+                    const model = this.treeModels[variantIndex];
+                    if (!model) {
+                        console.warn(`[TreeSystem] Missing model for variant ${variantIndex}`);
+                        continue;
+                    }
+                    if (useBillboards) {
+                        console.warn(`[TreeSystem] Billboard texture missing for variant ${variantIndex}, using full model`);
+                    }
+
+                    const normalizeScale = this.treeModelScales[variantIndex] || 1.0;
+                    const tree = model.clone(true); // Deep clone
+
+                    // Position at terrain height
+                    tree.position.set(instance.x, instance.y, instance.z);
+
+                    // Always upright - only Y rotation
+                    tree.rotation.set(0, instance.rotation, 0);
+
+                    // Scale = normalization factor * desired height in meters
+                    // normalizeScale converts model to 1m, instance.scale is desired height (3-5m)
+                    const finalScale = normalizeScale * instance.scale;
+                    tree.scale.set(finalScale, finalScale, finalScale);
+
+                    tree.updateMatrixWorld(true);
+                    treeMesh = tree;
+                }
+
+                record.meshes.push(treeMesh);
+                this.treeGroup.add(treeMesh);
+
+                // Create collision cylinder (same for all LOD levels)
+                const collider = this.createCollider(instance);
+                record.colliders.push(collider);
+                this.colliderGroup.add(collider);
+
+            } catch (error) {
+                console.error('[TreeSystem] Failed to create tree mesh:', error);
+                // Continue with next instance instead of failing completely
+                continue;
+            }
+        }
+
+        record.activeLodTier = lodTier;
+    }
+
+    /**
+     * Create a billboard sprite for an impostor tree
+     */
+    private createBillboardSprite(instance: TreeInstance, variantIndex: number): Sprite {
+        // Validation
+        if (!this.billboardTextures[variantIndex]) {
+            throw new Error(`[TreeSystem] Billboard texture missing for variant ${variantIndex}`);
+        }
+
+        const texture = this.billboardTextures[variantIndex];
+        const material = new SpriteMaterial({
+            map: texture,
+            transparent: true,
+            alphaTest: 0.5, // Higher alpha test to remove black edges
+            depthWrite: true,
+            opacity: 1.0,
+            sizeAttenuation: true, // Scale with distance
+        });
+
+        const sprite = new Sprite(material);
+        sprite.name = 'tree-billboard';
+
+        // CRITICAL FIX: Anchor sprite at BOTTOM instead of center
+        // By default sprites are centered at (0.5, 0.5)
+        // Setting center to (0.5, 0) anchors at bottom-center
+        // This makes the sprite base align with ground level
+        sprite.center.set(0.5, 0);
+
+        // Calculate sprite scale to match 3D model size
+        // Billboard texture was rendered with orthographic frustum of billboardFrustumSize
+        // Tree (1m after normalization) fills (1 / frustumSize) of the texture
+        // To display tree at correct size (instance.scale), sprite must be:
+        // sprite.scale = instance.scale * frustumSize
+
+        const treeHeight = instance.scale; // Desired tree height (6-10m)
+        const spriteScale = treeHeight * this.billboardFrustumSize;
+
+        // Position sprite base at terrain height
+        // Since sprite is anchored at bottom, position.y = base height
+        sprite.position.set(instance.x, instance.y, instance.z);
+
+        // Scale sprite to compensate for frustum size
+        sprite.scale.set(spriteScale, spriteScale, 1);
+
+        // Debug logging - sample 5% of billboards
+        if (Math.random() < 0.05) {
+            console.log(
+                `[TreeSystem] Billboard: pos=(${instance.x.toFixed(1)}, ${instance.y.toFixed(1)}, ${instance.z.toFixed(1)}) ` +
+                `treeHeight=${treeHeight.toFixed(1)}m spriteScale=${spriteScale.toFixed(2)} ` +
+                `frustum=${this.billboardFrustumSize}m anchor=bottom`
+            );
+        }
+
+        return sprite;
     }
 
     /**

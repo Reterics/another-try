@@ -106,11 +106,11 @@ const GRASS_CONFIG = {
 const TREE_CONFIG = {
     patchSize: 64,            // Size of each tree patch in meters
     densityPerSqM: 0.008,     // Trees per square meter (~32 trees per 64x64m patch)
-    maxDistance: 200,         // Maximum render distance in meters
+    maxDistance: 150,         // Maximum render distance (MUST be < terrain range)
     minHeight: 6,             // Minimum tree height in meters
     maxHeight: 10,            // Maximum tree height in meters
     grassThreshold: 0.3,      // Minimum grass splat weight to place trees
-    lodDistances: [50, 100, 200] as [number, number, number], // LOD tier boundaries
+    lodDistances: [50, 100, 150] as [number, number, number], // LOD tier boundaries (last MUST match maxDistance)
     enabled: true,
     collisionRadius: 0.8,     // Tree trunk collision radius in meters
 };
@@ -300,6 +300,7 @@ busSubscriptions.push(
                 collisionRadius: TREE_CONFIG.collisionRadius,
             });
             await treeSystem.loadModels();
+            treeSystem.setCamera(camera); // Set camera for billboard orientation
             treeSystem.setTerrainSampler(map.getHeightSampler());
             treeSystem.setTerrainParams(map.getTerrainParams());
             treeSystem.attach(scene);

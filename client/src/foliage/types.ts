@@ -295,12 +295,12 @@ export interface TreeParams {
 export const DEFAULT_TREE_PARAMS: TreeParams = {
     patchSize: 64,
     densityPerSqM: 0.008,       // ~0.5 trees per 64m² patch area = ~8 trees per patch
-    maxDistance: 200,
+    maxDistance: 150,           // Safe default - adjust based on terrain chunkSize × chunkRadius
     minHeight: 3,
     maxHeight: 5,
     seed: 54321,
     grassThreshold: 0.3,        // Only place on areas with 30%+ grass
-    lodDistances: [50, 100, 200],
+    lodDistances: [50, 100, 150], // Last distance MUST match maxDistance
     enabled: true,
     collisionRadius: 0.4,       // 40cm trunk radius for collision
 };
