@@ -37,6 +37,14 @@ import {
 import { environmentWorkerClient } from '../workers/environmentWorkerClient';
 import type { EarthParams } from '../utils/terrain';
 import { hash2 } from '../utils/terrainHelpers';
+import {
+    getChunk,
+    putChunk,
+    makeChunkKey,
+    serializeGrassChunk,
+    deserializeGrassChunk,
+    CACHE_VERSION,
+} from '../utils/worldCache';
 
 /**
  * Patch record for internal tracking
@@ -696,15 +704,15 @@ export class GrassSystem {
     }
 
     /**
-     * Generate grass instance data via web worker
+     * Generate grass instance data via web worker with IndexedDB caching
      * Handles terrain height sampling and splat-based density on worker thread
      */
     private async generateGrassData(
         originX: number,
         originZ: number,
         patchSize: number,
-        _chunkX: number,
-        _chunkZ: number
+        chunkX: number,
+        chunkZ: number
     ): Promise<GrassWorkerResponse> {
         // Calculate target instance count
         const targetCount = Math.min(
@@ -712,9 +720,22 @@ export class GrassSystem {
             GRASS_CONSTANTS.MAX_INSTANCES_PER_PATCH
         );
 
-        // If no terrain params, fall back to local generation
+        // If no terrain params, fall back to local generation (no caching)
         if (!this.terrainParams) {
             return this.generateGrassDataLocal(originX, originZ, patchSize, targetCount);
+        }
+
+        // Check IndexedDB cache first
+        const cacheKey = makeChunkKey(this.params.seed, chunkX, chunkZ, CACHE_VERSION);
+        const cachedBuffer = await getChunk('grassChunks', cacheKey);
+
+        if (cachedBuffer) {
+            const cachedData = deserializeGrassChunk(cachedBuffer);
+            return {
+                positions: cachedData.positions,
+                instanceData: cachedData.instanceData,
+                count: cachedData.count,
+            };
         }
 
         // Call worker for proper terrain integration
@@ -724,6 +745,16 @@ export class GrassSystem {
             origin: { x: originX, z: originZ },
             terrainParams: this.terrainParams,
             seed: this.params.seed,
+        });
+
+        // Cache the result asynchronously (don't block)
+        const serialized = serializeGrassChunk({
+            positions: result.positions,
+            instanceData: result.instanceData,
+            count: result.count,
+        });
+        putChunk('grassChunks', cacheKey, serialized).catch(() => {
+            // Ignore cache write failures
         });
 
         return {

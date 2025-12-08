@@ -11,6 +11,7 @@ import {MinimapController} from "./controllers/MinimapController.ts";
 import Clouds from "./models/cloud";
 import ATSky from "./models/sky.ts";
 import { GrassSystem, TreeSystem } from "./foliage";
+import { preloadWorld, type PreloadConfig } from "./utils/worldPreloader";
 import {EventBus, Topics, type Subscription, VideoSettingsPayload} from '@game/shared';
 import { createGameUI, type GameUI } from '@game/ui';
 import { FrameLoop } from '@engine/render/FrameLoop.ts';
@@ -316,12 +317,52 @@ busSubscriptions.push(
 
         await map.preloadAroundSpawn();
 
-        if (!animationRunning) {
-            creatorController.updateView();
-            FrameLoop.onFrame(animate);
-            FrameLoop.start();
-            animationRunning = true;
+        // Preload 2x render area for all chunk systems
+        const preloadSpawn = map.getSpawnPoint();
+        const terrainParams = map.getTerrainParams();
+        const chunkConfig = map.getChunkConfig();
+        const preloadConfig: PreloadConfig = {
+            spawnX: preloadSpawn.x,
+            spawnZ: preloadSpawn.z,
+            terrainParams,
+            grass: {
+                seed: terrainParams.seed ?? 12345,
+                patchSize: GRASS_CONFIG.patchSize,
+                maxDistance: GRASS_CONFIG.maxDistance,
+                densityPerSqM: GRASS_CONFIG.densityPerSqM,
+            },
+            tree: {
+                seed: terrainParams.seed ?? 54321,
+                patchSize: TREE_CONFIG.patchSize,
+                maxDistance: TREE_CONFIG.maxDistance,
+                densityPerSqM: TREE_CONFIG.densityPerSqM,
+                grassThreshold: TREE_CONFIG.grassThreshold,
+                minHeight: TREE_CONFIG.minHeight,
+                maxHeight: TREE_CONFIG.maxHeight,
+            },
+            terrain: {
+                chunkSize: chunkConfig.size,
+                chunkRadius: chunkConfig.radius,
+                chunkSegments: 64, // matches terrainManager
+                splatResolution: 64,
+            },
+        };
+
+        // Preload 2x render area before starting game loop for better performance
+        try {
+            await preloadWorld(preloadConfig, (progress) => {
+                if (progress.phase !== 'done') {
+                    eventBus.publish(Topics.UI.Dialog, {
+                        visible: true,
+                        title: 'Loading',
+                        body: `Preloading ${progress.phase}... (${progress.completed}/${progress.total})`,
+                    });
+                }
+            });
+        } catch (err) {
+            console.warn('[Main] World preload failed:', err);
         }
+
         map.respawn(heroPlayer);
         snapCameraToPlayer();
         applySavedPosition();
@@ -345,6 +386,14 @@ busSubscriptions.push(
             minimap.setPatch(center, span);
             minimap.setTexture(texture || selected.texture || '');
         });
+
+        // Start animation loop only after preload is complete
+        if (!animationRunning) {
+            creatorController.updateView();
+            FrameLoop.onFrame(animate);
+            FrameLoop.start();
+            animationRunning = true;
+        }
 
         // Notify new UI system that game is now playing (shows HUD, hides menu)
         eventBus.publish(Topics.Game.StateChanged, { state: 'playing' });

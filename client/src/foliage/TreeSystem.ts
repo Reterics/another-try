@@ -46,6 +46,14 @@ import { environmentWorkerClient } from '../workers/environmentWorkerClient';
 import type { EarthParams } from '../utils/terrain';
 import { loadModel } from '../utils/model';
 import { hash2 } from '../utils/terrainHelpers';
+import {
+    getChunk,
+    putChunk,
+    makeChunkKey,
+    serializeTreeChunk,
+    deserializeTreeChunk,
+    CACHE_VERSION,
+} from '../utils/worldCache';
 
 /**
  * Tree instance record for a patch
@@ -948,7 +956,9 @@ export class TreeSystem {
             const result = await this.generateTreeData(
                 center.x,
                 center.z,
-                this.params.patchSize
+                this.params.patchSize,
+                record.chunkX,
+                record.chunkZ
             );
 
             if (
@@ -971,12 +981,14 @@ export class TreeSystem {
     }
 
     /**
-     * Generate tree instance data via web worker
+     * Generate tree instance data via web worker with IndexedDB caching
      */
     private async generateTreeData(
         originX: number,
         originZ: number,
-        patchSize: number
+        patchSize: number,
+        chunkX: number,
+        chunkZ: number
     ): Promise<TreeWorkerResponse> {
         const targetCount = Math.min(
             Math.ceil(patchSize * patchSize * this.params.densityPerSqM),
@@ -985,6 +997,19 @@ export class TreeSystem {
 
         if (!this.terrainParams) {
             return this.generateTreeDataLocal(originX, originZ, patchSize, targetCount);
+        }
+
+        // Check IndexedDB cache first
+        const cacheKey = makeChunkKey(this.params.seed, chunkX, chunkZ, CACHE_VERSION);
+        const cachedBuffer = await getChunk('treeChunks', cacheKey);
+
+        if (cachedBuffer) {
+            const cachedData = deserializeTreeChunk(cachedBuffer);
+            return {
+                positions: cachedData.positions,
+                instanceData: cachedData.instanceData,
+                count: cachedData.count,
+            };
         }
 
         const result = await environmentWorkerClient.computeTreeInstances({
@@ -996,6 +1021,16 @@ export class TreeSystem {
             grassThreshold: this.params.grassThreshold,
             minHeight: this.params.minHeight,
             maxHeight: this.params.maxHeight,
+        });
+
+        // Cache the result asynchronously (don't block)
+        const serialized = serializeTreeChunk({
+            positions: result.positions,
+            instanceData: result.instanceData,
+            count: result.count,
+        });
+        putChunk('treeChunks', cacheKey, serialized).catch(() => {
+            // Ignore cache write failures
         });
 
         return {

@@ -40,6 +40,14 @@ import { environmentWorkerClient } from "../workers/environmentWorkerClient.ts";
 import { Water } from "three/examples/jsm/objects/Water2";
 import {CreatorController} from "../controllers/CreatorController.ts";
 import { buildSplatData, chunkKey } from "../utils/terrainHelpers.ts";
+import {
+    getChunk,
+    putChunk,
+    makeChunkKey,
+    serializeTerrainChunk,
+    deserializeTerrainChunk,
+    CACHE_VERSION,
+} from "../utils/worldCache.ts";
 import { EventBus, Topics } from '@game/shared';
 import {
     TPS_CAMERA_DISTANCE,
@@ -483,26 +491,55 @@ diffuseColor = vec4(blended, 1.0);
         geometry.translate(centerX, 0, centerZ);
 
         let splatTexture: DataTexture | undefined;
+        const seed = this.earthTerrain.getParams().seed;
+        const cacheKey = makeChunkKey(seed, cx, cz, CACHE_VERSION);
+
         try {
-            const positionArray = geometry.attributes.position.array as Float32Array;
-            const positionsCopy = new Float32Array(positionArray);
-            const workerResult = await environmentWorkerClient.computeChunkData({
-                positions: positionsCopy,
-                terrainParams: this.earthTerrain.getParams(),
-                chunkX: cx,
-                chunkZ: cz,
-                chunkSize: this.chunkSize,
-                chunkSegments: this.chunkSegments,
-                splatResolution: 64
-            });
-            const pos = geometry.attributes.position.array as Float32Array;
-            for (let i = 0, v = 0; i < pos.length; i += 3, v++) {
-                pos[i + 1] = workerResult.heights[v];
+            // Check IndexedDB cache first
+            const cachedBuffer = await getChunk('terrainChunks', cacheKey);
+
+            if (cachedBuffer) {
+                const cachedData = deserializeTerrainChunk(cachedBuffer);
+                const pos = geometry.attributes.position.array as Float32Array;
+                for (let i = 0, v = 0; i < pos.length; i += 3, v++) {
+                    pos[i + 1] = cachedData.heights[v];
+                }
+                geometry.attributes.position.needsUpdate = true;
+                geometry.computeVertexNormals();
+                geometry.computeBoundingBox();
+                splatTexture = this.createSplatTextureFromData(cachedData.splat, cachedData.splatResolution);
+            } else {
+                // Generate via worker
+                const positionArray = geometry.attributes.position.array as Float32Array;
+                const positionsCopy = new Float32Array(positionArray);
+                const workerResult = await environmentWorkerClient.computeChunkData({
+                    positions: positionsCopy,
+                    terrainParams: this.earthTerrain.getParams(),
+                    chunkX: cx,
+                    chunkZ: cz,
+                    chunkSize: this.chunkSize,
+                    chunkSegments: this.chunkSegments,
+                    splatResolution: 64
+                });
+                const pos = geometry.attributes.position.array as Float32Array;
+                for (let i = 0, v = 0; i < pos.length; i += 3, v++) {
+                    pos[i + 1] = workerResult.heights[v];
+                }
+                geometry.attributes.position.needsUpdate = true;
+                geometry.computeVertexNormals();
+                geometry.computeBoundingBox();
+                splatTexture = this.createSplatTextureFromData(workerResult.splat, workerResult.splatResolution);
+
+                // Cache the result asynchronously (don't block)
+                const serialized = serializeTerrainChunk({
+                    heights: workerResult.heights,
+                    splat: workerResult.splat,
+                    splatResolution: workerResult.splatResolution,
+                });
+                putChunk('terrainChunks', cacheKey, serialized).catch(() => {
+                    // Ignore cache write failures
+                });
             }
-            geometry.attributes.position.needsUpdate = true;
-            geometry.computeVertexNormals();
-            geometry.computeBoundingBox();
-            splatTexture = this.createSplatTextureFromData(workerResult.splat, workerResult.splatResolution);
         } catch (err) {
             console.warn('[TerrainManager] Worker chunk build failed, falling back to main thread', err);
             const sampler = (x: number, z: number) => this.earthTerrain.sampleHeight(x, z);
