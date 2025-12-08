@@ -17,7 +17,7 @@ import {
     Color,
 } from 'three';
 import { GrassPatch } from './GrassPatch';
-import { createSharedBladeGeometry } from './bladeGeometry';
+import { createSharedTuftGeometry, BLADES_PER_TUFT } from './bladeGeometry';
 import {
     createSharedGrassMaterial,
     updateGrassMaterialPerFrame,
@@ -151,14 +151,17 @@ export class GrassSystem {
         this.params = { ...DEFAULT_GRASS_PARAMS, ...params };
         this.enabled = this.params.enabled;
 
-        // Create shared geometry and material
-        this.geometry = createSharedBladeGeometry();
+        // Create shared tuft geometry (Horizon FW/ZD style - 5 blades per tuft)
+        this.geometry = createSharedTuftGeometry();
         this.material = createSharedGrassMaterial({ params: this.params });
 
-        // Calculate max instances per patch based on density and patch size
+        // Calculate max tuft instances per patch
+        // With 5 blades per tuft, we need fewer instances for same visual density
         const patchArea = this.params.patchSize * this.params.patchSize;
+        const bladesPerPatch = patchArea * this.params.densityPerSqM;
+        const tuftsPerPatch = Math.ceil(bladesPerPatch / BLADES_PER_TUFT);
         const maxInstancesPerPatch = Math.min(
-            Math.ceil(patchArea * this.params.densityPerSqM),
+            tuftsPerPatch,
             GRASS_CONSTANTS.MAX_INSTANCES_PER_PATCH
         );
 
@@ -415,9 +418,12 @@ export class GrassSystem {
             return patch;
         }
 
+        // Calculate tuft count (5 blades per tuft)
         const patchArea = this.params.patchSize * this.params.patchSize;
+        const bladesPerPatch = patchArea * this.params.densityPerSqM;
+        const tuftsPerPatch = Math.ceil(bladesPerPatch / BLADES_PER_TUFT);
         const maxInstances = Math.min(
-            Math.ceil(patchArea * this.params.densityPerSqM),
+            tuftsPerPatch,
             GRASS_CONSTANTS.MAX_INSTANCES_PER_PATCH
         );
         return this.createPatch(maxInstances);
@@ -706,6 +712,9 @@ export class GrassSystem {
     /**
      * Generate grass instance data via web worker with IndexedDB caching
      * Handles terrain height sampling and splat-based density on worker thread
+     *
+     * Note: Instance count is for TUFTS, not individual blades
+     * Each tuft contains 5 blades (Horizon FW/ZD style)
      */
     private async generateGrassData(
         originX: number,
@@ -714,9 +723,10 @@ export class GrassSystem {
         chunkX: number,
         chunkZ: number
     ): Promise<GrassWorkerResponse> {
-        // Calculate target instance count
+        // Calculate target tuft count (5 blades per tuft)
+        const bladesPerPatch = patchSize * patchSize * this.params.densityPerSqM;
         const targetCount = Math.min(
-            Math.ceil(patchSize * patchSize * this.params.densityPerSqM),
+            Math.ceil(bladesPerPatch / BLADES_PER_TUFT),
             GRASS_CONSTANTS.MAX_INSTANCES_PER_PATCH
         );
 
@@ -767,6 +777,9 @@ export class GrassSystem {
     /**
      * Fallback local grass generation when no terrain params available
      * Used for testing or simple scenes without terrain
+     *
+     * Generates TUFT positions (not individual blades)
+     * Each tuft is a single instance with 5 blades rendered by the geometry
      */
     private generateGrassDataLocal(
         originX: number,
@@ -778,19 +791,21 @@ export class GrassSystem {
         const instanceData: number[] = [];
         const seed = this.params.seed;
 
-        const clusterSizeRange = { min: 6, max: 18 };
-        const radiusMin = GRASS_CONSTANTS.CLUMP_RADIUS_MIN;
-        const radiusMax = GRASS_CONSTANTS.CLUMP_RADIUS_MAX * 1.35;
-        const maxInstances = Math.max(
+        // Tuft placement parameters - larger spacing since each tuft has 5 blades
+        // Tufts are placed in clusters for natural grouping
+        const tuftsPerCluster = { min: 3, max: 8 };
+        const clusterRadius = { min: 0.5, max: 1.5 }; // Tighter clusters for tuft groups
+        const maxTufts = Math.max(
             0,
             Math.min(Math.floor(targetCount * 1.05), GRASS_CONSTANTS.MAX_INSTANCES_PER_PATCH)
         );
-        const averageClusterSize = (clusterSizeRange.min + clusterSizeRange.max) * 0.5;
-        const clusterCount = Math.max(1, Math.ceil(maxInstances / averageClusterSize));
-        const maxClusterAttempts = Math.max(clusterCount, Math.ceil(maxInstances / clusterSizeRange.min));
+        const avgTuftsPerCluster = (tuftsPerCluster.min + tuftsPerCluster.max) * 0.5;
+        const clusterCount = Math.max(1, Math.ceil(maxTufts / avgTuftsPerCluster));
+        const maxClusterAttempts = Math.max(clusterCount * 2, Math.ceil(maxTufts / tuftsPerCluster.min));
 
         let count = 0;
-        for (let clusterIndex = 0; clusterIndex < maxClusterAttempts && count < maxInstances; clusterIndex++) {
+        for (let clusterIndex = 0; clusterIndex < maxClusterAttempts && count < maxTufts; clusterIndex++) {
+            // Deterministic cluster center
             const centerNoiseX = hash2(
                 originX * 0.013 + clusterIndex * 19.17,
                 originZ * 0.071 + clusterIndex * 23.71,
@@ -801,31 +816,36 @@ export class GrassSystem {
                 originX * 0.067 + clusterIndex * 27.19,
                 seed + 7.13
             );
-            const centerX = originX + (centerNoiseX - 0.5) * patchSize;
-            const centerZ = originZ + (centerNoiseZ - 0.5) * patchSize;
+            const clusterCenterX = originX + (centerNoiseX - 0.5) * patchSize;
+            const clusterCenterZ = originZ + (centerNoiseZ - 0.5) * patchSize;
 
+            // How many tufts in this cluster
             const clusterSizeNoise = hash2(clusterIndex * 3.11, clusterIndex * 5.19, seed);
-            let bladesInCluster = Math.floor(
-                clusterSizeRange.min + clusterSizeNoise * (clusterSizeRange.max - clusterSizeRange.min + 1)
+            let tuftsInCluster = Math.floor(
+                tuftsPerCluster.min + clusterSizeNoise * (tuftsPerCluster.max - tuftsPerCluster.min + 1)
             );
-            bladesInCluster = Math.min(bladesInCluster, maxInstances - count);
-            if (bladesInCluster <= 0) {
+            tuftsInCluster = Math.min(tuftsInCluster, maxTufts - count);
+            if (tuftsInCluster <= 0) {
                 break;
             }
 
+            // Cluster radius
             const radiusNoise = hash2(clusterIndex * 7.13, clusterIndex * 11.17, seed);
-            const clusterRadius = radiusMin + radiusNoise * (radiusMax - radiusMin);
+            const thisClusterRadius = clusterRadius.min + radiusNoise * (clusterRadius.max - clusterRadius.min);
 
-            for (let i = 0; i < bladesInCluster && count < maxInstances; i++) {
+            // Place tufts within cluster
+            for (let i = 0; i < tuftsInCluster && count < maxTufts; i++) {
+                // Distribute tufts within cluster using polar coordinates
                 const angle = hash2(clusterIndex * 13.37 + i * 0.37, clusterIndex * 17.23 + i * 0.71, seed) * Math.PI * 2;
                 const radiusRand = Math.sqrt(
                     hash2(clusterIndex * 19.97 + i * 0.53, clusterIndex * 23.11 + i * 0.91, seed)
                 );
-                const anisot = 0.65 + hash2(clusterIndex * 29.71 + i * 0.21, clusterIndex * 31.19 + i * 0.33, seed) * 0.6;
-                const offsetR = radiusRand * clusterRadius;
-                const worldX = centerX + Math.cos(angle) * offsetR * anisot;
-                const worldZ = centerZ + Math.sin(angle) * offsetR / anisot;
+                const anisotropy = 0.7 + hash2(clusterIndex * 29.71 + i * 0.21, clusterIndex * 31.19 + i * 0.33, seed) * 0.5;
+                const offsetR = radiusRand * thisClusterRadius;
+                const worldX = clusterCenterX + Math.cos(angle) * offsetR * anisotropy;
+                const worldZ = clusterCenterZ + Math.sin(angle) * offsetR / anisotropy;
 
+                // Sample terrain height
                 let height = 0;
                 if (this.terrainSampler) {
                     height = this.terrainSampler(worldX, worldZ);
@@ -834,19 +854,23 @@ export class GrassSystem {
                     }
                 }
 
-                // Keep near-camera density high while allowing slight thinning noise
-                const densityNoise = 0.8 + hash2(worldX * 0.11, worldZ * 0.13, seed) * 0.2;
+                // Density variation
+                const densityNoise = 0.85 + hash2(worldX * 0.11, worldZ * 0.13, seed) * 0.15;
                 if (hash2(worldX, worldZ, seed + 17.1) > densityNoise) {
                     continue;
                 }
 
                 positions.push(worldX, height, worldZ);
 
+                // Tuft rotation (whole tuft rotates together)
                 const rotation = hash2(worldX + 100, worldZ + 100, seed) * Math.PI * 2;
+                // Scale affects all 5 blades in the tuft
                 const scaleRand = hash2(worldX + 200, worldZ + 200, seed);
-                const scale = 0.72 + Math.pow(scaleRand, 0.65) * 0.58;
+                const scale = 0.75 + Math.pow(scaleRand, 0.6) * 0.5;
+                // Variant for color/style
                 const variantRand = hash2(worldX + 300, worldZ + 300, seed);
                 const variant = variantRand < 0.4 ? 0 : variantRand < 0.8 ? 1 : 2;
+                // Random for per-tuft variation in shader
                 const random = hash2(worldX + 400, worldZ + 400, seed);
 
                 instanceData.push(rotation, scale, variant, random);

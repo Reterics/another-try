@@ -42,6 +42,8 @@ uniform bool uUseAlphaMap;      // Whether to use alpha map
 const float AO_STRENGTH = 0.4;          // Ambient occlusion intensity at base
 const float TINT_VARIATION = 0.12;      // Random color variation strength
 const float SUBSURFACE_STRENGTH = 0.15; // Fake subsurface scattering
+const float TIP_DARKEN_START = 0.6;     // Height where tip darkening starts
+const float TIP_DARKEN_STRENGTH = 0.35; // Multiplier applied at very top
 
 // ============================================
 // Helper Functions
@@ -115,6 +117,11 @@ void main() {
 
     // Mix base and tip colors
     vec3 color = mix(uColorBase, uColorTip, heightGradient);
+
+    // Push the top of the blade much darker to avoid glowing tips
+    float tipShadow = smoothstep(TIP_DARKEN_START, 1.0, heightGradient);
+    float tipDarkenFactor = mix(1.0, TIP_DARKEN_STRENGTH, tipShadow);
+    color *= tipDarkenFactor;
 
     // ========================================
     // Per-Instance Color Variation

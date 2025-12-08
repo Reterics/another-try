@@ -1,7 +1,10 @@
 /**
  * Foliage System - Public API
  *
- * Fortnite-style stylized grass rendering system
+ * - Grass rendered as tufts (5 blades per instance)
+ * - Natural clumpy appearance like real grass
+ * - Efficient instancing (5x fewer draw instances)
+ *
  * Procedural tree placement system
  */
 
@@ -29,10 +32,16 @@ export {
 
 // Geometry
 export {
+    // Single blade (legacy)
     createTuskBladeGeometry,
     createBladeGeometryVariants,
     createSharedBladeGeometry,
     getBladeGeometryStats,
+    // Tuft geometry (5 blades per tuft)
+    BLADES_PER_TUFT,
+    createTuftGeometry,
+    createSharedTuftGeometry,
+    getTuftGeometryStats,
 } from './bladeGeometry';
 
 // Types and constants

@@ -1,9 +1,11 @@
 /**
  * Grass Vertex Shader
- * Fortnite-style stylized grass with:
+ *
+ * Renders grass as tufts (5 blades per instance) with:
  * - Per-instance positioning, rotation, scale
+ * - Per-blade variation within tuft using aBladeIndex
  * - Tusk-shaped blade tapering
- * - Wind animation (stronger at tip)
+ * - Wind animation with per-blade phase offset
  * - Distance-based fade calculation
  * - Upward normals for flat shading
  */
@@ -13,10 +15,11 @@ precision highp float;
 // ============================================
 // Geometry Attributes (per-vertex)
 // ============================================
-attribute vec3 position;    // Local blade vertex position
+attribute vec3 position;    // Local blade vertex position (already pre-bent in geometry)
 attribute vec3 normal;      // Vertex normal (pointing UP for flat shading)
 attribute vec2 uv;          // Texture coordinates
 attribute float aTaper;     // 0=base, 1=tip (for wind/taper calculations)
+attribute float aBladeIndex; // Which blade in tuft (0-4) for per-blade variation
 
 // ============================================
 // Instance Attributes (per-instance)
@@ -112,6 +115,7 @@ void main() {
     float variant = aInstanceData.z;        // Variant index (0, 1, 2)
 
     // Calculate blade dimensions with per-instance variation
+    // Use tuft position for consistent sizing across all blades in tuft
     vec2 posHash = aInstancePosition.xz;
     float heightVar = pow(hash(posHash), 0.7);
     float widthVar = pow(hash(posHash + 100.0), 0.85);
@@ -119,44 +123,45 @@ void main() {
     float bladeHeight = mix(uHeightRange.x, uHeightRange.y, heightVar) * scale;
     float bladeWidth = mix(uWidthRange.x, uWidthRange.y, widthVar);
 
-    // Start with base position
+    // Start with pre-bent tuft geometry position
+    // The geometry already has 5 blades arranged in a fan pattern
     vec3 pos = position;
 
-    // Apply height scaling
+    // Apply height and width scaling
     pos.y *= bladeHeight;
+    pos.xz *= bladeWidth;
 
-    // Apply width with taper (geometry already tapered, this adds variation)
-    // Width decreases toward tip (aTaper = 1 at tip)
-    float taperWidth = bladeWidth * (1.0 - aTaper * 0.95);
-    pos.x *= taperWidth;
-
-    // Apply rotation around Y axis
+    // Apply tuft rotation around Y axis
     float cosR = cos(rotation);
     float sinR = sin(rotation);
     vec2 rotatedXZ = mat2(cosR, -sinR, sinR, cosR) * pos.xz;
     pos.x = rotatedXZ.x;
     pos.z = rotatedXZ.y;
 
-    // Static lean and micro-bend per blade to break vertical uniformity
-    vec2 leanDir = normalize(vec2(hash(posHash + 17.7) - 0.5, hash(posHash + 27.3) - 0.5) + vec2(0.01, 0.02));
-    float leanStrength = mix(0.04, 0.22, hash(posHash + 91.31)) * (0.6 + vRandom * 0.4);
-    float heightT = smoothstep(0.0, 1.0, aTaper);
-    float leanBend = heightT * heightT;
-    pos.xz += leanDir * leanStrength * bladeHeight * leanBend;
+    // Per-blade wind phase offset (each blade in tuft moves slightly differently)
+    // This creates the natural wave pattern through a tuft
+    float bladePhaseOffset = aBladeIndex * 0.4; // ~0.4 radians between blades
 
-    // Subtle S-curve around a perpendicular axis for tuft softness
-    vec2 perpDir = vec2(-leanDir.y, leanDir.x);
-    float sCurvePhase = hash(posHash + 141.7) * 6.28318530718;
-    float sCurve = sin(heightT * 2.2 + sCurvePhase) * 0.05;
-    pos.xz += perpDir * sCurve * bladeHeight * heightT * 0.35;
+    // Tuft-level and blade-level jitter keep motion out of sync so blades never stand upright together
+    float tuftPhase = vRandom * 6.2831853; // Deterministic per-tuft offset
+    float bladePhaseJitter = (hash(posHash + aBladeIndex * 11.7) - 0.5) * 1.2;
 
-    // Slight vertical wobble for non-uniform spike heights
-    pos.y *= 0.98 + (hash(posHash + 211.3) - 0.5) * 0.06;
+    // Calculate wind displacement with per-blade variation
+    float windTime = uTime * uWindSpeed;
+    float windAmount = calculateWind(
+        aInstancePosition,
+        windTime + bladePhaseOffset + tuftPhase + bladePhaseJitter
+    );
+    // Tiny idle offset so blades are never perfectly vertical in unison
+    windAmount += sin(bladePhaseOffset + tuftPhase) * 0.05;
 
-    // Calculate wind displacement
     // Wind affects mostly the tip (aTaper squared for natural falloff)
-    float windAmount = calculateWind(aInstancePosition, uTime * uWindSpeed);
     float windInfluence = aTaper * aTaper * uWindStrength;
+
+    // Per-blade stiffness variation (some blades bend more than others)
+    float bladeStiffness = 0.8 + hash(posHash + aBladeIndex * 17.3) * 0.4;
+    windInfluence *= bladeStiffness;
+
     vec2 windOffset = uWindDirection * windAmount * windInfluence * bladeHeight;
 
     // Apply wind bend
@@ -173,7 +178,6 @@ void main() {
     vWorldPosition = worldPos;
 
     // Calculate distance fade
-    // Horizontal distance only (ignore height difference)
     float dist = distance(worldPos.xz, uCameraPosition.xz);
 
     // Smooth fade from uFadeStart to uMaxDistance

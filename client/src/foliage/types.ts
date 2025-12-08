@@ -1,6 +1,10 @@
 /**
  * Grass System Types and Constants
- * Fortnite-style stylized grass with multiple variants
+ *
+ * - Grass is rendered as TUFTS (groups of 5 blades)
+ * - Each tuft is a single instance with 5 blades fanning outward
+ * - Creates natural clumpy appearance like real grass
+ * - More efficient than individual blades (5x fewer instances)
  */
 
 
@@ -106,8 +110,14 @@ export const GRASS_VARIANTS: readonly GrassVariant[] = [
 
 /**
  * Global grass constants matching the guidelines spec
+ *
+ * Note: density values are in BLADES per m², but instances are TUFTS
+ * Each tuft contains BLADES_PER_TUFT blades, so actual instance count
+ * is density / BLADES_PER_TUFT
  */
 export const GRASS_CONSTANTS = {
+    /** Number of blades per tuft */
+    BLADES_PER_TUFT: 5,
     /** Minimum blade height in meters */
     HEIGHT_MIN: 0.15,
     /** Maximum blade height in meters */
@@ -116,13 +126,13 @@ export const GRASS_CONSTANTS = {
     WIDTH_MIN: 0.01,
     /** Maximum blade width in meters */
     WIDTH_MAX: 0.02,
-    /** Minimum clump radius in meters */
+    /** Minimum tuft cluster radius in meters */
     CLUMP_RADIUS_MIN: 0.2,
-    /** Maximum clump radius in meters */
+    /** Maximum tuft cluster radius in meters */
     CLUMP_RADIUS_MAX: 0.4,
-    /** Minimum density (blades per m²) */
+    /** Minimum density (blades per m², divide by 5 for tufts) */
     DENSITY_MIN: 200,
-    /** Maximum density (blades per m²) */
+    /** Maximum density (blades per m², divide by 5 for tufts) */
     DENSITY_MAX: 600,
     /** LOD tier 0 distance (full detail) */
     LOD0_DISTANCE: 20,
@@ -132,7 +142,7 @@ export const GRASS_CONSTANTS = {
     FADE_DISTANCE: 60,
     /** Number of segments per blade geometry */
     SEGMENTS_PER_BLADE: 5,
-    /** Maximum instances per patch */
+    /** Maximum tuft instances per patch */
     MAX_INSTANCES_PER_PATCH: 65536,
 } as const;
 
